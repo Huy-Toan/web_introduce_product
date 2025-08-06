@@ -1,17 +1,6 @@
 // Mock data for when database connection is unavailable
 export const mockBooks = [
   {
-    id: 1,
-    title: "The Brothers Karamazov",
-    author: "Fyodor Dostoevsky",
-    description:
-      "A passionate philosophical novel set in 19th-century Russia, which explores ethical debates of God, free will, and morality.",
-    image_url: "/images/books/brothers-karamazov.jpg",
-    genre: "Literary Fiction",
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
     id: 2,
     title: "East of Eden",
     author: "John Steinbeck",

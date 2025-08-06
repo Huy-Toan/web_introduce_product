@@ -1,12 +1,13 @@
 {
   "name": "react-postgres-fullstack-template",
-  "description": "Deploy your own library of books using Postgres and Workers.",
+  "description": "Deploy your own library of books using D1 SQLite and R2 Storage with Workers.",
   "version": "0.0.0",
   "cloudflare": {
-    "label": "React + Postgres Fullstack App",
+    "label": "React + D1 SQLite Fullstack App",
     "products": [
       "Workers",
-      "Hyperdrive",
+      "D1",
+      "R2",
       "Workers Static Assets",
       "Smart Placement"
     ],
@@ -14,7 +15,7 @@
       "starter",
       "storage"
     ],
-    "docs_url": "https://developers.cloudflare.com/hyperdrive/get-started/",
+    "docs_url": "https://developers.cloudflare.com/d1/get-started/",
     "preview_image_url": "https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/cd71c67a-253f-477d-022c-2f90cb4b3d00/public",
     "icon_urls": [],
     "publish": true
@@ -30,7 +31,6 @@
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.7.5",
     "@eslint/js": "9.29.0",
-    "@neondatabase/serverless": "1.0.1",
     "@types/node": "24.0.4",
     "@types/react": "19.0.10",
     "@types/react-dom": "19.0.4",
@@ -43,7 +43,6 @@
     "globals": "16.2.0",
     "hono": "4.8.2",
     "postcss": "8.5.3",
-    "postgres": "3.4.5",
     "vite": "^6.0.0",
     "wrangler": "4.21.x"
   },
@@ -54,8 +53,21 @@
     "check": "vite build && wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
     "dev": "vite",
+    "dev:wrangler": "wrangler dev --local",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    
+    "db:create": "wrangler d1 create react-fullstack-db",
+    "db:schema": "wrangler d1 execute react-fullstack-db --file=./init.sql",
+    "db:schema:local": "wrangler d1 execute react-fullstack-db --local --file=./init.sql",
+    "db:query": "wrangler d1 execute react-fullstack-db",
+    "db:query:local": "wrangler d1 execute react-fullstack-db --local",
+    "db:list": "wrangler d1 list",
+    "db:backup": "wrangler d1 export react-fullstack-db --output=backup.sql",
+    
+    "r2:create": "wrangler r2 bucket create react-fullstack-images",
+    "r2:list": "wrangler r2 bucket list",
+    "r2:delete": "wrangler r2 bucket delete react-fullstack-images"
   },
   "type": "module"
 }

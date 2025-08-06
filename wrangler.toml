@@ -1,0 +1,30 @@
+# For more details on how to configure Wrangler, refer to:
+# https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "react-postgres-fullstack-template"
+main = "api/index.js"
+compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2025-04-01"
+
+[observability]
+enabled = true
+
+[assets]
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "react-fullstack-db"
+database_id = "15c19695-b012-40df-a7dd-f0f51d7373dd"
+
+# R2 Bucket để lưu ảnh
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "react-fullstack-images"
+
+[placement]
+mode = "smart"
+
+upload_source_maps = true
+

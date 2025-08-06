@@ -1,47 +1,42 @@
 import { Hono } from "hono";
-import postgres from "postgres";
 import booksRouter from "./routes/books";
 import bookRelatedRouter from "./routes/book-related";
-import { mockBooks } from "./lib/mockData";
 
 const app = new Hono();
 
-// Setup SQL client middleware
+// Setup D1 database middleware
 app.use("*", async (c, next) => {
-  // Check if Hyperdrive binding is available
-  if (c.env.HYPERDRIVE) {
+  // Check if D1 binding is available
+  if (c.env.DB) {
     try {
-      // Create SQL client
-      const sql = postgres(c.env.HYPERDRIVE.connectionString, {
-        max: 5,
-        fetch_types: false,
-      });
-
-      c.env.SQL = sql;
+      // Test database connection
+      const testQuery = await c.env.DB.prepare("SELECT 1").first();
       c.env.DB_AVAILABLE = true;
-
-      // Process the request
-      await next();
-
-      // Close the SQL connection after the response is sent
-      c.executionCtx.waitUntil(sql.end());
+      console.log("D1 Database connected successfully");
     } catch (error) {
-      console.error("Database connection error:", error);
+      console.error("D1 Database connection error:", error);
       c.env.DB_AVAILABLE = false;
-      c.env.MOCK_DATA = mockBooks;
-      await next();
     }
   } else {
-    // No Hyperdrive binding available, use mock data
-    console.log("No database connection available. Using mock data.");
+    // No D1 binding available
+    console.log("No D1 database binding available");
     c.env.DB_AVAILABLE = false;
-    c.env.MOCK_DATA = mockBooks;
-    await next();
   }
+  
+  await next();
 });
 
 app.route("/api/books", booksRouter);
 app.route("/api/books/:id/related", bookRelatedRouter);
+
+// Health check endpoint
+app.get("/api/health", async (c) => {
+  return c.json({
+    status: "ok",
+    database: c.env.DB_AVAILABLE ? "connected" : "disconnected",
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Catch-all route for static assets
 app.all("*", async (c) => {
