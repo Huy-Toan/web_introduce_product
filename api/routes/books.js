@@ -13,24 +13,6 @@ const fallbackBooks = [
     description: "A classic American novel about racial injustice and moral growth.",
     image_url: "/images/books/mockingbird.jpg", // Changed to image_url
     published_year: 1960
-  },
-  {
-    id: 2,
-    title: "1984",
-    author: "George Orwell",
-    genre: "Dystopian",
-    description: "A dystopian social science fiction novel about totalitarian control.",
-    image_url: "/images/books/1984.jpg",
-    published_year: 1949
-  },
-  {
-    id: 3,
-    title: "Pride and Prejudice",
-    author: "Jane Austen",
-    genre: "Romance",
-    description: "A romantic novel about manners, upbringing, morality, education, and marriage.",
-    image_url: "/images/books/pride.jpg",
-    published_year: 1813
   }
 ];
 
@@ -41,11 +23,9 @@ booksRouter.get("/", async (c) => {
 
   try {
     if (c.env.DB_AVAILABLE) {
-      // Database logic with D1 - FIXED VERSION
       let query = "SELECT * FROM books";
       let params = [];
 
-      // Apply genre filter if provided
       if (genre) {
         query += " WHERE genre = ?";
         params.push(genre);
@@ -78,24 +58,20 @@ booksRouter.get("/", async (c) => {
         }
       }
 
-      console.log("Executing query:", query, "with params:", params); // Debug
-
-      // FIXED: Correct way to bind parameters
       let stmt = c.env.DB.prepare(query);
       if (params.length > 0) {
-        stmt = stmt.bind(...params); // Use spread operator, not forEach
+        stmt = stmt.bind(...params); 
       }
       
       const result = await stmt.all();
       const books = result.results || [];
 
-      console.log("Database results:", books.length); // Debug
 
       return c.json({
         books: books,
         source: "database",
         count: books.length,
-        debug: { query, params } // Remove this in production
+        debug: { query, params } 
       });
 
     } else {
@@ -110,12 +86,10 @@ booksRouter.get("/", async (c) => {
         books = books.filter(book => 
           book.genre.toLowerCase() === genre.toLowerCase()
         );
-        console.log("After genre filter:", books.length); // Debug
       }
 
       // Apply sorting
       if (sort) {
-        console.log("Sorting by:", sort); // Debug
         switch (sort) {
           case "title_asc":
             books.sort((a, b) => a.title.localeCompare(b.title));
@@ -142,7 +116,7 @@ booksRouter.get("/", async (c) => {
         books: books,
         source: "fallback",
         count: books.length,
-        debug: { genre, sort, originalCount: fallbackBooks.length } // Remove this in production
+        debug: { genre, sort, originalCount: fallbackBooks.length } 
       });
     }
 
@@ -159,11 +133,8 @@ booksRouter.get("/", async (c) => {
 // Book details endpoint
 booksRouter.get("/:id", async (c) => {
   const bookId = parseInt(c.req.param("id"));
-  console.log("Fetching book with ID:", bookId); // Debug
-
   try {
     if (c.env.DB_AVAILABLE) {
-      // Database logic with D1
       const result = await c.env.DB.prepare("SELECT * FROM books WHERE id = ?")
         .bind(bookId)
         .first();
@@ -178,7 +149,6 @@ booksRouter.get("/:id", async (c) => {
       });
 
     } else {
-      // Fallback logic
       const book = fallbackBooks.find(b => b.id === bookId);
 
       if (!book) {
@@ -197,29 +167,26 @@ booksRouter.get("/:id", async (c) => {
   }
 });
 
-// Add new book endpoint
+// add book
 booksRouter.post("/", async (c) => {
   try {
     if (!c.env.DB_AVAILABLE) {
       return c.json({ error: "Database not available" }, 503);
     }
 
-    const { title, author, genre, description, image_url, published_year } = await c.req.json();
+    const { title, author, genre, description, image_url} = await c.req.json();
 
-    // Validate required fields
     if (!title || !author || !genre) {
       return c.json({ error: "Missing required fields: title, author, genre" }, 400);
     }
 
-    // Insert new book - FIXED: Use image_url instead of cover_url
     const result = await c.env.DB.prepare(`
-      INSERT INTO books (title, author, genre, description, image_url, published_year)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).bind(title, author, genre, description || null, image_url || null, published_year || null)
+      INSERT INTO books (title, author, genre, description, image_url)
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(title, author, genre, description || null, image_url || null)
       .run();
 
     if (result.success) {
-      // Get the inserted book
       const newBook = await c.env.DB.prepare("SELECT * FROM books WHERE id = ?")
         .bind(result.meta.last_row_id)
         .first();
@@ -248,18 +215,16 @@ booksRouter.put("/:id", async (c) => {
     }
 
     const updates = await c.req.json();
-    const { title, author, genre, description, image_url, published_year } = updates;
+    const { title, author, genre, description, image_url} = updates;
 
-    // Update book - FIXED: Use image_url instead of cover_url
     const result = await c.env.DB.prepare(`
       UPDATE books 
-      SET title = ?, author = ?, genre = ?, description = ?, image_url = ?, published_year = ?
+      SET title = ?, author = ?, genre = ?, description = ?, image_url = ?
       WHERE id = ?
-    `).bind(title, author, genre, description, image_url, published_year, bookId)
+    `).bind(title, author, genre, description, image_url, bookId)
       .run();
 
-    if (result.changes > 0) {
-      // Get updated book
+    if (result.meta.changes > 0) {
       const updatedBook = await c.env.DB.prepare("SELECT * FROM books WHERE id = ?")
         .bind(bookId)
         .first();
@@ -280,27 +245,38 @@ booksRouter.put("/:id", async (c) => {
 
 // Delete book endpoint
 booksRouter.delete("/:id", async (c) => {
-  const bookId = parseInt(c.req.param("id"));
+  const bookId = c.req.param("id");
+  console.log("Có yêu cầu xóa với ID:", bookId, "Type:", typeof bookId);
 
   try {
     if (!c.env.DB_AVAILABLE) {
       return c.json({ error: "Database not available" }, 503);
     }
 
+    // Thêm debug: Check book tồn tại không
+    const existingBook = await c.env.DB.prepare("SELECT * FROM books WHERE id = ?")
+      .bind(parseInt(bookId))  // ← Thử convert sang number
+      .first();
+    
+    console.log("Book tìm thấy:", existingBook);
+
     const result = await c.env.DB.prepare("DELETE FROM books WHERE id = ?")
-      .bind(bookId)
+      .bind(parseInt(bookId))  // ← Convert sang number
       .run();
 
-    if (result.changes > 0) {
-      return c.json({ message: "Book deleted successfully" });
+    console.log("Delete result:", result);
+
+    if (result.meta.changes > 0) {
+      return c.json({ success: true, message: "Book deleted successfully" }, 200);
     } else {
       return c.json({ error: "Book not found" }, 404);
     }
 
   } catch (error) {
-    console.error("Error deleting book:", error);
+    console.error("Lỗi khi xoá:", error);
     return c.json({ error: "Failed to delete book" }, 500);
   }
 });
+
 
 export default booksRouter;

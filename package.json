@@ -22,7 +22,8 @@
   },
   "dependencies": {
     "@tailwindcss/postcss": "4.1.4",
-    "react": "19.0.0",
+    "lucide-react": "^0.536.0",
+    "react": "^19.0.0",
     "react-dom": "19.0.0",
     "react-router": "7.6.3",
     "react-router-dom": "7.6.3",
@@ -56,7 +57,6 @@
     "dev:wrangler": "wrangler dev --local",
     "lint": "eslint .",
     "preview": "vite preview",
-    
     "db:create": "wrangler d1 create react-fullstack-db",
     "db:schema": "wrangler d1 execute react-fullstack-db --file=./init.sql",
     "db:schema:local": "wrangler d1 execute react-fullstack-db --local --file=./init.sql",
@@ -64,7 +64,6 @@
     "db:query:local": "wrangler d1 execute react-fullstack-db --local",
     "db:list": "wrangler d1 list",
     "db:backup": "wrangler d1 export react-fullstack-db --output=backup.sql",
-    
     "r2:create": "wrangler r2 bucket create react-fullstack-images",
     "r2:list": "wrangler r2 bucket list",
     "r2:delete": "wrangler r2 bucket delete react-fullstack-images"
