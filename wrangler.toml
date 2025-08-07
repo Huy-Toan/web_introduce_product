@@ -12,7 +12,7 @@ enabled = true
 [assets]
 binding = "ASSETS"
 not_found_handling = "single-page-application"
-directory = "./dist"
+directory = "./dist/client"
 
 [[d1_databases]]
 binding = "DB"
