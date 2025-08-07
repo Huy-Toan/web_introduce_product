@@ -44,7 +44,13 @@ uploadImageRouter.post('/', async (c) => {
     });
 
     // Tạo public URL (dùng public development URL nếu không có custom domain)
-    const publicUrl = `https://${c.env.PUBLIC_R2_URL || ''}${c.env.PUBLIC_R2_URL ? '/' : ''}${fileName}`;
+    if (!c.env.PUBLIC_R2_URL) {
+        return c.json({ error: 'Thiếu PUBLIC_R2_URL trong cấu hình môi trường' }, 500);
+        }
+
+    const baseUrl = c.env.PUBLIC_R2_URL.replace(/\/+$/, '');
+    const publicUrl = `${baseUrl}/${fileName}`;
+
 
     return c.json({
       success: true,
