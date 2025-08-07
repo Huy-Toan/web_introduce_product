@@ -1,97 +1,57 @@
 // api/upload-image.js (Next.js API route)
 // hoặc routes/upload.js (Express.js)
 
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import multer from 'multer';
+
+import { Hono } from 'hono';
 import { v4 as uuidv4 } from 'uuid';
-import path from 'path';
 
-// Cấu hình R2 Cloudflare
-const r2Client = new S3Client({
-  region: 'auto',
-  endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-  },
-});
+const uploadImageRouter = new Hono();
 
-// Cấu hình multer để xử lý file upload
-const storage = multer.memoryStorage();
-const upload = multer({
-  storage,
-  limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB
-  },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP)'));
-    }
-  },
-});
-
-// Middleware để xử lý file upload
-const uploadMiddleware = upload.single('image');
-
-export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
+uploadImageRouter.post('/', async (c) => {
   try {
-    // Xử lý file upload
-    await new Promise((resolve, reject) => {
-      uploadMiddleware(req, res, (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    // Parse multipart form data
+    const formData = await c.req.formData();
+    const file = formData.get('image');
+    if (!file || typeof file === 'string') {
+      return c.json({ error: 'Không có file nào được upload' }, 400);
+    }
 
-    if (!req.file) {
-      return res.status(400).json({ error: 'Không có file nào được upload' });
+    // Kiểm tra loại file
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      return c.json({ error: 'Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP)' }, 400);
+    }
+
+    // Kiểm tra kích thước file (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      return c.json({ error: 'Kích thước ảnh không được vượt quá 5MB!' }, 400);
     }
 
     // Tạo tên file unique
-    const fileExtension = path.extname(req.file.originalname);
-    const fileName = `books/${uuidv4()}${fileExtension}`;
+    const ext = file.name.split('.').pop();
+    const fileName = `books/${uuidv4()}.${ext}`;
 
-    // Upload lên R2 Cloudflare
-    const uploadParams = {
-      Bucket: process.env.R2_BUCKET_NAME,
-      Key: fileName,
-      Body: req.file.buffer,
-      ContentType: req.file.mimetype,
-      // Cấu hình để file có thể truy cập public
-      ACL: 'public-read',
-    };
+    // Upload lên R2 Cloudflare qua binding
+    const r2 = c.env.IMAGES; // binding từ wrangler.toml
+    await r2.put(fileName, await file.arrayBuffer(), {
+      httpMetadata: { contentType: file.type },
+    });
 
-    await r2Client.send(new PutObjectCommand(uploadParams));
+    // Tạo public URL (dùng public development URL nếu không có custom domain)
+    const publicUrl = `https://${c.env.PUBLIC_R2_URL || ''}${c.env.PUBLIC_R2_URL ? '/' : ''}${fileName}`;
 
-    // Tạo URL public cho file
-    const publicUrl = `https://${process.env.R2_CUSTOM_DOMAIN}/${fileName}`;
-    // Hoặc nếu chưa có custom domain:
-    // const publicUrl = `https://${process.env.R2_BUCKET_NAME}.${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${fileName}`;
-
-    res.status(200).json({
+    return c.json({
       success: true,
       url: publicUrl,
-      fileName: fileName,
+      fileName,
     });
-
   } catch (error) {
     console.error('Upload error:', error);
-    res.status(500).json({ 
+    return c.json({
       error: 'Có lỗi xảy ra khi upload ảnh',
-      details: error.message 
-    });
+      details: error.message,
+    }, 500);
   }
-}
+});
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+export default uploadImageRouter;
