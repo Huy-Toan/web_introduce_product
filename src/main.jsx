@@ -12,7 +12,6 @@ import ProductDetailPage from "./pages/ProductDetail";
 import News from "./pages/News";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import ScrollToTop from "./components/ScrollTop";
-// import AdminDashboard from "./pages/admin/home";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
