@@ -1,155 +1,276 @@
-# React + Vite + PostgreSQL + Hyperdrive on Cloudflare Workers
+# Hướng dẫn Deploy dự án lên Cloudflare thông qua GitHub
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/templates/tree/main/react-postgres-fullstack-template)
+## Yêu cầu trước khi bắt đầu
 
-![Build a library of books using Cloudflare Workes Assets, Hono, and Hyperdrive](https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/cd71c67a-253f-477d-022c-2f90cb4b3d00/public)
+- Tài khoản GitHub
+- Tài khoản Cloudflare (miễn phí)
+- Node.js đã cài đặt trên máy
+- Git đã cài đặt
 
-<!-- dash-content-start -->
+## Bước 1: Fork và Clone dự án
 
-Build a library of books using [Cloudflare Workers Assets](https://developers.cloudflare.com/workers/static-assets/), Hono API routes, and [Cloudflare Hyperdrive](https://developers.cloudflare.com/hyperdrive/) to connect to a PostgreSQL database. [Workers Smart Placement](https://developers.cloudflare.com/workers/configuration/smart-placement/) is enabled to automatically position your Worker closer to your database for reduced latency.
+```bash
+# Fork dự án trên GitHub UI, sau đó clone về máy
+git clone https://github.com/Huy-Toan/library.git
+cd library
 
-Browse a categorized collection of books in this application. To learn more about a title, click on it to navigate to an expanded view. The collection can also be filtered by genre. If a custom database connection is not provided, a fallback set of books will be used.
-
-If creating a personal database, books are expected to be stored in the following format:
-
-```sql
-(INDEX, 'BOOK_TITLE', 'BOOK_AUTHOR', 'BOOK_DESCRIPTION', '/images/books/BOOK_COVER_IMAGE.jpg', 'BOOK_GENRE')
+# Cài đặt dependencies
+npm install
 ```
 
-## Features
+## Bước 2: Cài đặt Wrangler CLI
 
-- 📖 Dynamic routes
-- 📦 Asset bundling and optimization
-- 🌐 Optimized Worker placement
-- 🚀 Database connection via Hyperdrive
-- 🎉 TailwindCSS for styling
-- 🐳 Docker for container management
+```bash
+# Cài đặt Wrangler globally
+npm install -g wrangler
 
-## Smart Placement Benefits
+# Đăng nhập Cloudflare
+wrangler login
+```
 
-This application uses Cloudflare Workers' [Smart Placement](https://developers.cloudflare.com/workers/configuration/smart-placement/) feature to optimize performance.
+## Bước 3: Tạo D1 Database
 
-- **What is Smart Placement?** Smart Placement [can dynamically position](https://developers.cloudflare.com/workers/configuration/smart-placement/#understand-how-smart-placement-works) your Worker in Cloudflare's network to minimize latency between your Worker and database.
+```bash
+# Tạo database mới
+wrangler d1 create react-fullstack-db
+```
 
-- **How does it work?** The application makes multiple database round trips per request. Smart Placement analyzes this traffic pattern and can choose to position the Worker and Hyperdrive closer to your deployed database to reduce latency. This can significantly improve response times, especially for read-intensive operations requiring multiple database queries — as demonstrated in this application's book-related API endpoints.
+**Quan trọng**: Lệnh trên sẽ trả về `database_id`, copy ID này!
 
-- **No configuration needed:** Smart Placement works automatically when enabled in `wrangler.jsonc` with `"mode": "smart"`.
+Ví dụ output:
+```
+✅ Successfully created DB 'react-fullstack-db'!
+📋 Created your database using D1's new storage backend.
+   Database ID: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+```
 
-<!-- dash-content-end -->
+## Bước 4: Tạo R2 Bucket
 
-## Tech Stack
+```bash
+# Tạo R2 bucket cho việc lưu trữ images
+wrangler r2 bucket create react-fullstack-images
+```
 
-- **Frontend**: React + React Router for client-side navigation [using declarative routing](https://reactrouter.com/en/main/start/overview)
-  - Built with Vite and deployed as static assets via Workers
-  - React SPA mode enabled in `wrangler.jsonc` for client-side navigation
+## Bước 5: Cập nhật cấu hình
 
-- **Backend**: API routes served by a Worker using [Hono](https://hono.dev/)
-  - API endpoints defined in `/api/routes` directory
-  - Automatic fallback to mock data when database is unavailable
+Mở file `wrangler.toml` và thay đổi `database_id`:
 
-- **Database**: PostgreSQL database connected via Cloudflare Hyperdrive
-  - Smart Placement enabled for optimal performance
-  - Handles missing connection strings or connection failures
+```toml
+[[d1_databases]]
+binding = "DB"
+database_name = "react-fullstack-db"
+database_id = "PASTE_YOUR_NEW_DATABASE_ID_HERE"  # ← Thay đổi dòng này
+```
 
-## Get Started
+## Bước 6: Setup Database Schema
 
-To run the applicaton locally, use the Docker container defined in `docker-compose.yml`:
+```bash
+# Nếu dự án có file init.sql
+wrangler d1 execute react-fullstack-db --file=./init.sql
 
-1. `docker-compose up -d`
-   - Creates container with PostgreSQL and seeds it with the data found in `init.sql`
-2. `npm run dev`
+# Nếu dùng migrations
+wrangler d1 migrations apply react-fullstack-db
+```
 
-If you update `init.sql`, be sure to run `docker-compose down -v` to teardown the previous image.
+## Bước 7: Test Local (Optional)
 
-### Setting Up Hyperdrive Bindings
+```bash
+# Chạy development server để test
+wrangler dev
 
-Cloudflare's Hyperdrive is database connector that optimizes queries from your Workers to various database providers using a connection string. Here's a detailed explanation of how to set it up:
+# Hoặc
+npm run dev
+```
 
-1. **Create a Hyperdrive configuration**:
+## Bước 8: Commit thay đổi
 
-   ```sh
-   npx wrangler hyperdrive create my-hyperdrive-config --connection-string="postgres://user:password@hostname:port/dbname"
-   ```
+```bash
+git add wrangler.toml
+git commit -m "Update database ID for deployment"
+git push origin main
+```
 
-   This command will return the Hyperdrive ID that you'll need for your configuration.
+## Bước 9: Deploy qua Cloudflare Pages
 
-2. **Configure Hyperdrive in wrangler.jsonc**:
+### Cách 1: Sử dụng Cloudflare Dashboard
 
-   ```json
-   "hyperdrive": [
-     {
-       "binding": "HYPERDRIVE",  // Name used to access the binding in your code
-       "id": "YOUR_HYPERDRIVE_ID",  // ID from the create command
-       "localConnectionString": "postgresql://myuser:mypassword@localhost:5432/mydatabase"  // Local dev connection
-     }
-   ]
-   ```
+1. Đăng nhập [Cloudflare Dashboard](https://dash.cloudflare.com)
+2. Vào **Workers & Pages** > **Create application** > **Workers** > **Import a repository**
+3. Click **Connect to Git**
+4. Chọn GitHub repository của bạn
+5. Configure build settings:
+   - **Build command**: `npx wrangler deploy` (hoặc theo package.json)
+   - **Build output directory**: `dist` hoặc bỏ trống
+6. Click **Save and Deploy**
 
-3. **Access in your code**:
+### Cách 2: Sử dụng GitHub Actions (Tự động)
 
-   ```javascript
-   // Example from this project
-   if (c.env.HYPERDRIVE) {
-     const sql = postgres(c.env.HYPERDRIVE.connectionString);
-     // Use SQL client
-   }
-   ```
+Tạo file `.github/workflows/deploy.yml`:
 
-4. **Fallback handling**: This application automatically falls back to mock data if:
-   - Hyperdrive binding is not configured
-   - Database connection fails for any reason
+```yaml
+name: Deploy to Cloudflare Pages
 
-For a more detailed walkthrough, see the [Hyperdrive documentation](https://developers.cloudflare.com/hyperdrive/configuration/connect-to-postgres/).
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
-### More on Docker's Use in Local Development
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Build project
+        run: npm run build
+      
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: your-project-name
+          directory: dist
+          # Optional: github token
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+```
 
-When developing locally with Hyperdrive, you **must** use the Docker setup provided. This is because Hyperdrive's local dev mode requires a database running on localhost with the exact configuration specified in `localConnectionString`.
+## Bước 10: Cấu hình Bindings
 
-The Docker setup in this template ensures the PostgreSQL instance is properly configured to work with Hyperdrive locally. The container automatically runs `init.sql` to create tables and load sample data.
+Sau khi deploy thành công, cần bind database và R2 bucket:
 
-While remote database use in local dev with Hyperdrive is not currently supported, it is being worked on.
+1. Vào **Cloudflare Dashboard** > **Workers & Pages**
+2. Click vào project vừa tạo
+3. Vào **Settings** > **Functions** > **Bindings**
+4. Add các bindings sau:
 
-## Ways to Deploy
+**D1 Database Binding:**
+- Variable name: `DB`
+- D1 database: `react-fullstack-db`
 
-There are two different ways to deploy this application: Full Experience and Demo Mode.
+**R2 Bucket Binding:**
+- Variable name: `IMAGES` 
+- R2 bucket: `react-fullstack-images`
 
-### Option 1: With Database (Full Experience)
+5. Click **Save**
 
-1. Run `npm i`
-2. Sign up for a PostgreSQL provider and create a database
-   - Quickstart options: [Supabase](https://supabase.com/), [Neon](https://neon.tech/)
-3. Load the sample data using the provided SQL script:
-   - The `/init.sql` file contains all database schema and sample data
-   - You can either:
-     - Copy and paste the contents into your database provider's SQL editor
-     - Or use a command line tool like `psql`: `psql -h hostname -U username -d dbname -f init.sql`
-4. Create a Hyperdrive connection by running:
-   ```sh
-   npx wrangler hyperdrive create <YOUR_CONFIG_NAME> --connection-string="<postgres://user:password@HOSTNAME_OR_IP_ADDRESS:PORT/database_name>"
-   ```
-5. Uncomment and update the Hyperdrive binding in `wrangler.jsonc` with the ID from step 4:
-   ```json
-   "hyperdrive": [
-     {
-       "binding": "HYPERDRIVE",
-       "id": "YOUR_HYPERDRIVE_ID",
-       "localConnectionString": "postgresql://myuser:mypassword@localhost:5432/mydatabase"
-     }
-   ]
-   ```
-6. Deploy with `npm run deploy`
+## Bước 11: Cấu hình Environment Variables và Secrets
 
-### Option 2: Without Database (Demo Mode)
+Vào **Settings** > **Environment Variables** > **Add Variable**:
 
-1. Run `npm i`
-2. Keep the Hyperdrive binding commented out in `wrangler.jsonc` (this is the default)
-3. Deploy with `npm run deploy`
-4. The app will automatically use mock data instead of a real database
+### Secrets cần thêm:
 
-## Resources
+1. **CLOUDFLARE_ACCOUNT_ID**
+   - Type: Secret
+   - Value: Account ID từ Cloudflare Dashboard (sidebar bên phải)
 
-- [Neon PostgreSQL with Cloudflare Workers and Hyperdrive](https://developers.cloudflare.com/hyperdrive/examples/neon/)
-- [Cloudflare Vite Plugin](https://www.npmjs.com/package/@cloudflare/vite-plugin)
-- [Cloudflare Hyperdrive Documentation](https://developers.cloudflare.com/hyperdrive/get-started/)
-- [Hono - Fast, Lightweight, Web Framework for Cloudflare Workers](https://hono.dev/docs/getting-started/cloudflare-workers)
-- [Workers Smart Placement](https://developers.cloudflare.com/workers/configuration/smart-placement/)
+2. **PUBLIC_R2_URL**
+   - Type: Secret  
+   - Value: URL public của R2 bucket (format: `https://pub-xxxxx.r2.dev`)
+
+3. **R2_ACCESS_KEY_ID** 
+   - Type: Secret
+   - Value: Lấy từ **R2** > **Manage R2 API tokens** > **Create API token**
+
+4. **R2_BUCKET_NAME**
+   - Type: Secret
+   - Value: `react-fullstack-images`
+
+5. **R2_SECRET_ACCESS_KEY**
+   - Type: Secret
+   - Value: Secret key đi cùng với R2_ACCESS_KEY_ID
+
+### Cách lấy R2 API credentials:
+
+1. Vào **Cloudflare Dashboard** > **R2 Object Storage**
+2. Click **Manage R2 API tokens**
+3. **Create API token** với permissions:
+   - **Object Read & Write**
+   - **Bucket:** `react-fullstack-images`
+4. Copy Access Key ID và Secret Access Key
+
+### Cách lấy PUBLIC_R2_URL:
+
+1. Vào **R2** > **react-fullstack-images**
+2. **Settings** > **Public access**
+3. **Connect Custom Domain** hoặc dùng R2.dev subdomain
+4. Copy URL (ví dụ: `https://pub-abc123.r2.dev`)
+
+## Bước 12: Setup Database trên Production
+
+```bash
+# Chạy migrations trên production database
+wrangler d1 migrations apply react-fullstack-db --remote
+
+# Hoặc execute SQL trực tiếp
+wrangler d1 execute react-fullstack-db --remote --file=./init.sql
+```
+
+## Bước 13: Redeploy để áp dụng bindings và secrets
+
+Trigger một deployment mới:
+- Push một commit nhỏ lên GitHub
+- Hoặc click **Retry deployment** trong Cloudflare Dashboard
+
+## Troubleshooting
+
+### Lỗi "Database not found"
+- Kiểm tra `database_id` trong `wrangler.toml` có đúng không
+- Đảm bảo đã bind database trong Pages settings
+
+### Lỗi "R2 bucket not accessible"
+- Kiểm tra đã bind R2 bucket chưa
+- Verify bucket name đúng trong `wrangler.toml`
+
+### Build failed
+- Kiểm tra Node.js version (khuyến nghị >= 18)
+- Verify build command trong Pages settings
+- Check dependencies trong `package.json`
+
+## Các lệnh hữu ích
+
+```bash
+# Xem danh sách databases
+wrangler d1 list
+
+# Xem danh sách R2 buckets
+wrangler r2 bucket list
+
+# Query database
+wrangler d1 execute react-fullstack-db --remote --command="SELECT * FROM users LIMIT 5"
+
+# Xem logs của worker
+wrangler tail
+
+# Upload file lên R2
+wrangler r2 object put react-fullstack-images/filename.jpg --file=./path/to/file.jpg
+```
+
+## Lưu ý quan trọng
+
+- **Database ID** phải unique cho mỗi người
+- Mỗi người cần tạo database và bucket riêng
+- Không share database_id giữa các môi trường
+- Luôn test local trước khi deploy
+- Backup database trước khi thay đổi cấu trúc
+
+## Kết quả
+
+Sau khi hoàn thành, bạn sẽ có:
+- ✅ Dự án được deploy tự động qua GitHub
+- ✅ Database riêng với schema đầy đủ  
+- ✅ R2 bucket để lưu trữ files
+- ✅ Domain Cloudflare để truy cập ứng dụng
+
+**Chúc mừng! Dự án của bạn đã sẵn sàng trên Cloudflare! 🚀**
