@@ -1,5 +1,6 @@
 import React from 'react';
-import { Home, BookOpen, Users, Settings } from 'lucide-react';
+import { Home, BookOpen, Users, Settings, Newspaper, Info } from 'lucide-react';
+
 
 const navItems = [
   { id: 'dashboard', label: 'Tổng quan', icon: Home },

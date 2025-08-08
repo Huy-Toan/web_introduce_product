@@ -6,7 +6,13 @@ import DashboardOverview from './components/DashBoard';
 import SettingsPanel from './components/SettingPanel';
 import UsersPanel from './components/UserPanel';
 import useBooks from './hook/Usebook';
+import useNews from './hook/Usenews';
 import BookFormModal from './components/BookFormModal';
+import Newscard from './components/NewsCard';
+import NewsFormModal from './components/NewsFormModal';
+import useAbout from './hook/Useabout';
+import AboutFormModal from './components/AboutFormModal';
+import AboutCard from './components/AboutCard';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -29,14 +35,49 @@ const AdminDashboard = () => {
     handleUpdateBook,
     handleDeleteBook,
     } = useBooks();
+    
+    const {
+      news,
+      newsLoading,
+      totalNews,
+      isNewsModalOpen,
+      newsToEdit,
+      handleOpenNewsModal,
+      handleCloseNewsModal,
+      handleAddNews,
+      handleUpdateNews,
+      handleDeleteNews,
+    } = useNews();
+
+    const {
+      about,
+      aboutLoading,
+      totalAbout,
+      isAboutModalOpen,
+      aboutToEdit,
+      handleOpenAboutModal,
+      handleCloseAboutModal,
+      handleAddAbout,
+      handleUpdateAbout,
+      handleDeleteAbout,
+    } = useAbout();
 
   return (
+
     <div className="flex min-h-screen bg-gray-100">
       <SidebarNav activeTab={activeTab} setActiveTab={setActiveTab} />
       <main className="flex-1 p-6 overflow-auto">
         <h1 className="text-2xl font-bold mb-6">Trang Quản Trị</h1>
+      
 
-        {activeTab === 'overview' && <DashboardOverview />}        
+        {activeTab === 'dashboard' && (
+          <DashboardOverview 
+            bookCount={books.length} 
+            genreCount={genres.length} 
+            aboutCount={about.length} 
+          />
+        )}
+       
 
         {activeTab === 'books' && (
           <div>
@@ -48,7 +89,6 @@ const AdminDashboard = () => {
             sortOptions={sortOptions}
             sortBy={sortBy}
             setSortBy={setSortBy}
-            total={totalBooks}
             filtered={books.length}
             />
 
@@ -82,6 +122,86 @@ const AdminDashboard = () => {
               onClose={handleCloseModal}
               onSubmit={bookToEdit ? handleUpdateBook : handleAddBook}
               initialData={bookToEdit || {}}
+            />
+          </div>
+        )}
+
+{/* news */}
+        {activeTab === 'news' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-gray-700">
+                Tổng số tin tức: {news.length}
+              </p>
+              <button
+                onClick={() => handleOpenNewsModal(null)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+              >
+                Thêm tin tức
+              </button>
+            </div>
+
+            {newsLoading ? (
+              <p>Đang tải...</p>
+            ) : news.length === 0 ? (
+              <p className="text-gray-600">Không có tin tức.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {news.map(item => (
+                  <Newscard
+                    key={item.id}
+                    news={item}
+                    onEdit={() => handleOpenNewsModal(item)}
+                    onDelete={handleDeleteNews}
+                  />
+                ))}
+              </div>
+            )}
+
+            <NewsFormModal
+              isOpen={isNewsModalOpen}
+              onClose={handleCloseNewsModal}
+              onSubmit={newsToEdit ? handleUpdateNews : handleAddNews}
+              initialData={newsToEdit || {}}
+            />
+          </div>
+        )}
+
+{/* about */}
+        {activeTab === 'about_us' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => handleOpenAboutModal(null)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+              >
+                Thêm tin tức
+              </button>
+            </div>
+
+            {aboutLoading ? (
+              <p>Đang tải...</p>
+            ) : about.length === 0 ? (
+              <p className="text-gray-600">Không có tin tức.</p>
+            ) : (
+              <div className="flex flex-col gap-4 w-full">
+                {about.map(item => (
+                  <AboutCard
+                    key={item.id}
+                    about={item}
+                    onEdit={() => handleOpenAboutModal(item)}
+                    onDelete={handleDeleteAbout}
+                  />
+                ))}
+              </div>
+            )}
+            
+
+            <AboutFormModal
+              isOpen={isAboutModalOpen}
+              onClose={handleCloseAboutModal}
+              onSubmit={aboutToEdit ? handleUpdateAbout : handleAddAbout}
+              initialData={aboutToEdit || {}}
             />
           </div>
         )}

@@ -6,6 +6,7 @@ import aboutRouter from "./routes/about";
 import newsRouter from "./routes/news";
 import uploadNewsImageRouter from "./routes/upload-news-image";
 import uploadImageRouter from "./routes/upload-image";
+import uploadAboutImageRouter from "./routes/upload-about-image";
 
 const app = new Hono();
 
@@ -37,7 +38,7 @@ app.route("/api/news", newsRouter);
 app.route("/api/books/:id/related", bookRelatedRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/upload-news-image", uploadNewsImageRouter);
-app.route("/api/upload-image", uploadImageRouter);
+app.route("/api/upload-about-image", uploadAboutImageRouter);
 
 // Health check endpoint
 app.get("/api/health", async (c) => {

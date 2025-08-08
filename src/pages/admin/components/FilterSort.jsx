@@ -1,7 +1,7 @@
 import React from 'react';
 import { Filter, SortAsc } from 'lucide-react';
 
-const FilterSortBar = ({ genres = [], selectedGenre, setSelectedGenre, sortOptions = [], sortBy, setSortBy, total, filtered }) => (
+const FilterSortBar = ({ genres = [], selectedGenre, setSelectedGenre, sortOptions = [], sortBy, setSortBy, filtered }) => (
   <div className="bg-white p-4 rounded-lg shadow mb-6">
     <div className="flex flex-wrap gap-4 items-center">
       <div className="flex items-center gap-2">
@@ -32,7 +32,7 @@ const FilterSortBar = ({ genres = [], selectedGenre, setSelectedGenre, sortOptio
       </div>
 
       <div className="text-sm text-gray-600">
-        Hiển thị {filtered} / {total} sách
+        Hiển thị {filtered}  sách
       </div>
     </div>
   </div>

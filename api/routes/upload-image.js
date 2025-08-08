@@ -15,7 +15,6 @@ const uploadImageRouter = new Hono();
 
 uploadImageRouter.post('/', async (c) => {
   try {
-    // Parse multipart form data
     const formData = await c.req.formData();
     const file = formData.get('image');
     if (!file || typeof file === 'string') {
