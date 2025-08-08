@@ -8,6 +8,7 @@ import Footer from "../components/Footer";
 import Banner from "../components/Banner";
 import ProductCategories from "../components/Categori";
 import { groupByGenre } from "../lib/utils";
+import TakimexWebsite from "../components/Section";
 
 export default function LibraryPage() {
   const navigate = useNavigate();
@@ -87,6 +88,7 @@ export default function LibraryPage() {
 
       <Banner />
       <ProductCategories />
+      <TakimexWebsite />
 
       {/* <main className="container mx-auto px-4 py-6 mt-12 max-w-7xl">
         {isBookDetailPage ? (

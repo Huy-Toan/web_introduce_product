@@ -62,7 +62,7 @@ function TopNavigation() {
 
           {/* Desktop */}
           <div className="hidden md:flex items-center space-x-6">
-            {["home", "about", "news", "contact"].map((page) => {
+            {["home", "about","product", "news", "contact"].map((page) => {
             const path = page === "home" ? "/" : `/${page}`;
             return (
                 <button
@@ -74,13 +74,13 @@ function TopNavigation() {
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                 }`}
                 >
-                {page === "home" ? "Home" : page === "about" ? "About Us" : page ==="contact" ? "Contact" : "News"}
+                {page === "home" ? "Home" : page === "about" ? "About Us" : page ==="contact" ? "Contact" : page === "news" ? "News" : "Products"}
                 </button>
             );
             })}
 
             {/* Genres Dropdown */}
-            <div className="relative">
+            {/* <div className="relative">
               <button
                 onClick={() => setIsGenreDropdownOpen(!isGenreDropdownOpen)}
                 className="flex items-center px-3 py-2 rounded-md text-lg font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
@@ -109,7 +109,7 @@ function TopNavigation() {
                   ))}
                 </div>
               )}
-            </div>
+            </div> */}
           </div>
 
           {/* Mobile Button */}
@@ -127,18 +127,18 @@ function TopNavigation() {
         {isMobileMenuOpen && (
           <div className="md:hidden border-t border-gray-200 py-2">
             <div className="space-y-1">
-              {["home", "about", "news", "contact"].map((page) => (
+              {["home", "about","product", "news", "contact"].map((page) => (
                 <button
                   key={page}
                   onClick={() => handlePageNavigation(page)}
                   className="w-full text-left px-4 py-3 text-sm text-gray-600 hover:bg-gray-50"
                 >
-                  {page === "home" ? "Home" : page === "about" ? "About Us" : page ==="contact" ? "Contact" : "News"}
+                  {page === "home" ? "Home" : page === "about" ? "About Us" : page ==="contact" ? "Contact" : page === "news" ? "News" : "Products"}
                 </button>
               ))}
             </div>
 
-            <div className="border-t border-gray-100 mt-2 pt-2">
+            {/* <div className="border-t border-gray-100 mt-2 pt-2">
               <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Genres
               </div>
@@ -158,18 +158,15 @@ function TopNavigation() {
                   </span>
                 </button>
               ))}
-            </div>
+            </div> */}
           </div>
         )}
       </div>
 
-      {(isGenreDropdownOpen || isMobileMenuOpen) && (
+      {isGenreDropdownOpen && (
         <div
-          className="fixed inset-0 z-40"
-          onClick={() => {
-            setIsGenreDropdownOpen(false);
-            setIsMobileMenuOpen(false);
-          }}
+          className="fixed inset-0 z-10"
+          onClick={() => setIsGenreDropdownOpen(false)}
         />
       )}
     </nav>

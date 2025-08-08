@@ -1,6 +1,8 @@
 import React from 'react';
+import { useNavigate } from "react-router";
 
 function Banner() {
+  const navigate = useNavigate();
   return (
     <section className="bg-[url('https://thietkekhainguyen.com/wp-content/uploads/2018/10/sach-anh-du-lich7-788x445.jpg')] bg-cover bg-center text-white py-20 mt-16">
       <div className="container mx-auto px-4 text-center">
@@ -10,11 +12,11 @@ function Banner() {
           From our farm to your doorstep with nearly 10 years of export experience.
         </p>
         <div className="flex justify-center space-x-4">
-          <button className="bg-white text-green-800 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
-            View Products
-          </button>
-          <button className="border-2 border-white text-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-green-800 transition-colors">
-            Learn More
+          <button 
+            className="bg-white text-green-800 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+            onClick={() => navigate("/contact")}
+          >
+            Contact now
           </button>
         </div>
         

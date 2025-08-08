@@ -5,6 +5,8 @@ const navItems = [
   { id: 'dashboard', label: 'Tổng quan', icon: Home },
   { id: 'books', label: 'Sách', icon: BookOpen },
   { id: 'users', label: 'Người dùng', icon: Users },
+  { id: 'news', label: 'Tin tức', icon: Newspaper },
+  { id: 'about_us', label: 'Giới thiệu', icon: Info },
   { id: 'settings', label: 'Cài đặt', icon: Settings },
 ];
 

@@ -2,6 +2,10 @@ import { Hono } from "hono";
 import booksRouter from "./routes/books";
 import bookRelatedRouter from "./routes/book-related";
 import uploadImageRouter from "./routes/upload-image";
+import aboutRouter from "./routes/about";
+import newsRouter from "./routes/news";
+import uploadNewsImageRouter from "./routes/upload-news-image";
+import uploadImageRouter from "./routes/upload-image";
 
 const app = new Hono();
 
@@ -28,7 +32,11 @@ app.use("*", async (c, next) => {
 });
 
 app.route("/api/books", booksRouter);
+app.route("/api/about", aboutRouter);
+app.route("/api/news", newsRouter);
 app.route("/api/books/:id/related", bookRelatedRouter);
+app.route("/api/upload-image", uploadImageRouter);
+app.route("/api/upload-news-image", uploadNewsImageRouter);
 app.route("/api/upload-image", uploadImageRouter);
 
 // Health check endpoint

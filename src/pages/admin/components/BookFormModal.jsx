@@ -1,150 +1,3 @@
-// // src/components/admin/BookFormModal.jsx
-// import React, { useEffect, useState } from 'react';
-// import { X, Plus, Edit2, Trash2 } from 'lucide-react';
-
-// const BookFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
-//   const [form, setForm] = useState({
-//     title: '',
-//     author: '',
-//     genre: '',
-//     description: '',
-//     image_url: ''
-//   });
-
-//   useEffect(() => {
-//     if (initialData && isOpen) {
-//       setForm({
-//         title: initialData.title || '',
-//         author: initialData.author || '',
-//         genre: initialData.genre || '',
-//         description : initialData.description || '',
-//         image_url : initialData.image_url || ''
-//        });
-//     }
-//   }, [initialData, isOpen]);
-
-//   const handleChange = (e) => {
-//     const { name, value } = e.target;
-//     setForm((prev) => ({ ...prev, [name]: value }));
-//   };
-
-//   const handleSubmit = (e) => {
-//     e.preventDefault();
-//     onSubmit(form);
-//     onClose();
-//   };
-
-//   if (!isOpen) return null;
-
-//   return (
-//     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-//       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-//         <div className="flex items-center justify-between p-4 border-b">
-//           <h3 className="text-lg font-semibold">
-//             {initialData.id ? 'Chỉnh sửa sách' : 'Thêm sách mới'}
-//           </h3>
-//           <button
-//             onClick={onClose}
-//             className="text-gray-400 hover:text-gray-600"
-//           >
-//             <X size={20} />
-//           </button>
-//         </div>
-
-//         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-//           <div>
-//             <label className="block text-sm font-medium text-gray-700 mb-1">
-//               Tên sách *
-//             </label>
-//             <input
-//               name="title"
-//               value={form.title}
-//               onChange={handleChange}
-//               placeholder="Nhập tên sách"
-//               required
-//               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-//             />
-//           </div>
-
-//           <div>
-//             <label className="block text-sm font-medium text-gray-700 mb-1">
-//               Tác giả *
-//             </label>
-//             <input
-//               name="author"
-//               value={form.author}
-//               onChange={handleChange}
-//               placeholder="Nhập tên tác giả"
-//               required
-//               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-//             />
-//           </div>
-
-//           <div>
-//             <label className="block text-sm font-medium text-gray-700 mb-1">
-//               Thể loại
-//             </label>
-//             <input
-//               name="genre"
-//               value={form.genre}
-//               onChange={handleChange}
-//               placeholder="Thể loại"
-//               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-//             />
-//           </div>
-
-//           <div>
-//             <label className="block text-sm font-medium text-gray-700 mb-1">
-//               Mô tả
-//             </label>
-//             <textarea
-//               name="description"
-//               value={form.description}
-//               onChange={handleChange}
-//               rows={3}
-//               placeholder="Mô tả về nội dung sách"
-//               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-//             />
-//           </div>
-
-//           <div>
-//             <label className="block text-sm font-medium text-gray-700 mb-1">
-//               URL hình ảnh bìa
-//             </label>
-//             <input
-//               name="coverUrl"
-//               value={form.coverUrl}
-//               onChange={handleChange}
-//               placeholder="https://example.com/book-cover.jpg"
-//               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-//             />
-//           </div>
-
-//           <div className="flex justify-end gap-2 pt-4 border-t">
-//             <button
-//               type="button"
-//               onClick={onClose}
-//               className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md"
-//             >
-//               Hủy
-//             </button>
-//             <button
-//               type="submit"
-//               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md"
-//             >
-//               {initialData.id ? 'Cập nhật' : 'Thêm'}
-//             </button>
-//           </div>
-//         </form>
-//       </div>
-//     </div>
-
-//   );
-// };
-
-// export default BookFormModal;
-
-// src/components/admin/BookFormModal.jsx
 import React, { useEffect, useState } from 'react';
 import { X, Upload, Image, Loader2 } from 'lucide-react';
 
@@ -181,13 +34,11 @@ const BookFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Kiểm tra loại file
       if (!file.type.startsWith('image/')) {
         alert('Vui lòng chọn file ảnh hợp lệ!');
         return;
       }
 
-      // Kiểm tra kích thước file (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         alert('Kích thước ảnh không được vượt quá 5MB!');
         return;
@@ -231,12 +82,14 @@ const BookFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     try {
       let finalForm = { ...form };
 
-      // Nếu có ảnh mới được chọn, upload lên R2
       if (imageFile) {
         const uploadedImageUrl = await uploadImage(imageFile);
         finalForm.image_url = uploadedImageUrl;
       }
 
+      if (initialData.id) {
+        finalForm.id = initialData.id;
+      }
       onSubmit(finalForm);
       onClose();
       

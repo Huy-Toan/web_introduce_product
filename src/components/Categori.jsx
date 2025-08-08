@@ -1,74 +1,69 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { groupByGenre } from "../lib/utils";
+import { useNavigate } from "react-router";
 
 function ProductCategories({ categories = [], onSelectCategory }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAutoPlay, setIsAutoPlay] = useState(true);
+  const [genres, setGenres] = useState([]);
+  const [loading, setLoading] = useState(true);
   const sliderRef = useRef(null);
   const intervalRef = useRef(null);
+  const navigate = useNavigate();
 
-  // Default categories nếu không có props truyền vào
-  const defaultCategories = [
-    {
-      id: 1,
-      name: "HANDICRAFT PRODUCTS",
-      image: "🏺",
-      description: "Traditional Vietnamese handicrafts",
-      count: 45
-    },
-    {
-      id: 2,
-      name: "CANNED & FROZEN",
-      image: "🥫",
-      description: "Preserved and frozen foods",
-      count: 32
-    },
-    {
-      id: 3,
-      name: "AGRO WASTE PRODUCTS", 
-      image: "🐄",
-      description: "Agricultural waste and feed products",
-      count: 28
-    },
-    {
-      id: 4,
-      name: "OTHER PRODUCTS",
-      image: "🌿",
-      description: "Various agricultural products",
-      count: 56
-    },
-    {
-      id: 5,
-      name: "FRESH FRUITS",
-      image: "🍓",
-      description: "Fresh tropical fruits",
-      count: 38
-    },
-    {
-      id: 6,
-      name: "COFFEE & TEA",
-      image: "☕",
-      description: "Premium coffee and tea",
-      count: 24
-    },
-    {
-      id: 7,
-      name: "SPICES & HERBS",
-      image: "🌶️",
-      description: "Aromatic spices and herbs",
-      count: 41
-    },
-    {
-      id: 8,
-      name: "RICE & GRAINS",
-      image: "🌾",
-      description: "Premium rice and grain products",
-      count: 29
-    }
-  ];
+  // Fetch genres from API
+  useEffect(() => {
+    const fetchGenres = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch("/api/books");
+        const data = await res.json();
+        const booksArray = data.books || [];
+        const grouped = groupByGenre(booksArray);
+        
+        // Convert grouped object to array format
+        const genreArray = Object.entries(grouped).map(([name, genreData]) => ({
+          id: name,
+          name: genreData.name || name,
+          books: genreData.books || genreData,
+          count: genreData.count || (genreData.books ? genreData.books.length : 0)
+        }));
+        
+        setGenres(genreArray);
+      } catch (err) {
+        console.error("Failed to load genres:", err);
+        // Fallback to empty array if API fails
+        setGenres([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchGenres();
+  }, []);
 
-  const displayCategories = categories.length > 0 ? categories : defaultCategories;
-  const itemsPerView = 4; // Số items hiển thị cùng lúc
+  // Responsive items per view
+  const [itemsPerView, setItemsPerView] = useState(4);
+  
+  useEffect(() => {
+    const updateItemsPerView = () => {
+      if (window.innerWidth < 640) { 
+        setItemsPerView(1);
+      } else if (window.innerWidth < 1024) { 
+        setItemsPerView(2);
+      } else { 
+        setItemsPerView(4);
+      }
+    };
+
+    updateItemsPerView();
+    window.addEventListener('resize', updateItemsPerView);
+    return () => window.removeEventListener('resize', updateItemsPerView);
+  }, []);
+
+  // Sử dụng categories từ props hoặc genres từ API
+  const displayCategories = categories.length > 0 ? categories : genres;
   const maxIndex = Math.max(0, displayCategories.length - itemsPerView);
 
   // Auto play slider
@@ -84,7 +79,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isAutoPlay, maxIndex, itemsPerView]);
+  }, [isAutoPlay, maxIndex, itemsPerView, displayCategories.length]);
 
   const goToNext = () => {
     setCurrentIndex(prev => prev >= maxIndex ? 0 : prev + 1);
@@ -99,6 +94,16 @@ function ProductCategories({ categories = [], onSelectCategory }) {
   };
 
   const handleCategoryClick = (category) => {
+    // Navigate to product page with genre query parameter
+    const genreName = category.name || category.title;
+    if (genreName) {
+      // Use encodeURIComponent to handle special characters and spaces
+      window.location.href = `/product?genre=${encodeURIComponent(genreName)}`;
+    } else {
+      window.location.href = '/product';
+    }
+    
+    // Call onSelectCategory if provided
     if (onSelectCategory) {
       onSelectCategory(category);
     }
@@ -107,14 +112,49 @@ function ProductCategories({ categories = [], onSelectCategory }) {
   const handleMouseEnter = () => setIsAutoPlay(false);
   const handleMouseLeave = () => setIsAutoPlay(true);
 
+  // Loading state
+  if (loading) {
+    return (
+      <section className="py-16 bg-gray-50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-800 mb-4">Our Book Categories</h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Loading our wide range of book genres...
+            </p>
+          </div>
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Empty state
+  if (displayCategories.length === 0) {
+    return (
+      <section className="py-16 bg-gray-50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-800 mb-4">Our Book Categories</h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              No categories available at the moment.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="py-16 bg-gray-50 overflow-hidden">
       <div className="container mx-auto px-4">
         {/* Header */}
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-gray-800 mb-4">Our Product Categories</h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Discover our wide range of premium Vietnamese agricultural and handicraft products
+        <div className="text-center mb-8 sm:mb-12">
+          <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-3 sm:mb-4">Our Book Categories</h2>
+          <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto px-4">
+            Discover our wide range of book genres and collections
           </p>
         </div>
 
@@ -149,7 +189,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
           <div className="overflow-hidden rounded-lg">
             <div 
               ref={sliderRef}
-              className="flex transition-transform duration-500 ease-in-out gap-6"
+              className="flex transition-transform duration-500 ease-in-out gap-3 sm:gap-4 lg:gap-6"
               style={{ 
                 transform: `translateX(-${currentIndex * (100 / itemsPerView)}%)`,
                 width: `${(displayCategories.length / itemsPerView) * 100}%`
@@ -157,40 +197,40 @@ function ProductCategories({ categories = [], onSelectCategory }) {
             >
               {displayCategories.map((category, index) => (
                 <div
-                  key={category.id || index}
+                  key={category.id || category.name || index}
                   className="flex-shrink-0"
                   style={{ width: `${100 / displayCategories.length}%` }}
                 >
                   <div
                     onClick={() => handleCategoryClick(category)}
-                    className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2 group h-full mx-3"
+                    className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2 group h-full mx-1 sm:mx-2 lg:mx-3"
                   >
-                    <div className="p-6 text-center h-full flex flex-col">
+                    <div className="p-4 sm:p-5 lg:p-6 text-center h-full flex flex-col">
                       {/* Image/Icon Container */}
-                      <div className="w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-green-100 to-green-200 rounded-full flex items-center justify-center group-hover:from-green-200 group-hover:to-green-300 transition-all duration-300">
-                        <span className="text-3xl">{category.image || category.icon || "📦"}</span>
+                      <div className="w-16 h-16 sm:w-18 sm:h-18 lg:w-20 lg:h-20 mx-auto mb-3 sm:mb-4 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center group-hover:from-blue-200 group-hover:to-blue-300 transition-all duration-300">
+                        <span className="text-2xl sm:text-3xl">📚</span>
                       </div>
                       
                       {/* Category Name */}
-                      <h3 className="text-base font-bold text-gray-800 mb-2 group-hover:text-green-600 transition-colors line-clamp-2">
+                      <h3 className="text-sm sm:text-base lg:text-base font-bold text-gray-800 mb-2 group-hover:text-blue-600 transition-colors line-clamp-2">
                         {category.name || category.title}
                       </h3>
                       
-                      {/* Description */}
-                      <p className="text-gray-600 text-sm leading-relaxed mb-3 flex-grow">
-                        {category.description || `Products in ${category.name}`}
+                      {/* Description - Hidden on mobile */}
+                      <p className="hidden sm:block text-gray-600 text-xs sm:text-sm leading-relaxed mb-3 flex-grow">
+                        {category.description || `Books in ${category.name || category.title} genre`}
                       </p>
                       
-                      {/* Product Count */}
-                      {category.count && (
-                        <div className="text-xs text-green-600 font-medium mb-3">
-                          {category.count} products
+                      {/* Book Count */}
+                      {(category.books || category.count) && (
+                        <div className="text-xs text-blue-600 font-medium mb-3">
+                          {category.count || (category.books ? category.books.length : 0)} books
                         </div>
                       )}
                       
-                      {/* View Products Link */}
-                      <div className="inline-flex items-center text-green-600 font-medium group-hover:text-green-700 transition-colors text-sm">
-                        <span className="mr-1">View Products</span>
+                      {/* View Books Link */}
+                      <div className="inline-flex items-center text-blue-600 font-medium group-hover:text-blue-700 transition-colors text-xs sm:text-sm">
+                        <span className="mr-1">View Books</span>
                         <svg 
                           className="w-3 h-3 transform group-hover:translate-x-1 transition-transform" 
                           fill="none" 
@@ -203,7 +243,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
                     </div>
                     
                     {/* Hover Effect Border */}
-                    <div className="h-1 bg-gradient-to-r from-green-400 to-green-600 rounded-b-2xl transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
+                    <div className="h-1 bg-gradient-to-r from-blue-400 to-blue-600 rounded-b-2xl transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
                   </div>
                 </div>
               ))}
@@ -219,7 +259,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
                   onClick={() => goToSlide(index)}
                   className={`w-3 h-3 rounded-full transition-all duration-300 ${
                     index === currentIndex 
-                      ? 'bg-green-600 w-8' 
+                      ? 'bg-blue-600 w-8' 
                       : 'bg-gray-300 hover:bg-gray-400'
                   }`}
                 />
@@ -229,12 +269,12 @@ function ProductCategories({ categories = [], onSelectCategory }) {
         </div>
 
         {/* Call to Action */}
-        <div className="text-center mt-12">
+        <div className="text-center mt-8 sm:mt-12">
           <button 
-            onClick={() => handleCategoryClick({ name: "All Products" })}
-            className="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors duration-300 shadow-lg hover:shadow-xl"
+            onClick={() => window.location.href = "/product"}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors duration-300 shadow-lg hover:shadow-xl text-sm sm:text-base"
           >
-            Browse All Products
+            Browse All Books
           </button>
         </div>
       </div>

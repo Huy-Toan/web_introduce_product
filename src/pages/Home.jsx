@@ -1,54 +1,92 @@
-// import { useEffect, useState } from "react";
-// import { useParams, useNavigate } from "react-router-dom";
-// import Breadcrumbs from "../components/Breadcrumbs";
-// import BooksList from "../components/BooksList";
-// import { groupByGenre } from "../lib/utils";
+import { useEffect, useState } from "react";
+import { Routes, Route, useParams, useNavigate, useLocation } from "react-router-dom";
+import TopNavigation from "../components/Navigation";
+import Footer from "../components/Footer";
+import Banner from "../components/Banner";
+import ProductCategories from "../components/Categori";
+import { groupByGenre } from "../lib/utils";
+import TakimexWebsite from "../components/Section";
 
-// export default function HomePage() {
-//   const { genreId } = useParams();
-//   const navigate = useNavigate();
-//   const [genres, setGenres] = useState([]);
-//   const [dataSource, setDataSource] = useState(null);
+export default function HomePage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams();
 
-//   const activeGenre = genreId ? decodeURIComponent(genreId) : null;
+  const { genreId, bookId } = params;
+  const activeGenre = genreId ? decodeURIComponent(genreId) : null;
 
-//   useEffect(() => {
-//     const loadGenres = async () => {
-//       try {
-//         const res = await fetch("/api/books");
-//         const data = await res.json();
-//         const booksArray = data.books || [];
+  const [genres, setGenres] = useState([]);
+  const [dataSource, setDataSource] = useState(null);
+  const [bookDetail, setBookDetail] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-//         if (data.source) setDataSource(data.source);
-//         const grouped = groupByGenre(booksArray);
-//         setGenres(grouped);
-//       } catch (err) {
-//         console.error("Failed to load genres:", err);
-//       }
-//     };
+  useEffect(() => {
+    const loadGenres = async () => {
+      try {
+        const res = await fetch("/api/books");
+        const data = await res.json();
+        const booksArray = data.books || [];
 
-//     loadGenres();
-//   }, []);
+        if (data.source) setDataSource(data.source);
+        setGenres(groupByGenre(booksArray));
+      } catch (err) {
+        console.error("Failed to load genres:", err);
+      }
+    };
 
-//   const handleSelectBook = (bookId) => {
-//     navigate(`/book/${bookId}`);
-//   };
+    loadGenres();
+  }, []);
 
-//   const handleSelectGenre = (genre) => {
-//     navigate(genre ? `/genre/${encodeURIComponent(genre)}` : "/");
-//   };
+  useEffect(() => {
+    if (!bookId) return;
 
-//   return (
-//     <>
-//       <Breadcrumbs
-//         items={[
-//           { label: "All Books", value: null },
-//           ...(activeGenre ? [{ label: activeGenre, value: activeGenre }] : []),
-//         ]}
-//         onNavigate={handleSelectGenre}
-//       />
+    const fetchBookDetail = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/books/${bookId}`);
+        const bookData = await res.json();
 
-//       <BooksList onSelectBook={handleSelectBook} filter={activeGenre} />
-//     </>
-//   );
-// }
+        const relatedRes = await fetch(`/api/books/${bookId}/related`);
+        const relatedData = await relatedRes.json();
+
+        setBookDetail({
+          book: bookData.book,
+          relatedBooks: relatedData.relatedBooks,
+          recentRecommendations: relatedData.recentRecommendations,
+          genreStats: relatedData.genreStats,
+        });
+      } catch (err) {
+        console.error("Failed to load book detail:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBookDetail();
+  }, [bookId]);
+
+  const handleSelectGenre = (genre) => {
+    navigate(genre ? `/genre/${encodeURIComponent(genre)}` : "/");
+  };
+
+  const handleSelectBook = (bookId) => {
+    navigate(`/book/${bookId}`);
+  };
+
+  const isBookDetailPage = location.pathname.startsWith("/book/");
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <TopNavigation
+        genres={genres}
+        activeGenre={activeGenre}
+        onSelectGenre={handleSelectGenre}
+      />
+
+      <Banner />
+      <ProductCategories />
+      <TakimexWebsite />
+      <Footer />
+    </div>
+  );
+}

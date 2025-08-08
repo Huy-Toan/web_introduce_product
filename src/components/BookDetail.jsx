@@ -22,8 +22,9 @@ function BookDetail({ bookData }) {
   };
 
   const handleRelatedBookClick = (bookId) => {
-    navigate(`/book/${bookId}`);
+    navigate(`/product/product-detail/${bookId}`);
   };
+
 
   return (
     <div>
@@ -49,9 +50,14 @@ function BookDetail({ bookData }) {
                 <div className="mb-6">
                   <span
                     className="inline-block border border-blue-800 text-blue-800 text-sm px-3 py-1 rounded-full font-sans cursor-pointer"
-                    onClick={() =>
-                      navigate(`/genre/${encodeURIComponent(book.genre)}`)
-                    }
+                    onClick={() => {
+                      if (book.genre) {
+                        window.location.href = `/product?genre=${encodeURIComponent(book.genre)}`;
+                      } else {
+                        window.location.href = '/product';
+                      }
+                    }}
+
                   >
                     {book.genre}
                   </span>
