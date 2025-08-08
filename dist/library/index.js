@@ -2533,7 +2533,7 @@ bookRelatedRouter.get("/", async (c) => {
     }, 500);
   }
 });
-function uuidv4() {
+function uuidv4$1() {
   return ("10000000-1000-4000-8000" + -1e11).replace(
     /[018]/g,
     (c) => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
@@ -2555,12 +2555,16 @@ uploadImageRouter.post("/", async (c) => {
       return c.json({ error: "Kích thước ảnh không được vượt quá 5MB!" }, 400);
     }
     const ext = file.name.split(".").pop();
-    const fileName = `books/${uuidv4()}.${ext}`;
+    const fileName = `books/${uuidv4$1()}.${ext}`;
     const r2 = c.env.IMAGES;
     await r2.put(fileName, await file.arrayBuffer(), {
       httpMetadata: { contentType: file.type }
     });
-    const publicUrl = `https://${c.env.PUBLIC_R2_URL || ""}${c.env.PUBLIC_R2_URL ? "/" : ""}${fileName}`;
+    if (!c.env.PUBLIC_R2_URL) {
+      return c.json({ error: "Thiếu PUBLIC_R2_URL trong cấu hình môi trường" }, 500);
+    }
+    const baseUrl = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
+    const publicUrl = `${baseUrl}/${fileName}`;
     return c.json({
       success: true,
       url: publicUrl,
@@ -2572,6 +2576,182 @@ uploadImageRouter.post("/", async (c) => {
       error: "Có lỗi xảy ra khi upload ảnh",
       details: error.message
     }, 500);
+  }
+});
+const aboutRouter = new Hono2();
+const fallbackAbout = [
+  {
+    id: 1,
+    title: "About Our Library",
+    content: "We are a community-driven library offering a wide range of books to readers of all ages.",
+    image_url: "/images/about/library.jpg"
+  }
+];
+aboutRouter.get("/", async (c) => {
+  try {
+    if (c.env.DB_AVAILABLE) {
+      const result = await c.env.DB.prepare("SELECT * FROM about_us").all();
+      console.log("Fetched about us from database:", result.results);
+      return c.json({ about: result.results, source: "database" });
+    } else {
+      return c.json({ about: fallbackAbout, source: "fallback" });
+    }
+  } catch (error) {
+    return c.json({ error: "Failed to fetch about us" }, 500);
+  }
+});
+aboutRouter.get("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"));
+  try {
+    const item = await c.env.DB.prepare("SELECT * FROM about_us WHERE id = ?").bind(id).first();
+    if (!item) return c.json({ error: "Not found" }, 404);
+    return c.json({ about: item });
+  } catch (e) {
+    return c.json({ error: "Failed to fetch about" }, 500);
+  }
+});
+aboutRouter.post("/", async (c) => {
+  try {
+    const { title: title2, content, image_url } = await c.req.json();
+    const result = await c.env.DB.prepare(`
+      INSERT INTO about_us (title, content, image_url)
+      VALUES (?, ?, ?)
+    `).bind(title2, content, image_url || null).run();
+    const newItem = await c.env.DB.prepare("SELECT * FROM about_us WHERE id = ?").bind(result.meta.last_row_id).first();
+    return c.json({ about: newItem }, 201);
+  } catch (e) {
+    return c.json({ error: "Failed to create about" }, 500);
+  }
+});
+aboutRouter.put("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"));
+  const { title: title2, content, image_url } = await c.req.json();
+  try {
+    await c.env.DB.prepare(`
+      UPDATE about_us SET title = ?, content = ?, image_url = ? WHERE id = ?
+    `).bind(title2, content, image_url, id).run();
+    const updated = await c.env.DB.prepare("SELECT * FROM about_us WHERE id = ?").bind(id).first();
+    return c.json({ about: updated });
+  } catch (e) {
+    return c.json({ error: "Failed to update about" }, 500);
+  }
+});
+aboutRouter.delete("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"));
+  try {
+    await c.env.DB.prepare("DELETE FROM about_us WHERE id = ?").bind(id).run();
+    return c.json({ success: true });
+  } catch (e) {
+    return c.json({ error: "Failed to delete about" }, 500);
+  }
+});
+const newsRouter = new Hono2();
+const fallbackNews = [
+  {
+    id: 1,
+    title: "Website Launch",
+    content: "We are excited to announce the launch of our new website!",
+    image_url: "/images/news/launch.jpg",
+    published_at: "2025-08-01"
+  }
+];
+newsRouter.get("/", async (c) => {
+  try {
+    if (c.env.DB_AVAILABLE) {
+      const result = await c.env.DB.prepare("SELECT * FROM news ORDER BY published_at DESC").all();
+      return c.json({ news: result.results, source: "database" });
+    } else {
+      return c.json({ news: fallbackNews, source: "fallback" });
+    }
+  } catch (error) {
+    return c.json({ error: "Failed to fetch news" }, 500);
+  }
+});
+newsRouter.get("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"));
+  try {
+    const news = await c.env.DB.prepare("SELECT * FROM news WHERE id = ?").bind(id).first();
+    if (!news) return c.json({ error: "News not found" }, 404);
+    return c.json({ news });
+  } catch (e) {
+    return c.json({ error: "Failed to fetch news" }, 500);
+  }
+});
+newsRouter.post("/", async (c) => {
+  try {
+    const { title: title2, content, image_url } = await c.req.json();
+    const result = await c.env.DB.prepare(`
+      INSERT INTO news (title, content, image_url)
+      VALUES (?, ?, ?)
+    `).bind(title2, content, image_url || null).run();
+    const newItem = await c.env.DB.prepare("SELECT * FROM news WHERE id = ?").bind(result.meta.last_row_id).first();
+    return c.json({ news: newItem }, 201);
+  } catch (e) {
+    return c.json({ error: "Failed to create news" }, 500);
+  }
+});
+newsRouter.put("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"));
+  const { title: title2, content, image_url } = await c.req.json();
+  try {
+    await c.env.DB.prepare(`
+      UPDATE news SET title = ?, content = ?, image_url = ? WHERE id = ?
+    `).bind(title2, content, image_url, id).run();
+    const updated = await c.env.DB.prepare("SELECT * FROM news WHERE id = ?").bind(id).first();
+    return c.json({ news: updated });
+  } catch (e) {
+    return c.json({ error: "Failed to update news" }, 500);
+  }
+});
+newsRouter.delete("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"));
+  try {
+    await c.env.DB.prepare("DELETE FROM news WHERE id = ?").bind(id).run();
+    return c.json({ success: true });
+  } catch (e) {
+    return c.json({ error: "Failed to delete news" }, 500);
+  }
+});
+function uuidv4() {
+  return ("10000000-1000-4000-8000" + -1e11).replace(
+    /[018]/g,
+    (c) => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+  );
+}
+const uploadAboutImageRouter = new Hono2();
+uploadAboutImageRouter.post("/", async (c) => {
+  try {
+    const formData = await c.req.formData();
+    const file = formData.get("image");
+    if (!file || typeof file === "string") {
+      return c.json({ error: "Không có file nào được upload" }, 400);
+    }
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP)" }, 400);
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return c.json({ error: "Kích thước ảnh không được vượt quá 5MB!" }, 400);
+    }
+    const ext = file.name.split(".").pop();
+    const fileName = `about/${uuidv4()}.${ext}`;
+    const r2 = c.env.IMAGES;
+    await r2.put(fileName, await file.arrayBuffer(), {
+      httpMetadata: { contentType: file.type }
+    });
+    if (!c.env.PUBLIC_R2_URL) {
+      return c.json({ error: "Thiếu PUBLIC_R2_URL trong cấu hình môi trường" }, 500);
+    }
+    const baseUrl = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
+    const publicUrl = `${baseUrl}/${fileName}`;
+    return c.json({
+      success: true,
+      url: publicUrl,
+      fileName
+    });
+  } catch (error) {
+    console.error("Upload error:", error);
+    return c.json({ error: "Lỗi khi upload ảnh", details: error.message }, 500);
   }
 });
 const app = new Hono2();
@@ -2592,6 +2772,8 @@ app.use("*", async (c, next) => {
   await next();
 });
 app.route("/api/books", booksRouter);
+app.route("/api/about", aboutRouter);
+app.route("/api/news", newsRouter);
 app.route("/api/books/:id/related", bookRelatedRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.get("/api/health", async (c) => {
