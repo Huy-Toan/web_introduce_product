@@ -12,6 +12,7 @@ import ProductDetailPage from "./pages/ProductDetail";
 import News from "./pages/News";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import ScrollToTop from "./components/ScrollTop";
+import News_Detail from "./pages/NewsDetail";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
@@ -21,6 +22,7 @@ createRoot(document.getElementById("root")).render(
         <Route path="/*" element={<HomePage />} />
         <Route path="/genre/:genreId" element={<Products />} />
         <Route path="/product/product-detail/:bookId" element={<ProductDetailPage />} />
+        <Route path="/news/news-detail/:newsId" element={<News_Detail />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/product" element={<Products />} />
         <Route path="/contact" element={<ContactPage />} />

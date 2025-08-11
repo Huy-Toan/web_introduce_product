@@ -37,17 +37,8 @@ function News() {
     fetchNewsData();
   }, []);
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
-  };
-
   const handleNewsSelect = (newsId) => {
-    navigate(`/news/${newsId}`);
+    navigate(`/news/news-detail/${newsId}`);
   };
 
   return (
@@ -76,7 +67,6 @@ function News() {
                 key={newsItem.id}
                 news={newsItem}
                 onClick={() => handleNewsSelect(newsItem.id)}
-                formatDate={formatDate}
               />
             ))}
           </div>

@@ -13,7 +13,7 @@ function Banner() {
         </p>
         <div className="flex justify-center space-x-4">
           <button 
-            className="bg-white text-green-800 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+            className="bg-white cursor-pointer text-green-800 px-8 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
             onClick={() => navigate("/contact")}
           >
             Contact now

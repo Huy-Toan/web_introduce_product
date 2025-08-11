@@ -1,5 +1,5 @@
 // NewsCard.jsx
-export const NewsCard = ({ news, onClick, formatDate }) => {
+export const NewsCard = ({ news, onClick }) => {
   return (
     <div
       className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
@@ -19,9 +19,7 @@ export const NewsCard = ({ news, onClick, formatDate }) => {
               {news.category}
             </span>
           )}
-          <span className="text-gray-500 text-sm">
-            {formatDate(news.created_at)}
-          </span>
+   
         </div>
         <h3 className="text-lg font-semibold text-gray-900 mb-3 line-clamp-2">
           {news.title}

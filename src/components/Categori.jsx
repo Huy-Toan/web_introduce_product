@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { groupByGenre } from "../lib/utils";
-import { useNavigate } from "react-router";
 
 function ProductCategories({ categories = [], onSelectCategory }) {
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -10,7 +9,6 @@ function ProductCategories({ categories = [], onSelectCategory }) {
   const [loading, setLoading] = useState(true);
   const sliderRef = useRef(null);
   const intervalRef = useRef(null);
-  const navigate = useNavigate();
 
   // Fetch genres from API
   useEffect(() => {
@@ -23,13 +21,17 @@ function ProductCategories({ categories = [], onSelectCategory }) {
         const grouped = groupByGenre(booksArray);
         
         // Convert grouped object to array format
-        const genreArray = Object.entries(grouped).map(([name, genreData]) => ({
-          id: name,
-          name: genreData.name || name,
-          books: genreData.books || genreData,
-          count: genreData.count || (genreData.books ? genreData.books.length : 0)
+        // const genreArray = Object.entries(grouped).map(([name, genreData]) => ({
+        //   id: name,
+        //   name: genreData.name || name,
+        //   books: genreData.books || genreData,
+        //   count: genreData.count || (genreData.books ? genreData.books.length : 0)
+        // }));
+        const genreArray = grouped.map((genre) => ({
+          id: genre.name,
+          ...genre,
         }));
-        
+
         setGenres(genreArray);
       } catch (err) {
         console.error("Failed to load genres:", err);
@@ -177,7 +179,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
               
               <button
                 onClick={goToNext}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white hover:bg-gray-50 shadow-lg rounded-full p-3 transition-all duration-300 hover:shadow-xl"
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white cursor-pointer hover:bg-gray-50 shadow-lg rounded-full p-3 transition-all duration-300 hover:shadow-xl"
                 disabled={currentIndex === maxIndex}
               >
                 <ChevronRight className="h-6 w-6 text-gray-600" />
@@ -272,7 +274,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
         <div className="text-center mt-8 sm:mt-12">
           <button 
             onClick={() => window.location.href = "/product"}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors duration-300 shadow-lg hover:shadow-xl text-sm sm:text-base"
+            className="bg-blue-600 hover:bg-blue-700 cursor-pointer text-white px-6 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors duration-300 shadow-lg hover:shadow-xl text-sm sm:text-base"
           >
             Browse All Books
           </button>

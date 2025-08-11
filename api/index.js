@@ -4,6 +4,7 @@ import bookRelatedRouter from "./routes/book-related";
 import uploadImageRouter from "./routes/upload-image";
 import aboutRouter from "./routes/about";
 import newsRouter from "./routes/news";
+import seoApp from "./routes/seo";
 
 const app = new Hono();
 
@@ -32,6 +33,7 @@ app.use("*", async (c, next) => {
 app.route("/api/books", booksRouter);
 app.route("/api/about", aboutRouter);
 app.route("/api/news", newsRouter);
+app.route("/api/seo", seoApp);
 app.route("/api/books/:id/related", bookRelatedRouter);
 app.route("/api/upload-image", uploadImageRouter);
 

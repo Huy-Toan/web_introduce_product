@@ -20,8 +20,7 @@ function AboutPage() {
         
         // Xử lý data giống như LibraryPage
         const aboutArray = data.about || [];
-        console.log("About array:", aboutArray);
-        
+
         if (aboutArray.length > 0) {
           setAboutContent(aboutArray);
         } else {
@@ -87,7 +86,7 @@ function AboutPage() {
                           </div>
                           
                           <div className="space-y-6 text-gray-600 leading-relaxed">
-                            <p className="whitespace-pre-wrap">
+                            <p className="whitespace-pre-wrap text-justify">
                               {item.content}
                             </p>
                           </div>
@@ -109,7 +108,7 @@ function AboutPage() {
                           </h3>
                           
                           <div className="space-y-6 text-gray-600">
-                            <div className="whitespace-pre-wrap">
+                            <div className="whitespace-pre-wrap text-justify">
                               {item.content}
                             </div>
                           </div>

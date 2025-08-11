@@ -61,13 +61,14 @@ function Products() {
 
         const groupedGenres = groupByGenre(booksArray);
 
-        const genreList = Object.entries(groupedGenres).map(([name, books]) => ({
-          name,
-          books,
-          count: books.length
-        }));
+        // const genreList = Object.entries(groupedGenres).map(([name, books]) => ({
+        //   name,
+        //   books,
+        //   count: books.length
+        // }));
 
-        setGenres(genreList);
+        // setGenres(genreList);
+        setGenres(groupedGenres);
       } catch (err) {
         console.error("Failed to fetch genres:", err);
       }

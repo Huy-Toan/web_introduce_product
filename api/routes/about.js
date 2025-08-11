@@ -15,7 +15,6 @@ aboutRouter.get("/", async (c) => {
   try {
     if (c.env.DB_AVAILABLE) {
       const result = await c.env.DB.prepare("SELECT * FROM about_us").all();
-      console.log("Fetched about us from database:", result.results);
       return c.json({ about: result.results, source: "database" });
     } else {
       return c.json({ about: fallbackAbout, source: "fallback" });

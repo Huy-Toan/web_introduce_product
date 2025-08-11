@@ -27,5 +27,8 @@ bucket_name = "react-fullstack-images"
 [placement]
 mode = "smart"
 
+[ai]
+binding = "AI"
+
 upload_source_maps = true
 

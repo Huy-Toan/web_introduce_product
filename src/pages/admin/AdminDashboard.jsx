@@ -15,7 +15,7 @@ import AboutFormModal from './components/AboutFormModal';
 import AboutCard from './components/AboutCard';
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('dashboard');
 
     const {
     books,

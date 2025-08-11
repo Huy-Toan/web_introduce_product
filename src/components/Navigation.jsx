@@ -68,7 +68,7 @@ function TopNavigation() {
                 <button
                 key={page}
                 onClick={() => handlePageNavigation(page)}
-                className={`px-3 py-2 rounded-md text-lg font-medium transition-colors ${
+                className={`px-3 py-2 rounded-md text-lg font-medium transition- cursor-pointer ${
                     isActive(path)
                     ? "text-blue-700 bg-blue-50"
                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"

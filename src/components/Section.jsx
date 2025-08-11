@@ -1,11 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from "react-router";
+import { NewsCard } from './NewsCard';
 
 // Header/About Component
 export const AboutSection = () => {
   const [aboutData, setAboutData] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  
+  // Function để cắt text
+  const truncateText = (text, maxLength = 120) => {
+    if (!text) return '';
+    if (text.length <= maxLength) return text;
+    
+    // Tìm vị trí space gần nhất để không cắt giữa từ
+    const truncated = text.substring(0, maxLength);
+    const lastSpaceIndex = truncated.lastIndexOf(' ');
+    
+    if (lastSpaceIndex > maxLength * 0.8) {
+      return truncated.substring(0, lastSpaceIndex) + '...';
+    }
+    
+    return truncated + '...';
+  };
   
   useEffect(() => {
     const fetchAboutData = async () => {
@@ -50,25 +67,25 @@ export const AboutSection = () => {
                 </h2>
                 
                 <div className="space-y-4 text-gray-700 leading-relaxed">
-                  <p className="whitespace-pre-wrap">
-                    {aboutData[0].content}
+                  <p>
+                    {truncateText(aboutData[0].content, 150)}
                   </p>
                   
                   {aboutData[1] && (
                     <div className="mt-6">
                       <p className="font-semibold italic text-green-800 mb-2">{aboutData[1].title}:</p>
-                      <p className="whitespace-pre-wrap">
-                        {aboutData[1].content}
+                      <p>
+                        {truncateText(aboutData[1].content, 100)}
                       </p>
                     </div>
                   )}
                 </div>
                 
                 <button
-                      className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white px-8 py-3 rounded-full font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all duration-300 transform hover:-translate-y-1 shadow-lg hover:shadow-xl"
-                      onClick={() => navigate("/about")}
-                    >
-                      Đọc thêm →
+                  className="bg-gradient-to-r cursor-pointer from-yellow-500 to-yellow-600 text-white px-8 py-3 rounded-full font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all duration-300 transform hover:-translate-y-1 shadow-lg hover:shadow-xl"
+                  onClick={() => navigate("/about")}
+                >
+                  Đọc thêm →
                 </button>
               </>
             )}
@@ -262,6 +279,7 @@ export const TestimonialSection = () => {
 export const NewsSection = () => {
   const [newsData, setNewsData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchNewsData = async () => {
@@ -272,23 +290,7 @@ export const NewsSection = () => {
         setNewsData(newsArray);
       } catch (err) {
         console.error("Failed to load news data:", err);
-        // Fallback data
-        setNewsData([
-          {
-            id: 1,
-            title: "Khai trương khu vực đọc sách mới",
-            created_at: "2025-08-07",
-            summary: "Thư viện vừa khai trương khu vực đọc sách mới với không gian hiện đại...",
-            image_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
-          },
-          {
-            id: 2,
-            title: "Chương trình đọc sách mùa hè",
-            created_at: "2025-08-06",
-            summary: "Tham gia chương trình đọc sách mùa hè với nhiều hoạt động thú vị...",
-            image_url: "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
-          }
-        ]);
+
       } finally {
         setLoading(false);
       }
@@ -297,14 +299,10 @@ export const NewsSection = () => {
     fetchNewsData();
   }, []);
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
+  const handleNewsSelect = (newsId) => {
+    navigate(`/news/news-detail/${newsId}`);
   };
+
 
   return (
     <section className="bg-white py-20">
@@ -321,28 +319,12 @@ export const NewsSection = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-            {newsData.map((item) => (
-              <div 
-                key={item.id}
-                className="bg-white rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transform hover:-translate-y-2 transition-all duration-300 border border-gray-100"
-              >
-                <div className="overflow-hidden">
-                  <img 
-                    src={item.image_url || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"} 
-                    alt={item.title}
-                    className="w-full h-48 object-cover hover:scale-110 transition-transform duration-300"
-                  />
-                </div>
-                <div className="p-6">
-                  <h3 className="font-bold text-gray-800 mb-3 line-clamp-2 hover:text-yellow-600 transition-colors">
-                    {item.title}
-                  </h3>
-                  <p className="text-gray-500 text-sm mb-3">{formatDate(item.created_at)}</p>
-                  <p className="text-gray-600 text-sm leading-relaxed line-clamp-3">
-                    {item.summary || item.content}
-                  </p>
-                </div>
-              </div>
+            {newsData.map((newsItem) => (
+              <NewsCard
+                key={newsItem.id}
+                news={newsItem}
+                onClick={() => handleNewsSelect(newsItem.id)}
+              />
             ))}
           </div>
         )}
