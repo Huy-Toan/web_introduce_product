@@ -1,16 +1,7 @@
 import { Hono } from 'hono'
+import { cleanText } from '../../src/utils/textClean'
 
 const seoApp = new Hono()
-
-// ✅ Cải thiện hàm clean text
-function cleanAIResponse(text) {
-  if (!text) return '';
-  return text
-    .replace(/^\s*[\*\-\•]\s*/gm, '') // Remove bullets: *, -, •
-    .replace(/^\s*\d+\.\s*/gm, '')   // Remove numbered lists: 1., 2., etc
-    .replace(/\n{3,}/g, '\n\n')      // Remove excessive newlines
-    .trim();
-}
 
 // Hàm 1: Keyword → Full Content (Multi-call với context tự nhiên)
 seoApp.post('/generate-content', async (c) => {
@@ -108,9 +99,9 @@ Viết tiếp, không lặp lại phần đã viết.`
     const response = {
       success: true,
       raw_responses: {
-        planning: cleanAIResponse(planResult.response),
-        part1: cleanAIResponse(part1Result.response), 
-        part2: cleanAIResponse(part2Result.response)
+        planning: cleanText(planResult.response),
+        part1: cleanText(part1Result.response),
+        part2: cleanText(part2Result.response)
       },
       full_conversation: conversation,
       keyword: keyword,
@@ -221,9 +212,9 @@ Tư vấn chuyên nghiệp.`
     const response = {
       success: true,
       raw_responses: {
-        analysis: cleanAIResponse(analysisResult.response),
-        seo_elements: cleanAIResponse(seoResult.response),
-        recommendations: cleanAIResponse(recommendResult.response)
+        analysis: cleanText(analysisResult.response),
+        seo_elements: cleanText(seoResult.response),
+        recommendations: cleanText(recommendResult.response)
       },
       full_conversation: conversation,
       content_length: content.length,
