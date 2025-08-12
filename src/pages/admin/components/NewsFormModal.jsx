@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react'
 import { X, Sparkles } from 'lucide-react'
 import useNewsForm from '../hook/UseFormModal'
 
+const slugify = (str = '') =>
+  str
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+
 const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const [form, setForm] = useState({
     keyword: '',
@@ -22,9 +31,11 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     isGenerating
   } = useNewsForm(form, setForm)
 
+  // Tự fill form từ initialData khi mở modal
   useEffect(() => {
     if (isOpen) {
-      setForm({
+      setForm(prev => ({
+        ...prev,
         keyword: '',
         title: initialData.title || '',
         meta: initialData.meta || '',
@@ -32,13 +43,22 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
         keywords: initialData.keywords || '',
         slug: initialData.slug || '',
         image_url: initialData.image_url || ''
-      })
+      }))
       setImagePreview(initialData.image_url || '')
     }
   }, [initialData, isOpen])
 
   const handleChange = (e) => {
     const { name, value } = e.target
+    // Auto cập nhật slug khi người dùng đổi title (nếu slug đang trống)
+    if (name === 'title') {
+      setForm(prev => ({
+        ...prev,
+        title: value,
+        slug: prev.slug ? prev.slug : slugify(value)
+      }))
+      return
+    }
     setForm(prev => ({ ...prev, [name]: value }))
   }
 
@@ -58,6 +78,10 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     setIsUploading(true)
     try {
       let finalForm = { ...form }
+      // Re-slug nếu slug trống nhưng có title
+      if (!finalForm.slug && finalForm.title) {
+        finalForm.slug = slugify(finalForm.title)
+      }
       if (imageFile) {
         finalForm.image_url = await uploadImage(imageFile)
       }
@@ -87,6 +111,8 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
   if (!isOpen) return null
 
+  const contentWordCount = form.content.trim() ? form.content.trim().split(/\s+/).length : 0
+
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
@@ -110,13 +136,13 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 className="flex-1 px-3 py-2 border rounded focus:ring-2 focus:ring-purple-500"
                 disabled={isGenerating}
               />
-              <button 
-                type="button" 
-                onClick={generateContentFromKeyword} 
+              <button
+                type="button"
+                onClick={generateContentFromKeyword}
                 disabled={isGenerating || !form.keyword.trim()}
                 className="px-3 py-2 bg-purple-600 text-white rounded flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-700"
               >
-                <Sparkles size={16} /> 
+                <Sparkles size={16} />
                 {isGenerating ? 'Đang tạo...' : 'Tạo nội dung'}
               </button>
             </div>
@@ -125,24 +151,26 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
           {/* Title */}
           <div>
             <label className="block text-sm font-medium mb-1">Tiêu đề *</label>
-            <input 
-              name="title" 
-              value={form.title} 
-              onChange={handleChange} 
-              required 
-              className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" 
+            <input
+              name="title"
+              value={form.title}
+              onChange={handleChange}
+              required
+              className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
               disabled={isGenerating}
+              maxLength={90}
             />
+            <div className="text-xs text-gray-500 mt-1">{form.title.length}/60–90 ký tự gợi ý</div>
           </div>
 
           {/* Meta */}
           <div>
             <label className="block text-sm font-medium mb-1">Meta description</label>
-            <input 
-              name="meta" 
-              value={form.meta} 
-              onChange={handleChange} 
-              className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" 
+            <input
+              name="meta"
+              value={form.meta}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
               disabled={isGenerating}
               maxLength={160}
             />
@@ -152,24 +180,24 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
           {/* Content */}
           <div>
             <label className="block text-sm font-medium mb-1">Nội dung *</label>
-            <textarea 
-              name="content" 
-              value={form.content} 
-              onChange={handleChange} 
-              rows={8} 
-              required 
-              className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" 
+            <textarea
+              name="content"
+              value={form.content}
+              onChange={handleChange}
+              rows={10}
+              required
+              className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
               disabled={isGenerating}
             />
             <div className="flex justify-between items-center mt-2">
-              <div className="text-xs text-gray-500">{form.content.split(' ').filter(w => w.length > 0).length} từ</div>
-              <button 
-                type="button" 
-                onClick={generateSEOFromContent} 
+              <div className="text-xs text-gray-500">{contentWordCount} từ</div>
+              <button
+                type="button"
+                onClick={generateSEOFromContent}
                 disabled={isGenerating || !form.content.trim()}
                 className="px-3 py-2 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700"
               >
-                <Sparkles size={16} /> 
+                <Sparkles size={16} />
                 {isGenerating ? 'Đang tạo...' : 'Tạo SEO'}
               </button>
             </div>
@@ -178,11 +206,11 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
           {/* Keywords */}
           <div>
             <label className="block text-sm font-medium mb-1">Từ khóa SEO</label>
-            <input 
-              name="keywords" 
-              value={form.keywords} 
-              onChange={handleChange} 
-              className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" 
+            <input
+              name="keywords"
+              value={form.keywords}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
               disabled={isGenerating}
               placeholder="keyword1, keyword2, keyword3..."
             />
@@ -191,13 +219,13 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
           {/* Slug */}
           <div>
             <label className="block text-sm font-medium mb-1">Slug</label>
-            <input 
-              name="slug" 
-              value={form.slug} 
-              onChange={handleChange} 
-              className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" 
+            <input
+              name="slug"
+              value={form.slug}
+              onChange={handleChange}
+              className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
               disabled={isGenerating}
-              placeholder="url-slug-thien-thien"
+              placeholder="url-slug-than-thien-seo"
             />
           </div>
 
@@ -207,36 +235,36 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             {imagePreview && (
               <div className="mb-3 relative inline-block">
                 <img src={imagePreview} alt="Preview" className="w-40 h-28 object-cover rounded-md border" />
-                <button 
-                  type="button" 
-                  onClick={removeImage} 
+                <button
+                  type="button"
+                  onClick={removeImage}
                   className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
                 >
                   <X size={12} />
                 </button>
               </div>
             )}
-            <input 
-              type="file" 
-              accept="image/*" 
-              onChange={handleImageChange} 
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" 
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
               disabled={isGenerating}
             />
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t">
-            <button 
-              type="button" 
-              onClick={handleClose} 
+            <button
+              type="button"
+              onClick={handleClose}
               className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
               disabled={isGenerating}
             >
               Hủy
             </button>
-            <button 
-              type="submit" 
-              disabled={isUploading || isGenerating} 
+            <button
+              type="submit"
+              disabled={isUploading || isGenerating}
               className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUploading ? 'Đang lưu...' : initialData.id ? 'Cập nhật' : 'Thêm'}

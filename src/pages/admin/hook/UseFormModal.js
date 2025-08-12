@@ -1,10 +1,19 @@
 import { useState, useCallback } from 'react'
 
+const slugify = (str = '') =>
+  str
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+
 const useNewsForm = (form, setForm) => {
   const [isGenerating, setIsGenerating] = useState(false)
 
-  // Helper parse function for AI response
-  const parseAIResponse = useCallback((rawResponses, type = 'content') => {
+  // ====== LEGACY PARSER (fallback nếu backend trả raw_responses) ======
+  const legacyParser = useCallback((rawResponses, type = 'content') => {
     const cleanText = (text) => {
       if (!text) return ''
       return text
@@ -19,12 +28,9 @@ const useNewsForm = (form, setForm) => {
         new RegExp(`${label}\\s*[:：]\\s*(.+?)(?:\\n|$)`, 'i'),
         new RegExp(`${label}[^:：]*[:：]\\s*(.+?)(?:\\n[A-Z]|\\n\\n|$)`, 'i')
       ]
-
       for (const pattern of patterns) {
         const match = text.match(pattern)
-        if (match && match[1]) {
-          return cleanText(match[1])
-        }
+        if (match && match[1]) return cleanText(match[1])
       }
       return ''
     }
@@ -34,14 +40,13 @@ const useNewsForm = (form, setForm) => {
         new RegExp(`${label}\\s*[:：]\\s*([\\s\\S]+?)(?:\\n[A-Z][A-Z]|\\n\\n|$)`, 'i'),
         new RegExp(`${label}[^:：]*[:：]\\s*([\\s\\S]+?)(?:\\n[A-Z][A-Z]|\\n\\n|$)`, 'i')
       ]
-
       for (const pattern of patterns) {
         const match = text.match(pattern)
         if (match && match[1]) {
           return match[1]
             .split('\n')
             .map(line => cleanText(line))
-            .filter(line => line.length > 0)
+            .filter(Boolean)
             .slice(0, 5)
         }
       }
@@ -61,29 +66,48 @@ const useNewsForm = (form, setForm) => {
         title: title || '',
         meta: meta || '',
         content: (part1 + '\n\n' + part2).trim(),
-        keywords
+        keywords: Array.isArray(keywords) ? keywords.join(', ') : ''
       }
     } else {
-      const analysis = rawResponses.analysis || ''
       const seoElements = rawResponses.seo_elements || ''
-      const recommendations = rawResponses.recommendations || ''
-
       const title = extractValue(seoElements, 'TIÊU ĐỀ SEO|tiêu đề seo|tiêu đề')
       const meta = extractValue(seoElements, 'META DESCRIPTION|meta description|META DESC')
-      const keywords = extractKeywords(seoElements, 'TỪ KHÓA CHÍNH|từ khóa chính|từ khóa|keywords')
+      const keywordsArr = extractKeywords(seoElements, 'TỪ KHÓA CHÍNH|từ khóa chính|từ khóa|keywords')
       const slug = extractValue(seoElements, 'URL SLUG|url slug|slug')
 
       return {
         title: title || '',
         meta: meta || '',
-        keywords,
-        slug: slug || '',
-        analysis,
-        recommendations
+        keywords: Array.isArray(keywordsArr) ? keywordsArr.join(', ') : '',
+        slug: slug || ''
       }
     }
   }, [])
 
+  // ====== API V2 PARSER (mặc định) ======
+  const parseNewContentResponse = useCallback((data, keywordFallback = '') => {
+    const d = data?.data || {}
+    return {
+      title: d.title || keywordFallback || '',
+      meta: d.meta || '',
+      content: d.content || '',
+      keywords: typeof d.keywords === 'string' ? d.keywords : (Array.isArray(d.keywords) ? d.keywords.join(', ') : ''),
+      slug: d.slug || (d.title ? slugify(d.title) : '')
+    }
+  }, [])
+
+  const parseNewSEOResponse = useCallback((data) => {
+    const d = data?.data || {}
+    return {
+      title: d.title || '',
+      meta: d.meta || '',
+      keywords: typeof d.keywords === 'string' ? d.keywords : (Array.isArray(d.keywords) ? d.keywords.join(', ') : ''),
+      slug: d.slug || (d.title ? slugify(d.title) : '')
+      // Bạn có thể lấy thêm d.focus_keyword, d.score, d.tips, d.distribution nếu muốn hiển thị
+    }
+  }, [])
+
+  // ====== Upload ảnh ======
   const uploadImage = useCallback(async (file) => {
     const fd = new FormData()
     fd.append('image', file)
@@ -93,6 +117,7 @@ const useNewsForm = (form, setForm) => {
     return data.url
   }, [])
 
+  // ====== Cách 1: Keyword -> Full content ======
   const generateContentFromKeyword = useCallback(async () => {
     if (!form.keyword.trim()) return alert('Nhập từ khóa trước!')
     setIsGenerating(true)
@@ -102,33 +127,44 @@ const useNewsForm = (form, setForm) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword: form.keyword.trim() })
       })
-
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
       const data = await res.json()
-      if (!data.success || !data.raw_responses) {
-        throw new Error('AI response không hợp lệ')
-      }
+      if (!data.success) throw new Error(data.error || 'Tạo nội dung thất bại')
 
-      const result = parseAIResponse(data.raw_responses, 'content')
+      // Ưu tiên đọc theo schema mới (data.*)
+      let parsed = parseNewContentResponse(data, form.keyword)
+      // Fallback legacy nếu không có data chuẩn
+      if ((!parsed.title && !parsed.meta && !parsed.content) && data.raw_responses) {
+        const legacy = legacyParser(data.raw_responses, 'content')
+        parsed = {
+          title: legacy.title,
+          meta: legacy.meta,
+          content: legacy.content,
+          keywords: legacy.keywords,
+          slug: legacy.title ? slugify(legacy.title) : slugify(form.keyword)
+        }
+      }
 
       setForm(prev => ({
         ...prev,
-        title: result.title || prev.title,
-        meta: result.meta || prev.meta,
-        content: result.content || prev.content,
-        keywords: Array.isArray(result.keywords) ? result.keywords.join(', ') : result.keywords || ''
+        title: parsed.title,
+        meta: parsed.meta,
+        content: parsed.content,
+        keywords: parsed.keywords,
+        slug: parsed.slug || prev.slug
       }))
 
       alert('Tạo nội dung thành công!')
     } catch (err) {
       console.error('Generate content error:', err)
-      alert(`Lỗi tạo nội dung: ${err.message}`)
+      alert(`Lỗi tạo nội dung`)
     } finally {
       setIsGenerating(false)
     }
-  }, [form.keyword, parseAIResponse, setForm])
+  }, [form.keyword, legacyParser, parseNewContentResponse, setForm])
 
+  // ====== Cách 2: Content -> SEO ======
   const generateSEOFromContent = useCallback(async () => {
     if (!form.content.trim()) return alert('Nhập nội dung trước!')
     setIsGenerating(true)
@@ -138,32 +174,40 @@ const useNewsForm = (form, setForm) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: form.content.trim() })
       })
-
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
 
       const data = await res.json()
-      if (!data.success || !data.raw_responses) {
-        throw new Error('AI response không hợp lệ')
-      }
+      if (!data.success) throw new Error(data.error || 'Tạo SEO thất bại')
 
-      const result = parseAIResponse(data.raw_responses, 'seo')
+      // Ưu tiên schema mới
+      let parsed = parseNewSEOResponse(data)
+      // Fallback legacy
+      if ((!parsed.title && !parsed.meta && !parsed.keywords && !parsed.slug) && data.raw_responses) {
+        const legacy = legacyParser(data.raw_responses, 'seo')
+        parsed = {
+          title: legacy.title,
+          meta: legacy.meta,
+          keywords: legacy.keywords,
+          slug: legacy.slug || (legacy.title ? slugify(legacy.title) : '')
+        }
+      }
 
       setForm(prev => ({
         ...prev,
-        title: result.title || prev.title,
-        meta: result.meta || prev.meta,
-        keywords: result.keywords.join(', '),
-        slug: result.slug || prev.slug
+        title: parsed.title || prev.title,
+        meta: parsed.meta || prev.meta,
+        keywords: parsed.keywords || prev.keywords,
+        slug: parsed.slug || prev.slug
       }))
 
       alert('Tạo SEO thành công!')
     } catch (err) {
       console.error('Generate SEO error:', err)
-      alert(`Lỗi tạo SEO: ${err.message}`)
+      alert(`Lỗi tạo SEO`)
     } finally {
       setIsGenerating(false)
     }
-  }, [form.content, parseAIResponse, setForm])
+  }, [form.content, legacyParser, parseNewSEOResponse, setForm])
 
   return { isGenerating, uploadImage, generateContentFromKeyword, generateSEOFromContent }
 }
