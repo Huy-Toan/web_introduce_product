@@ -1,76 +1,139 @@
-import { useEffect, useState } from 'react'
-import { X, Sparkles } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { X, Sparkles, ImagePlus } from 'lucide-react'
+import EditorMd from './EditorMd'
+import { marked } from 'marked'
 import useNewsForm from '../hook/UseFormModal'
+import TurndownService from 'turndown'
 
-const slugify = (str = '') =>
-  str
-    .toLowerCase()
+const slugify = (s = '') =>
+  s.toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9\s-]/g, '')
     .trim()
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
 
-const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
+export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData = {} }) {
   const [form, setForm] = useState({
-    keyword: '',
-    title: '',
-    meta: '',
-    content: '',
-    keywords: '',
-    slug: '',
-    image_url: ''
+    keyword: '', title: '', meta: '', content: '', keywords: '', slug: '', image_url: ''
   })
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState('')
   const [isUploading, setIsUploading] = useState(false)
-  const {
-    uploadImage,
-    generateContentFromKeyword,
-    generateSEOFromContent,
-    isGenerating
-  } = useNewsForm(form, setForm)
 
-  // Tự fill form từ initialData khi mở modal
+  const { uploadImage, generateContentFromKeyword, generateSEOFromContent, isGenerating } =
+    useNewsForm(form, setForm)
+
+  // Markdown hiện có trong editor
+  const [md, setMd] = useState('')
+  const editorRef = useRef(null)
+  const filePickerRef = useRef(null)
+  const tempImages = useRef(new Map()) 
+
+  // Nếu content cũ là HTML thì convert sang MD để nạp vào Editor.md
+  const initialMarkdown = useMemo(() => {
+    const src = (initialData.content || '').trim()
+    if (!src) return ''
+    const hasTags = /<\/?[a-z][\s\S]*>/i.test(src)
+    return hasTags ? new TurndownService().turndown(src) : src
+  }, [initialData.content, isOpen])
+
+  // Khi mở modal: fill form + chuẩn bị editor + ảnh cover
   useEffect(() => {
-    if (isOpen) {
-      setForm(prev => ({
-        ...prev,
-        keyword: '',
-        title: initialData.title || '',
-        meta: initialData.meta || '',
-        content: initialData.content || '',
-        keywords: initialData.keywords || '',
-        slug: initialData.slug || '',
-        image_url: initialData.image_url || ''
-      }))
-      setImagePreview(initialData.image_url || '')
-    }
-  }, [initialData, isOpen])
+    if (!isOpen) return
+    setForm(prev => ({
+      ...prev,
+      keyword: '',
+      title: initialData.title || '',
+      meta: initialData.meta || '',
+      content: initialData.content || '',
+      keywords: initialData.keywords || '',
+      slug: initialData.slug || '',
+      image_url: initialData.image_url || ''
+    }))
+    setImagePreview(initialData.image_url || '')
+    setMd(initialMarkdown)
+    tempImages.current.clear()
+
+    requestAnimationFrame(() => editorRef.current?.cm?.refresh())
+  }, [initialData, isOpen, initialMarkdown])
+
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    // Auto cập nhật slug khi người dùng đổi title (nếu slug đang trống)
     if (name === 'title') {
-      setForm(prev => ({
-        ...prev,
-        title: value,
-        slug: prev.slug ? prev.slug : slugify(value)
-      }))
-      return
+      setForm(prev => ({ ...prev, title: value, slug: prev.slug || slugify(value) }))
+    } else {
+      setForm(prev => ({ ...prev, [name]: value }))
     }
-    setForm(prev => ({ ...prev, [name]: value }))
   }
 
+  // Ảnh cover
   const handleImageChange = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    if (!file.type.startsWith('image/')) return alert('Vui lòng chọn file ảnh hợp lệ!')
-    if (file.size > 5 * 1024 * 1024) return alert('Ảnh không được vượt quá 5MB!')
-    setImageFile(file)
-    const reader = new FileReader()
-    reader.onload = ev => setImagePreview(ev.target.result)
-    reader.readAsDataURL(file)
+    const f = e.target.files?.[0]; if (!f) return
+    if (!f.type.startsWith('image/')) return alert('Vui lòng chọn file ảnh!')
+    if (f.size > 5 * 1024 * 1024) return alert('Ảnh không vượt 5MB!')
+    setImageFile(f)
+    const r = new FileReader()
+    r.onload = ev => setImagePreview(ev.target.result)
+    r.readAsDataURL(f)
+  }
+
+  // Chèn ảnh xem trước vào Markdown (blob:)
+  const pickInlineImage = async (e) => {
+    const f = e.target.files?.[0]; if (!f) return
+    const blobUrl = URL.createObjectURL(f)
+    tempImages.current.set(blobUrl, f)
+    editorRef.current?.insertValue(`\n![](${blobUrl})\n`)
+    e.target.value = ''
+  }
+
+  // AI → gen nội dung → đổ vào editor (convert HTML -> MD nếu cần)
+  const handleGenerateClick = async () => {
+    const out = await generateContentFromKeyword()
+    const src = (typeof out === 'string' && out.trim()) ? out : (form.content || '')
+    if (!src) return
+    const hasTags = /<\/?[a-z][\s\S]*>/i.test(src)
+    const newMd = hasTags ? new TurndownService().turndown(src) : src
+
+    setMd(newMd)
+    requestAnimationFrame(() => editorRef.current?.refresh());
+  }
+
+  // Upload ảnh tạm & thay URL trong MD trước khi lưu
+  async function replaceTempImagesInMarkdown(markdown) {
+    let out = markdown
+    const re = /!\[[^\]]*]\(([^)]+)\)/g
+    const jobs = []
+    for (const m of markdown.matchAll(re)) {
+      const url = m[1]
+      if (url.startsWith('blob:')) {
+        const file = tempImages.current.get(url)
+        if (!file) continue
+        jobs.push((async () => {
+          const u = await uploadImage(file)
+          out = out.split(url).join(u)
+        })())
+      } else if (url.startsWith('data:image/')) {
+        jobs.push((async () => {
+          const file = await dataURLtoFile(url)
+          const u = await uploadImage(file)
+          out = out.split(url).join(u)
+        })())
+      }
+    }
+    await Promise.all(jobs)
+    return out
+  }
+
+  function dataURLtoFile(dataurl) {
+    const [meta, b64] = dataurl.split(',')
+    const mime = meta.match(/data:(.*?);base64/)?.[1] || 'image/png'
+    const bin = atob(b64 || '')
+    const arr = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
+    const ext = (mime.split('/')[1] || 'png').toLowerCase()
+    return new File([arr], `inline-${Date.now()}.${ext}`, { type: mime })
   }
 
   const handleSubmit = async (e) => {
@@ -78,13 +141,19 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     setIsUploading(true)
     try {
       let finalForm = { ...form }
-      // Re-slug nếu slug trống nhưng có title
-      if (!finalForm.slug && finalForm.title) {
-        finalForm.slug = slugify(finalForm.title)
+
+      if (!finalForm.slug && finalForm.title) finalForm.slug = slugify(finalForm.title)
+
+      if (imageFile) finalForm.image_url = await uploadImage(imageFile)
+
+      let mdClean = md
+      if (/blob:|data:image\//.test(mdClean)) {
+        mdClean = await replaceTempImagesInMarkdown(mdClean)
       }
-      if (imageFile) {
-        finalForm.image_url = await uploadImage(imageFile)
-      }
+
+      finalForm.content_md = mdClean
+      finalForm.content_html = marked.parse(mdClean)
+
       if (initialData.id) finalForm.id = initialData.id
       onSubmit(finalForm)
       handleClose()
@@ -101,21 +170,18 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     setForm({ keyword: '', title: '', meta: '', content: '', keywords: '', slug: '', image_url: '' })
     setImageFile(null)
     setImagePreview('')
-  }
-
-  const removeImage = () => {
-    setImageFile(null)
-    setImagePreview('')
-    setForm(prev => ({ ...prev, image_url: '' }))
+    setMd('')
+    tempImages.current.clear()
   }
 
   if (!isOpen) return null
 
-  const contentWordCount = form.content.trim() ? form.content.trim().split(/\s+/).length : 0
+  // Đếm từ từ HTML (loại thẻ)
+  const wordCount = (form.content.replace(/<[^>]+>/g, ' ').trim().match(/\S+/g) || []).length
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[100vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="text-lg font-semibold">{initialData.id ? 'Chỉnh sửa tin tức' : 'Thêm tin tức mới'}</h3>
           <button onClick={handleClose} disabled={isUploading || isGenerating} className="text-gray-400 hover:text-gray-600">
@@ -138,12 +204,11 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               />
               <button
                 type="button"
-                onClick={generateContentFromKeyword}
+                onClick={handleGenerateClick}
                 disabled={isGenerating || !form.keyword.trim()}
-                className="px-3 py-2 bg-purple-600 text-white rounded flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-700"
+                className="px-3 py-2 bg-purple-600 text-white rounded flex items-center gap-1 disabled:opacity-50 hover:bg-purple-700"
               >
-                <Sparkles size={16} />
-                {isGenerating ? 'Đang tạo...' : 'Tạo nội dung'}
+                <Sparkles size={16} /> {isGenerating ? 'Đang tạo...' : 'Tạo nội dung'}
               </button>
             </div>
           </div>
@@ -177,28 +242,40 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             <div className="text-xs text-gray-500 mt-1">{form.meta.length}/160 ký tự</div>
           </div>
 
-          {/* Content */}
+          {/* Content + chèn ảnh xem trước */}
           <div>
-            <label className="block text-sm font-medium mb-1">Nội dung *</label>
-            <textarea
-              name="content"
-              value={form.content}
-              onChange={handleChange}
-              rows={10}
-              required
-              className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
-              disabled={isGenerating}
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium mb-1">Nội dung *</label>
+              <div className="flex items-center gap-2">
+                <input type="file" accept="image/*" ref={filePickerRef} onChange={pickInlineImage} hidden />
+                <button
+                  type="button"
+                  onClick={() => filePickerRef.current?.click()}
+                  className="px-2 py-1 border rounded text-sm flex items-center gap-1 hover:bg-gray-50"
+                >
+                  <ImagePlus size={16} /> Chèn ảnh
+                </button>
+              </div>
+            </div>
+
+            <EditorMd
+              ref={editorRef}
+              value={form.content || md}               
+              onReady={(inst) => {
+                requestAnimationFrame(() => inst.cm.refresh());
+              }}
+              onChangeMarkdown={setMd}
             />
+
             <div className="flex justify-between items-center mt-2">
-              <div className="text-xs text-gray-500">{contentWordCount} từ</div>
+              <div className="text-xs text-gray-500">{wordCount} từ</div>
               <button
                 type="button"
                 onClick={generateSEOFromContent}
                 disabled={isGenerating || !form.content.trim()}
-                className="px-3 py-2 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700"
+                className="px-3 py-2 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-50 hover:bg-blue-700"
               >
-                <Sparkles size={16} />
-                {isGenerating ? 'Đang tạo...' : 'Tạo SEO'}
+                <Sparkles size={16} /> {isGenerating ? 'Đang tạo...' : 'Tạo SEO'}
               </button>
             </div>
           </div>
@@ -229,7 +306,7 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             />
           </div>
 
-          {/* Image */}
+          {/* Cover image */}
           <div>
             <label className="block text-sm font-medium mb-1">Ảnh minh họa</label>
             {imagePreview && (
@@ -237,7 +314,7 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 <img src={imagePreview} alt="Preview" className="w-40 h-28 object-cover rounded-md border" />
                 <button
                   type="button"
-                  onClick={removeImage}
+                  onClick={() => { setImageFile(null); setImagePreview(''); setForm(p => ({ ...p, image_url: '' })) }}
                   className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
                 >
                   <X size={12} />
@@ -265,7 +342,7 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             <button
               type="submit"
               disabled={isUploading || isGenerating}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
             >
               {isUploading ? 'Đang lưu...' : initialData.id ? 'Cập nhật' : 'Thêm'}
             </button>
@@ -275,5 +352,3 @@ const NewsFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     </div>
   )
 }
-
-export default NewsFormModal

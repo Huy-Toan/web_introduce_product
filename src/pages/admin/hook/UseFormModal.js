@@ -103,7 +103,6 @@ const useNewsForm = (form, setForm) => {
       meta: d.meta || '',
       keywords: typeof d.keywords === 'string' ? d.keywords : (Array.isArray(d.keywords) ? d.keywords.join(', ') : ''),
       slug: d.slug || (d.title ? slugify(d.title) : '')
-      // Bạn có thể lấy thêm d.focus_keyword, d.score, d.tips, d.distribution nếu muốn hiển thị
     }
   }, [])
 
