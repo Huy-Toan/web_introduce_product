@@ -13,19 +13,11 @@ export const NewsCard = ({ news, onClick }) => {
         />
       </div>
       <div className="p-6">
-        <div className="flex items-center justify-between mb-3">
-          {news.category && (
-            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
-              {news.category}
-            </span>
-          )}
-   
-        </div>
         <h3 className="text-lg font-semibold text-gray-900 mb-3 line-clamp-2">
           {news.title}
         </h3>
         <p className="text-gray-600 text-sm line-clamp-3">
-          {news.summary}
+          {news.meta_description || news.content || ''}
         </p>
         <div className="mt-4">
           <button className="text-blue-600 hover:text-blue-800 text-sm font-medium">

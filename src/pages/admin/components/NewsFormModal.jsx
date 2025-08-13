@@ -13,6 +13,8 @@ const slugify = (s = '') =>
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
 
+
+
 export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData = {} }) {
   const [form, setForm] = useState({
     keyword: '', title: '', meta: '', content: '', keywords: '', slug: '', image_url: ''
@@ -45,7 +47,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
       ...prev,
       keyword: '',
       title: initialData.title || '',
-      meta: initialData.meta || '',
+      meta: initialData.meta_description || '',
       content: initialData.content || '',
       keywords: initialData.keywords || '',
       slug: initialData.slug || '',
@@ -57,6 +59,8 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
 
     requestAnimationFrame(() => editorRef.current?.cm?.refresh())
   }, [initialData, isOpen, initialMarkdown])
+
+  
 
 
   const handleChange = (e) => {
@@ -97,6 +101,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
     const newMd = hasTags ? new TurndownService().turndown(src) : src
 
     setMd(newMd)
+    console.log('Generated Markdown:', newMd)
     requestAnimationFrame(() => editorRef.current?.refresh());
   }
 
@@ -136,34 +141,42 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
     return new File([arr], `inline-${Date.now()}.${ext}`, { type: mime })
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setIsUploading(true)
-    try {
-      let finalForm = { ...form }
+const handleSubmit = async (e) => {
+  e.preventDefault()
+  setIsUploading(true)
+  try {
+    let finalForm = { ...form }
 
-      if (!finalForm.slug && finalForm.title) finalForm.slug = slugify(finalForm.title)
+    if (!finalForm.slug && finalForm.title) finalForm.slug = slugify(finalForm.title)
 
-      if (imageFile) finalForm.image_url = await uploadImage(imageFile)
+    if (imageFile) finalForm.image_url = await uploadImage(imageFile)
 
-      let mdClean = md
-      if (/blob:|data:image\//.test(mdClean)) {
-        mdClean = await replaceTempImagesInMarkdown(mdClean)
-      }
-
-      finalForm.content_md = mdClean
-      finalForm.content_html = marked.parse(mdClean)
-
-      if (initialData.id) finalForm.id = initialData.id
-      onSubmit(finalForm)
-      handleClose()
-    } catch (err) {
-      console.error(err)
-      alert('Có lỗi khi lưu!')
-    } finally {
-      setIsUploading(false)
+    // Chuẩn bị mdClean từ md để dùng cho nhánh "sửa"
+    let mdClean = md || ''
+    if (/blob:|data:image\//.test(mdClean)) {
+      mdClean = await replaceTempImagesInMarkdown(mdClean)
     }
+
+    if (initialData.id) {
+      finalForm.content = (mdClean || '').trim()
+    } else {
+      finalForm.content = (form.content || '').trim()
+    }
+
+    if (initialData.id) finalForm.id = initialData.id
+
+    console.log('Submitting:', finalForm)
+    onSubmit(finalForm)
+    handleClose()
+  } catch (err) {
+    console.error(err)
+    alert('Có lỗi khi lưu!')
+  } finally {
+    setIsUploading(false)
   }
+}
+
+
 
   const handleClose = () => {
     onClose()
@@ -177,7 +190,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
   if (!isOpen) return null
 
   // Đếm từ từ HTML (loại thẻ)
-  const wordCount = (form.content.replace(/<[^>]+>/g, ' ').trim().match(/\S+/g) || []).length
+  const wordCount = (md.replace(/<[^>]+>/g, ' ').trim().match(/\S+/g) || []).length
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -260,11 +273,14 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
 
             <EditorMd
               ref={editorRef}
-              value={form.content || md}               
+              value={form.content || md}              
               onReady={(inst) => {
                 requestAnimationFrame(() => inst.cm.refresh());
               }}
-              onChangeMarkdown={setMd}
+              onChangeMarkdown={(val) => {
+                setMd(val)
+                setForm(prev => ({ ...prev, content: val }))
+              }}
             />
 
             <div className="flex justify-between items-center mt-2">
@@ -272,7 +288,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
               <button
                 type="button"
                 onClick={generateSEOFromContent}
-                disabled={isGenerating || !form.content.trim()}
+                disabled={isGenerating || !md.trim()}
                 className="px-3 py-2 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-50 hover:bg-blue-700"
               >
                 <Sparkles size={16} /> {isGenerating ? 'Đang tạo...' : 'Tạo SEO'}

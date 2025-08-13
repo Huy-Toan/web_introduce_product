@@ -131,9 +131,7 @@ const useNewsForm = (form, setForm) => {
       const data = await res.json()
       if (!data.success) throw new Error(data.error || 'Tạo nội dung thất bại')
 
-      // Ưu tiên đọc theo schema mới (data.*)
       let parsed = parseNewContentResponse(data, form.keyword)
-      // Fallback legacy nếu không có data chuẩn
       if ((!parsed.title && !parsed.meta && !parsed.content) && data.raw_responses) {
         const legacy = legacyParser(data.raw_responses, 'content')
         parsed = {

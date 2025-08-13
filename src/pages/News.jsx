@@ -25,7 +25,7 @@ function News() {
             id: 1,
             title: "Khai trương khu vực đọc sách mới",
             created_at: "2025-08-07",
-            summary: "Thư viện vừa khai trương khu vực đọc sách mới với không gian hiện đại và trang thiết bị đầy đủ để phục vụ độc giả tốt nhất.",
+            meta_description: "Thư viện vừa khai trương khu vực đọc sách mới với không gian hiện đại và trang thiết bị đầy đủ để phục vụ độc giả tốt nhất.",
             image_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
           }
         ]);
@@ -63,6 +63,7 @@ function News() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {newsData.map((newsItem) => (
+              console.log(newsItem),
               <NewsCard
                 key={newsItem.id}
                 news={newsItem}

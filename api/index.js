@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import booksRouter from "./routes/books";
 import bookRelatedRouter from "./routes/book-related";
 import uploadImageRouter from "./routes/upload-image";
+import editorUploadRouter from "./routes/editor-upload";
 import aboutRouter from "./routes/about";
 import newsRouter from "./routes/news";
 import seoApp from "./routes/seo";
@@ -36,6 +37,7 @@ app.route("/api/news", newsRouter);
 app.route("/api/seo", seoApp);
 app.route("/api/books/:id/related", bookRelatedRouter);
 app.route("/api/upload-image", uploadImageRouter);
+app.route("/api/editor-upload", editorUploadRouter);
 
 
 // Health check endpoint

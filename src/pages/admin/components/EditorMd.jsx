@@ -41,7 +41,7 @@ const EditorMd = forwardRef(function EditorMd(
 ) {
   const idRef = useRef('edmd-' + Math.random().toString(36).slice(2));
   const instRef = useRef(null);
-  const isSettingRef = useRef(false); // 🚩 phân biệt thay đổi lập trình
+  const isSettingRef = useRef(false); 
   const [status, setStatus] = useState('loading');
 
   const cbRef = useRef({ onChangeMarkdown, onChangeHTML, onReady });
@@ -71,15 +71,16 @@ const EditorMd = forwardRef(function EditorMd(
           height,
           markdown: '',
           path: 'https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/',
-          imageUpload: false,
-          pasteImage: false,
+          imageUpload: true,
+          pasteImage: true,
+          imageUploadURL: '/api/editor-upload',  
+          imageUploadName: 'editormd-image-file', 
           toolbarAutoFixed: false,
           watch: true,
           delay: 150,
           saveHTMLToTextarea: true,
           htmlDecode: 'style,script,iframe|on*',
           onload: function () {
-            // set nội dung khởi tạo từ value
             isSettingRef.current = true;
             this.setMarkdown(value || '');
             this.cm.refresh();
@@ -94,7 +95,6 @@ const EditorMd = forwardRef(function EditorMd(
             cbRef.current.onReady?.(this);
             setStatus('ready');
 
-            // refresh sau 1 frame để chắc CodeMirror layout đúng (modal)
             requestAnimationFrame(() => this.cm.refresh());
           },
         });

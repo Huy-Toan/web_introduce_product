@@ -15,7 +15,7 @@ const Newscard = ({ news, onEdit, onDelete }) => {
       <div className="p-4">
         <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">{news.title}</h3>
         <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-          {news.content || 'Chưa có mô tả'}
+          {news.meta_description || news.content || 'Chưa có mô tả'}
         </p>
 
         <div className="flex gap-2">
