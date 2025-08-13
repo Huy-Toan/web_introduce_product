@@ -6,6 +6,7 @@ import editorUploadRouter from "./routes/editor-upload";
 import aboutRouter from "./routes/about";
 import newsRouter from "./routes/news";
 import seoApp from "./routes/seo";
+import authRouter from "./routes/auth";
 
 const app = new Hono();
 
@@ -31,6 +32,7 @@ app.use("*", async (c, next) => {
   await next();
 });
 
+app.route("/api/auth", authRouter);
 app.route("/api/books", booksRouter);
 app.route("/api/about", aboutRouter);
 app.route("/api/news", newsRouter);

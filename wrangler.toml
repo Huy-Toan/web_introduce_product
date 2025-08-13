@@ -30,5 +30,9 @@ mode = "smart"
 [ai]
 binding = "AI"
 
+[vars]
+JWT_SECRET = "kOIu0O//qZ7JP++tc7GSBBUmvdw+Fcm7sx/D533H0JQ="
+JWT_EXPIRES_IN = "900" 
+
 upload_source_maps = true
 

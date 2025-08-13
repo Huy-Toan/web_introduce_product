@@ -154,7 +154,6 @@ Yêu cầu:
       generated_at: new Date().toISOString()
     }
 
-    console.log('Content generation response:', response)
     return c.json(response)
   } catch (err) {
     console.error('Content generation error:', err)

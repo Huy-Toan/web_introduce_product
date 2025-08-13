@@ -8,10 +8,37 @@ import rehypeExternalLinks from 'rehype-external-links';
 import rehypeSanitize from 'rehype-sanitize';
 import { defaultSchema } from 'hast-util-sanitize';
 import Slugger from 'github-slugger';
+import SEO, { buildNewsArticleJsonLd, stripMd } from './SEOhead'
 
 function NewsDetail({ newsData }) {
   const { news } = newsData || {};
   const markdown = news?.content || '';
+  const SITE_URL = import.meta.env.VITE_SITE_URL || 'https://example.com'
+  const canonical = news?.slug ? `${SITE_URL}/news/${news.slug}` : SITE_URL
+  const seoTitle =
+    (news?.title && news.title.trim()) ||
+    (markdown.match(/^#\s+(.+)$/m) || [])[1] ||
+    'Bài viết';
+  const seoDesc =
+    (news?.meta_description && news.meta_description.trim()) ||
+    stripMd(markdown).slice(0, 300);
+  const keywords = String(news?.keywords || '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+  const published = news?.published_at || news?.created_at;
+  const modified  = news?.updated_at || published;
+  const jsonLd = buildNewsArticleJsonLd({
+    url: canonical,
+    headline: seoTitle,
+    images: news?.image_url ? [news.image_url] : [],
+    datePublished: published,
+    dateModified: modified,
+    authorName: news?.author || 'HuyToan',
+    publisherName: 'AllXone',
+    publisherLogo: `${SITE_URL}/logo-512.png`,
+  })
+
 
   // Sanitize schema: cho phép ảnh + id trên headings (để anchor hoạt động)
   const schema = useMemo(() => {
@@ -19,7 +46,6 @@ function NewsDetail({ newsData }) {
     s.tagNames = Array.from(new Set([...(s.tagNames || []), 'img', 'figure', 'figcaption', 'mark', 'kbd']));
     s.attributes = {
       ...(s.attributes || {}),
-      // ✅ Cho phép id cho H1..H6 (do rehype-slug gắn)
       h1: [['id']], h2: [['id']], h3: [['id']], h4: [['id']], h5: [['id']], h6: [['id']],
       img: [
         ['src'], ['alt'], ['title'], ['width'], ['height'], ['loading'], ['decoding'], ['srcset'], ['sizes'],
@@ -51,6 +77,20 @@ function NewsDetail({ newsData }) {
 
   return (
     <div>
+     <SEO
+       title={seoTitle}
+       description={seoDesc}
+       url={canonical}
+       image={news?.image_url}
+       keywords={keywords}
+       publishedTime={published}
+       modifiedTime={modified}
+       siteName="Your Brand"
+       ogType="article"
+       twitterCard="summary_large_image"
+       jsonLd={jsonLd}
+     />
+
       <div className="space-y-12 mt-12">
         <div className="card">
           {/* Tiêu đề */}
@@ -83,7 +123,6 @@ function NewsDetail({ newsData }) {
                 {toc.map((h, idx) => (
                   <li
                     key={idx}
-                    // ✅ tránh Tailwind class động
                     style={{ marginLeft: (h.level - 1) * 12 }}
                   >
                     <a href={`#${h.id}`} className="inline-block hover:underline">

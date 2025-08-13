@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import SidebarNav from './components/SideBar';
 import BookCard from './components/BookCard';
 import FilterSortBar from './components/FilterSort';
@@ -13,11 +14,12 @@ import NewsFormModal from './components/NewsFormModal';
 import useAbout from './hook/Useabout';
 import AboutFormModal from './components/AboutFormModal';
 import AboutCard from './components/AboutCard';
-
+import { clearAuth } from '../../../api/admin/auth';
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const navigate = useNavigate();
 
-    const {
+  const {
     books,
     loading,
     sortOptions,
@@ -62,12 +64,40 @@ const AdminDashboard = () => {
       handleDeleteAbout,
     } = useAbout();
 
+
+    async function doLogout() {
+    try {
+      const token = localStorage.getItem('access_token');
+      if (token) {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+    } catch (e) {
+      console.warn('Logout API failed (continue clearing locally):', e);
+    } finally {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user');
+      navigate('/api/admin/login', { replace: true });
+    }
+  }
+
+
   return (
 
     <div className="flex min-h-screen bg-gray-100">
       <SidebarNav activeTab={activeTab} setActiveTab={setActiveTab} />
       <main className="flex-1 p-6 overflow-auto">
-        <h1 className="text-2xl font-bold mb-6">Trang Quản Trị</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Trang Quản Trị</h1>
+          <button
+            onClick={doLogout}
+            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+          >
+            Đăng xuất
+          </button>
+        </div>
       
 
         {activeTab === 'dashboard' && (
@@ -205,6 +235,7 @@ const AdminDashboard = () => {
             />
           </div>
         )}
+
 
         {activeTab === 'users' && <UsersPanel />}
         {activeTab === 'settings' && <SettingsPanel />}

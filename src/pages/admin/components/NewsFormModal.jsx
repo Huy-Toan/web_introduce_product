@@ -61,8 +61,6 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
   }, [initialData, isOpen, initialMarkdown])
 
   
-
-
   const handleChange = (e) => {
     const { name, value } = e.target
     if (name === 'title') {
@@ -92,7 +90,6 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
     e.target.value = ''
   }
 
-  // AI → gen nội dung → đổ vào editor (convert HTML -> MD nếu cần)
   const handleGenerateClick = async () => {
     const out = await generateContentFromKeyword()
     const src = (typeof out === 'string' && out.trim()) ? out : (form.content || '')
@@ -101,7 +98,6 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
     const newMd = hasTags ? new TurndownService().turndown(src) : src
 
     setMd(newMd)
-    console.log('Generated Markdown:', newMd)
     requestAnimationFrame(() => editorRef.current?.refresh());
   }
 

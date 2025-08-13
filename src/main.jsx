@@ -13,6 +13,7 @@ import News from "./pages/News";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import ScrollToTop from "./components/ScrollTop";
 import News_Detail from "./pages/NewsDetail";
+import RequireAuth from "./pages/admin/components/RequireAuth";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
@@ -28,7 +29,14 @@ createRoot(document.getElementById("root")).render(
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/news" element={<News />} />
         <Route path="/api/admin/login" element={<AdminLogin />} />
-        <Route path="/api/admin/dashboard" element={<AdminDashboard />} />
+        <Route
+          path="/api/admin/dashboard"
+          element={
+            <RequireAuth>
+              <AdminDashboard />
+            </RequireAuth>
+          }
+        />
       </Routes>
     </BrowserRouter>
   </StrictMode>,

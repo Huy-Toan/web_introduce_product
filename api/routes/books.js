@@ -19,7 +19,6 @@ const fallbackBooks = [
 // Books list endpoint with filtering and sorting
 booksRouter.get("/", async (c) => {
   const { genre, sort } = c.req.query();
-  console.log("Query params:", { genre, sort }); // Debug
 
   try {
     if (c.env.DB_AVAILABLE) {

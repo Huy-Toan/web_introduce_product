@@ -84,6 +84,9 @@ const EditorMd = forwardRef(function EditorMd(
             isSettingRef.current = true;
             this.setMarkdown(value || '');
             this.cm.refresh();
+            setTimeout(() => {
+              isSettingRef.current = false;
+            }, 0);
 
             // lắng nghe gõ phím/người dùng
             this.cm.on('change', () => {

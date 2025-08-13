@@ -1,6 +1,4 @@
-import React from 'react';
 import { Home, BookOpen, Users, Settings, Newspaper, Info } from 'lucide-react';
-
 
 const navItems = [
   { id: 'dashboard', label: 'Tổng quan', icon: Home },
@@ -8,7 +6,7 @@ const navItems = [
   { id: 'users', label: 'Người dùng', icon: Users },
   { id: 'news', label: 'Tin tức', icon: Newspaper },
   { id: 'about_us', label: 'Giới thiệu', icon: Info },
-  { id: 'settings', label: 'Cài đặt', icon: Settings },
+  { id: 'settings', label: 'Cài đặt', icon: Settings }
 ];
 
 const SidebarNav = ({ activeTab, setActiveTab }) => (
