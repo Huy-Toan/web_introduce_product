@@ -2325,8 +2325,8 @@ booksRouter.get("/", async (c) => {
         debug: { genre, sort, originalCount: fallbackBooks.length }
       });
     }
-  } catch (error) {
-    console.error("Error fetching books:", error);
+  } catch (error2) {
+    console.error("Error fetching books:", error2);
     return c.json({
       error: "Failed to fetch books",
       books: fallbackBooks,
@@ -2356,8 +2356,8 @@ booksRouter.get("/:id", async (c) => {
         source: "fallback"
       });
     }
-  } catch (error) {
-    console.error("Error fetching book:", error);
+  } catch (error2) {
+    console.error("Error fetching book:", error2);
     return c.json({ error: "Failed to fetch book" }, 500);
   }
 });
@@ -2383,8 +2383,8 @@ booksRouter.post("/", async (c) => {
     } else {
       throw new Error("Failed to insert book");
     }
-  } catch (error) {
-    console.error("Error adding book:", error);
+  } catch (error2) {
+    console.error("Error adding book:", error2);
     return c.json({ error: "Failed to add book" }, 500);
   }
 });
@@ -2410,8 +2410,8 @@ booksRouter.put("/:id", async (c) => {
     } else {
       return c.json({ error: "Book not found" }, 404);
     }
-  } catch (error) {
-    console.error("Error updating book:", error);
+  } catch (error2) {
+    console.error("Error updating book:", error2);
     return c.json({ error: "Failed to update book" }, 500);
   }
 });
@@ -2431,8 +2431,8 @@ booksRouter.delete("/:id", async (c) => {
     } else {
       return c.json({ error: "Book not found" }, 404);
     }
-  } catch (error) {
-    console.error("Lỗi khi xoá:", error);
+  } catch (error2) {
+    console.error("Lỗi khi xoá:", error2);
     return c.json({ error: "Failed to delete book" }, 500);
   }
 });
@@ -2521,8 +2521,8 @@ bookRelatedRouter.get("/", async (c) => {
         source: "fallback"
       });
     }
-  } catch (error) {
-    console.error("Error fetching related book data:", error);
+  } catch (error2) {
+    console.error("Error fetching related book data:", error2);
     return c.json({
       error: "Failed to fetch related books",
       bookId,
@@ -2570,12 +2570,53 @@ uploadImageRouter.post("/", async (c) => {
       url: publicUrl,
       fileName
     });
-  } catch (error) {
-    console.error("Upload error:", error);
+  } catch (error2) {
+    console.error("Upload error:", error2);
     return c.json({
       error: "Có lỗi xảy ra khi upload ảnh",
-      details: error.message
+      details: error2.message
     }, 500);
+  }
+});
+function uuidv4() {
+  return ("10000000-1000-4000-8000" + -1e11).replace(
+    /[018]/g,
+    (c) => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+  );
+}
+const editorUploadRouter = new Hono2();
+editorUploadRouter.post("/", async (c) => {
+  try {
+    const formData = await c.req.formData();
+    const file = formData.get("editormd-image-file");
+    if (!file || typeof file === "string") {
+      return c.json({ success: 0, message: "Không có file nào được upload" }, 400);
+    }
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      return c.json({ success: 0, message: "Chỉ chấp nhận JPEG, PNG, GIF, WebP" }, 400);
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return c.json({ success: 0, message: "Ảnh vượt quá 5MB!" }, 400);
+    }
+    const ext = file.name.split(".").pop();
+    const fileName = `books/${uuidv4()}.${ext}`;
+    const r2 = c.env.IMAGES;
+    await r2.put(fileName, await file.arrayBuffer(), {
+      httpMetadata: { contentType: file.type }
+    });
+    const baseUrl = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
+    const publicUrl = `${baseUrl}/${fileName}`;
+    return c.json({
+      success: 1,
+      message: "OK",
+      url: publicUrl,
+      fileName
+      // giữ lại cho bạn dùng khi cần
+    });
+  } catch (error2) {
+    console.error("Upload error:", error2);
+    return c.json({ success: 0, message: error2.message }, 500);
   }
 });
 const aboutRouter = new Hono2();
@@ -2591,12 +2632,11 @@ aboutRouter.get("/", async (c) => {
   try {
     if (c.env.DB_AVAILABLE) {
       const result = await c.env.DB.prepare("SELECT * FROM about_us").all();
-      console.log("Fetched about us from database:", result.results);
       return c.json({ about: result.results, source: "database" });
     } else {
       return c.json({ about: fallbackAbout, source: "fallback" });
     }
-  } catch (error) {
+  } catch (error2) {
     return c.json({ error: "Failed to fetch about us" }, 500);
   }
 });
@@ -2650,7 +2690,10 @@ const fallbackNews = [
   {
     id: 1,
     title: "Website Launch",
+    slug: "website-launch",
     content: "We are excited to announce the launch of our new website!",
+    meta_description: "Announcement of our new website",
+    keywords: "launch,website",
     image_url: "/images/news/launch.jpg",
     published_at: "2025-08-01"
   }
@@ -2663,7 +2706,8 @@ newsRouter.get("/", async (c) => {
     } else {
       return c.json({ news: fallbackNews, source: "fallback" });
     }
-  } catch (error) {
+  } catch (error2) {
+    console.error(error2);
     return c.json({ error: "Failed to fetch news" }, 500);
   }
 });
@@ -2674,32 +2718,70 @@ newsRouter.get("/:id", async (c) => {
     if (!news) return c.json({ error: "News not found" }, 404);
     return c.json({ news });
   } catch (e) {
+    console.error(error);
     return c.json({ error: "Failed to fetch news" }, 500);
   }
 });
 newsRouter.post("/", async (c) => {
   try {
-    const { title: title2, content, image_url } = await c.req.json();
+    const {
+      title: title2,
+      slug,
+      content,
+      meta,
+      keywords,
+      image_url,
+      published_at
+    } = await c.req.json();
     const result = await c.env.DB.prepare(`
-      INSERT INTO news (title, content, image_url)
-      VALUES (?, ?, ?)
-    `).bind(title2, content, image_url || null).run();
+       INSERT INTO news (title, slug, content, meta_description, keywords, image_url, published_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      title2,
+      slug,
+      content,
+      meta || null,
+      keywords || null,
+      image_url || null,
+      published_at || null
+    ).run();
     const newItem = await c.env.DB.prepare("SELECT * FROM news WHERE id = ?").bind(result.meta.last_row_id).first();
     return c.json({ news: newItem }, 201);
   } catch (e) {
+    console.error(e);
     return c.json({ error: "Failed to create news" }, 500);
   }
 });
 newsRouter.put("/:id", async (c) => {
   const id = parseInt(c.req.param("id"));
-  const { title: title2, content, image_url } = await c.req.json();
+  const {
+    title: title2,
+    slug,
+    content,
+    meta,
+    keywords,
+    image_url,
+    published_at
+  } = await c.req.json();
   try {
     await c.env.DB.prepare(`
-      UPDATE news SET title = ?, content = ?, image_url = ? WHERE id = ?
-    `).bind(title2, content, image_url, id).run();
+      UPDATE news
+      SET title = ?, slug = ?, content = ?, meta_description = ?, keywords = ?, image_url = ?, published_at = ?
+      WHERE id = ?
+    `).bind(
+      title2,
+      slug,
+      content,
+      meta || null,
+      keywords || null,
+      image_url || null,
+      published_at || null,
+      id
+    ).run();
     const updated = await c.env.DB.prepare("SELECT * FROM news WHERE id = ?").bind(id).first();
     return c.json({ news: updated });
   } catch (e) {
+    console.error(e);
     return c.json({ error: "Failed to update news" }, 500);
   }
 });
@@ -2709,50 +2791,237 @@ newsRouter.delete("/:id", async (c) => {
     await c.env.DB.prepare("DELETE FROM news WHERE id = ?").bind(id).run();
     return c.json({ success: true });
   } catch (e) {
+    console.error(e);
     return c.json({ error: "Failed to delete news" }, 500);
   }
 });
-function uuidv4() {
-  return ("10000000-1000-4000-8000" + -1e11).replace(
-    /[018]/g,
-    (c) => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-  );
+function cleanText(text) {
+  if (!text) return "";
+  return text.replace(/^\s*[-*•]\s*/gm, "").replace(/^\s*\d+\.\s*/gm, "").replace(/\n{3,}/g, "\n\n").trim();
 }
-const uploadAboutImageRouter = new Hono2();
-uploadAboutImageRouter.post("/", async (c) => {
+const seoApp = new Hono2();
+const slugify = (str = "") => (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+const safeJSONParse = (raw) => {
   try {
-    const formData = await c.req.formData();
-    const file = formData.get("image");
-    if (!file || typeof file === "string") {
-      return c.json({ error: "Không có file nào được upload" }, 400);
-    }
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP)" }, 400);
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      return c.json({ error: "Kích thước ảnh không được vượt quá 5MB!" }, 400);
-    }
-    const ext = file.name.split(".").pop();
-    const fileName = `about/${uuidv4()}.${ext}`;
-    const r2 = c.env.IMAGES;
-    await r2.put(fileName, await file.arrayBuffer(), {
-      httpMetadata: { contentType: file.type }
-    });
-    if (!c.env.PUBLIC_R2_URL) {
-      return c.json({ error: "Thiếu PUBLIC_R2_URL trong cấu hình môi trường" }, 500);
-    }
-    const baseUrl = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
-    const publicUrl = `${baseUrl}/${fileName}`;
-    return c.json({
-      success: true,
-      url: publicUrl,
-      fileName
-    });
-  } catch (error) {
-    console.error("Upload error:", error);
-    return c.json({ error: "Lỗi khi upload ảnh", details: error.message }, 500);
+    return { ok: true, data: JSON.parse(raw) };
+  } catch (e) {
+    return { ok: false, error: e?.message || "JSON parse error" };
   }
+};
+const tryExtractPlanningFromText = (txt = "") => {
+  const title2 = (txt.match(/TIÊU ĐỀ\s*:?\s*(.+)/i)?.[1] || "").trim();
+  const meta = (txt.match(/META DESCRIPTION\s*:?\s*([\s\S]*?)(?:\n|$)/i)?.[1] || "").trim();
+  const keywordsBlock = txt.match(/TỪ KHÓA[^\n]*\s*:\s*([\s\S]*?)(?:OUTLINE|$)/i)?.[1] || "";
+  const keywords = keywordsBlock.split("\n").map((l) => l.replace(/^\s*\d+\.\s*/, "").trim()).filter(Boolean);
+  const outlineBlock = txt.match(/OUTLINE\s*:\s*([\s\S]*)$/i)?.[1] || "";
+  const outline = outlineBlock.split("\n").map((l) => l.replace(/^\s*[-*•]\s*/, "").trim()).filter(Boolean);
+  return { title: title2, meta_description: meta, keywords, outline };
+};
+seoApp.post("/generate-content", async (c) => {
+  try {
+    const { keyword } = await c.req.json();
+    const ai = c.env.AI;
+    if (!keyword || typeof keyword !== "string" || !keyword.trim()) {
+      return c.json({ success: false, error: "Thiếu keyword" }, 400);
+    }
+    const planningMessages = [
+      { role: "system", content: "Bạn là content creator chuyên nghiệp, trả lời đúng định dạng yêu cầu." },
+      {
+        role: "user",
+        content: `Tôi cần viết bài về "${keyword}".
+
+Hãy trả lời CHỈ DẠNG JSON HỢP LỆ (không thêm chữ nào ngoài JSON):
+{
+  "title": "tiêu đề <= 60 ký tự, tự nhiên, không nhồi nhét",
+  "meta_description": "mô tả <= 160 ký tự, hấp dẫn, tự nhiên",
+  "keywords": ["5 từ khóa phụ, ngắn gọn", "..." ],
+  "outline": ["Danh sách mục chính để viết bài 1000+ từ"]
+}`
+      }
+    ];
+    const planResult = await ai.run("@cf/meta/llama-3.1-8b-instruct", {
+      messages: planningMessages,
+      max_tokens: 1400,
+      temperature: 0.6
+    });
+    let planningJSON;
+    {
+      const parsed = safeJSONParse(planResult.response);
+      if (parsed.ok) {
+        planningJSON = parsed.data;
+      } else {
+        const fallback = tryExtractPlanningFromText(planResult.response || "");
+        planningJSON = fallback;
+      }
+    }
+    const title2 = (planningJSON?.title || "").trim();
+    const metaRaw = (planningJSON?.meta_description || "").trim();
+    const meta = metaRaw.length > 160 ? metaRaw.slice(0, 159) : metaRaw;
+    const keywordsArr = Array.isArray(planningJSON?.keywords) ? planningJSON.keywords : [];
+    const outline = Array.isArray(planningJSON?.outline) ? planningJSON.outline : [];
+    const part1Messages = [
+      ...planningMessages,
+      { role: "assistant", content: JSON.stringify(planningJSON) },
+      {
+        role: "user",
+        content: `Dựa vào JSON planning ở trên, hãy viết phần mở đầu hấp dẫn và 2-3 section đầu theo outline (~500-600 từ).
+Yêu cầu:
+- Dùng từ khóa "${keyword}" tự nhiên
+- Giọng văn rõ ràng, hữu ích
+- Trả về CHỈ DẠNG MARKDOWN (không JSON, không tiêu đề trùng lặp với title).`
+      }
+    ];
+    const part1Result = await ai.run("@cf/meta/llama-3.1-8b-instruct", {
+      messages: part1Messages,
+      max_tokens: 2400,
+      temperature: 0.7
+    });
+    const part2Messages = [
+      ...part1Messages,
+      { role: "assistant", content: part1Result.response },
+      {
+        role: "user",
+        content: `Viết tiếp các section còn lại theo outline và phần kết luận có call-to-action (~400-500 từ).
+Yêu cầu:
+- Kết nối mượt với phần trước
+- Giữ cùng tone/style
+- Trả về CHỈ DẠNG MARKDOWN.`
+      }
+    ];
+    const part2Result = await ai.run("@cf/meta/llama-3.1-8b-instruct", {
+      messages: part2Messages,
+      max_tokens: 2400,
+      temperature: 0.7
+    });
+    const clean = (s) => cleanText(s || "");
+    const contentMarkdown = [clean(part1Result.response), clean(part2Result.response)].filter(Boolean).join("\n\n");
+    const response = {
+      success: true,
+      data: {
+        title: title2 || keyword,
+        meta,
+        keywords: keywordsArr.join(", "),
+        slug: slugify(title2 || keyword),
+        content: contentMarkdown,
+        outline
+      },
+      raw_responses: {
+        planning: planningJSON,
+        part1: clean(part1Result.response),
+        part2: clean(part2Result.response)
+      },
+      generated_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    console.log("Content generation response:", response);
+    return c.json(response);
+  } catch (err) {
+    console.error("Content generation error:", err);
+    return c.json({
+      success: false,
+      error: "Content generation failed",
+      details: err?.message || String(err)
+    }, 500);
+  }
+});
+seoApp.post("/generate-seo", async (c) => {
+  try {
+    const { content } = await c.req.json();
+    const ai = c.env.AI;
+    if (!content || typeof content !== "string" || !content.trim()) {
+      return c.json({ success: false, error: "Thiếu content" }, 400);
+    }
+    const truncated = content.length > 8e3 ? content.slice(0, 8e3) : content;
+    const prompt = [
+      { role: "system", content: "Bạn là chuyên gia SEO. Luôn trả lời đúng JSON schema khi được yêu cầu." },
+      {
+        role: "user",
+        content: `Phân tích nội dung sau và trả lời CHỈ DẠNG JSON HỢP LỆ (không thêm chữ nào ngoài JSON).
+---CONTENT---
+${truncated}
+---YÊU CẦU---
+{
+  "title": "tiêu đề <= 60 ký tự, súc tích, tự nhiên",
+  "meta_description": "mô tả <= 160 ký tự, hấp dẫn, không nhồi nhét",
+  "keywords": ["5-8 keyword ngắn gọn"],
+  "focus_keyword": "từ khóa trọng tâm",
+  "score": 7,
+  "tips": ["3-5 gợi ý cải thiện cụ thể, ngắn gọn"],
+  "distribution": ["các kênh phân phối nội dung gợi ý, 2-4 mục"]
+}`
+      }
+    ];
+    const aiRes = await ai.run("@cf/meta/llama-3.1-8b-instruct", {
+      messages: prompt,
+      max_tokens: 1200,
+      temperature: 0.5
+    });
+    let extracted;
+    {
+      const parsed = safeJSONParse(aiRes.response);
+      if (parsed.ok) {
+        extracted = parsed.data;
+      } else {
+        const txt = aiRes.response || "";
+        const title3 = (txt.match(/TIÊU ĐỀ[^\n]*:\s*(.+)/i)?.[1] || "").trim();
+        const meta2 = (txt.match(/META DESCRIPTION[^\n]*:\s*([\s\S]*?)(?:\n|$)/i)?.[1] || "").trim();
+        const kwBlock = txt.match(/TỪ KHÓA[^\n]*:\s*([\s\S]*?)(?:\n\n|URL|$)/i)?.[1] || "";
+        const keywords = kwBlock.split("\n").map((l) => l.replace(/^\s*\d+\.\s*/, "").trim()).filter(Boolean);
+        extracted = {
+          title: title3,
+          meta_description: meta2,
+          keywords,
+          focus_keyword: keywords?.[0] || "",
+          score: 7,
+          tips: [],
+          distribution: []
+        };
+      }
+    }
+    const title2 = (extracted?.title || "").trim();
+    const metaRaw = (extracted?.meta_description || "").trim();
+    const meta = metaRaw.length > 160 ? metaRaw.slice(0, 159) : metaRaw;
+    const keywordsArr = Array.isArray(extracted?.keywords) ? extracted.keywords : [];
+    const focus_keyword = (extracted?.focus_keyword || keywordsArr[0] || "").trim();
+    const score = Number.isFinite(extracted?.score) ? Math.max(1, Math.min(10, Math.round(extracted.score))) : 7;
+    const tips = Array.isArray(extracted?.tips) ? extracted.tips : [];
+    const distribution = Array.isArray(extracted?.distribution) ? extracted.distribution : [];
+    const response = {
+      success: true,
+      data: {
+        title: title2,
+        meta,
+        keywords: keywordsArr.join(", "),
+        slug: slugify(title2),
+        focus_keyword,
+        score,
+        tips,
+        distribution
+      },
+      raw_responses: {
+        model_raw: cleanText(aiRes.response)
+      },
+      content_length: content.length,
+      generated_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    return c.json(response);
+  } catch (err) {
+    console.error("SEO analysis error:", err);
+    return c.json({
+      success: false,
+      error: "SEO analysis failed",
+      details: err?.message || String(err)
+    }, 500);
+  }
+});
+seoApp.get("/test", (c) => {
+  return c.json({
+    message: "SEO API working",
+    endpoints: [
+      "POST /generate-content - keyword → full content (title/meta/keywords/slug/content)",
+      "POST /generate-seo - content → SEO (title/meta/keywords/slug + score/tips)"
+    ],
+    timestamp: (/* @__PURE__ */ new Date()).toISOString()
+  });
 });
 const app = new Hono2();
 app.use("*", async (c, next) => {
@@ -2761,8 +3030,8 @@ app.use("*", async (c, next) => {
       const testQuery = await c.env.DB.prepare("SELECT 1").first();
       c.env.DB_AVAILABLE = true;
       console.log("D1 Database connected successfully");
-    } catch (error) {
-      console.error("D1 Database connection error:", error);
+    } catch (error2) {
+      console.error("D1 Database connection error:", error2);
       c.env.DB_AVAILABLE = false;
     }
   } else {
@@ -2774,8 +3043,10 @@ app.use("*", async (c, next) => {
 app.route("/api/books", booksRouter);
 app.route("/api/about", aboutRouter);
 app.route("/api/news", newsRouter);
+app.route("/api/seo", seoApp);
 app.route("/api/books/:id/related", bookRelatedRouter);
 app.route("/api/upload-image", uploadImageRouter);
+app.route("/api/editor-upload", editorUploadRouter);
 app.get("/api/health", async (c) => {
   return c.json({
     status: "ok",
