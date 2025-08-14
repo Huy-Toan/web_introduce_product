@@ -6,7 +6,9 @@ import editorUploadRouter from "./routes/editor-upload";
 import aboutRouter from "./routes/about";
 import newsRouter from "./routes/news";
 import seoApp from "./routes/seo";
+import categoriesRouter from "./routes/categories";
 import authRouter from "./routes/auth";
+import productsRouter from "./routes/products";
 
 const app = new Hono();
 
@@ -37,6 +39,8 @@ app.route("/api/books", booksRouter);
 app.route("/api/about", aboutRouter);
 app.route("/api/news", newsRouter);
 app.route("/api/seo", seoApp);
+app.route("/api/products", productsRouter);
+app.route("/api/categories", categoriesRouter);
 app.route("/api/books/:id/related", bookRelatedRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);

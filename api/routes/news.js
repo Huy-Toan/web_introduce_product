@@ -30,10 +30,10 @@ newsRouter.get("/", async (c) => {
   }
 });
 
-newsRouter.get("/:id", async (c) => {
-  const id = parseInt(c.req.param("id"));
+newsRouter.get("/:slug", async (c) => {
+  const id = c.req.param("slug");
   try {
-    const news = await c.env.DB.prepare("SELECT * FROM news WHERE id = ?").bind(id).first();
+    const news = await c.env.DB.prepare("SELECT * FROM news WHERE slug = ?").bind(id).first();
     if (!news) return c.json({ error: "News not found" }, 404);
     return c.json({ news });
   } catch (e) {

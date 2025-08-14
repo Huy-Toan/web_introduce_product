@@ -1,7 +1,7 @@
 import TopNavigation from "../components/Navigation";
 import Footer from "../components/Footer";
 import { useEffect, useState } from "react";
-
+import AboutHeaderBanner from "../components/AboutBanner";
 function AboutPage() {
   const [aboutContent, setAboutContent] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -18,7 +18,6 @@ function AboutPage() {
         
         const data = await res.json();
         
-        // Xử lý data giống như LibraryPage
         const aboutArray = data.about || [];
 
         if (aboutArray.length > 0) {
@@ -40,7 +39,7 @@ function AboutPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
-      
+      <AboutHeaderBanner />
       {loading ? (
         <div className="flex justify-center items-center py-20">
           <div className="h-10 w-10 border-2 border-blue-800 border-t-transparent rounded-full animate-spin"></div>
@@ -48,14 +47,14 @@ function AboutPage() {
       ) : (
         <main className="bg-white">
           {/* Header Section */}
-          <div className="text-center py-12 bg-gray-50 mt-16">
+          <div className="text-center py-12 bg-gray-50">
             <h1 className="text-4xl font-bold text-yellow-600 mb-4">
-              VỀ CHÚNG TÔI
+              ALLXONE
             </h1>
             <h2 className="text-2xl font-semibold text-gray-700">
-              THÔNG TIN VỀ THƯ VIỆN
+              CHOOSE US - CHOOSE QUALITY
             </h2>
-            <div className="w-24 h-1 bg-yellow-500 mx-auto mt-6"></div>
+            <div className="w-24 h-1 bg-yellow-500 mx-auto"></div>
           </div>
 
           {aboutContent.length > 0 ? (

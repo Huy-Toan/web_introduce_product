@@ -19,16 +19,6 @@ function News() {
         setNewsData(newsArray);
       } catch (err) {
         console.error("Failed to load news data:", err);
-        // Fallback data
-        setNewsData([
-          {
-            id: 1,
-            title: "Khai trương khu vực đọc sách mới",
-            created_at: "2025-08-07",
-            meta_description: "Thư viện vừa khai trương khu vực đọc sách mới với không gian hiện đại và trang thiết bị đầy đủ để phục vụ độc giả tốt nhất.",
-            image_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"
-          }
-        ]);
       } finally {
         setLoading(false);
       }
@@ -37,8 +27,8 @@ function News() {
     fetchNewsData();
   }, []);
 
-  const handleNewsSelect = (newsId) => {
-    navigate(`/news/news-detail/${newsId}`);
+  const handleNewsSelect = (item) => {
+    navigate(`/news/news-detail/${item.slug}`);
   };
 
   return (
@@ -67,7 +57,7 @@ function News() {
               <NewsCard
                 key={newsItem.id}
                 news={newsItem}
-                onClick={() => handleNewsSelect(newsItem.id)}
+                onClick={() => handleNewsSelect(newsItem)}
               />
             ))}
           </div>

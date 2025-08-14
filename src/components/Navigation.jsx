@@ -1,4 +1,4 @@
-import { ChevronDown, Book, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { groupByGenre } from "../lib/utils";
@@ -56,8 +56,7 @@ function TopNavigation() {
       <div className="container max-w-7xl mx-auto">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center space-x-2">
-            <Book className="h-8 w-8 text-blue-600" />
-            <span className="text-xl font-semibold text-gray-900">BookLib</span>
+            <span className="text-xl font-semibold text-gray-900">AllXone</span>
           </div>
 
           {/* Desktop */}

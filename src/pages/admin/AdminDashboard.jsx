@@ -14,7 +14,15 @@ import NewsFormModal from './components/NewsFormModal';
 import useAbout from './hook/Useabout';
 import AboutFormModal from './components/AboutFormModal';
 import AboutCard from './components/AboutCard';
+import CategoriesCard from './components/CategoriesCard';
+import CategoriesFormModal from './components/CategoriesFormModal';
+import useCategories from './hook/UseCategories';
+import ProductCard from './components/ProductCard';
+import ProductFormModal from './components/ProductFormModal';
+import useProducts from './hook/Useproduct';
+
 import { clearAuth } from '../../../api/admin/auth';
+import { Cat } from 'lucide-react';
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const navigate = useNavigate();
@@ -64,6 +72,52 @@ const AdminDashboard = () => {
       handleDeleteAbout,
     } = useAbout();
 
+    const {
+      categories,
+      categoriesLoading,
+      totalCategories,
+      isCategoryModalOpen,
+      categoryToEdit,
+      fetchCategories,            
+      handleOpenCategoryModal,
+      handleCloseCategoryModal,
+      handleAddCategory,
+      handleUpdateCategory,
+      handleDeleteCategory,
+    } = useCategories();
+
+    const {
+      products,
+      totalProducts,
+      productsLoading,
+
+      // categories
+      productCategories,
+      productCategoriesLoading,
+
+      // filters
+      selectedProductCategoryId,
+      setSelectedProductCategoryId,
+      selectedProductCategorySlug,
+      setSelectedProductCategorySlug,
+
+      // modal
+      isProductModalOpen,
+      productToEdit,
+      openProductModal,
+      closeProductModal,
+
+      // CRUD
+      addProduct,
+      updateProduct,
+      deleteProduct,
+
+      // fetchers
+      fetchProducts,
+      fetchProductCategories,
+
+    } = useProducts();
+
 
     async function doLogout() {
     try {
@@ -99,7 +153,6 @@ const AdminDashboard = () => {
           </button>
         </div>
       
-
         {activeTab === 'dashboard' && (
           <DashboardOverview 
             bookCount={books.length} 
@@ -108,8 +161,7 @@ const AdminDashboard = () => {
           />
         )}
        
-
-        {activeTab === 'books' && (
+        {activeTab === 'products' && (
           <div>
             <div className="flex items-center justify-between mb-4">
             <FilterSortBar
@@ -236,6 +288,82 @@ const AdminDashboard = () => {
           </div>
         )}
 
+
+{/* category */}
+        {activeTab === 'categories' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => handleOpenCategoryModal(null)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+              >
+                Thêm danh mục
+              </button>
+            </div>
+
+            {categoriesLoading ? (
+              <p>Đang tải...</p>
+            ) : categories.length === 0 ? (
+              <p className="text-gray-600">Không có tin tức.</p>
+            ) : (
+              <div className="flex flex-col gap-4 w-full">
+                {categories.map(item => (
+                  <CategoriesCard
+                    key={item.id}
+                    categories={item}
+                    onEdit={() => handleOpenCategoryModal(item)}
+                    onDelete={handleDeleteCategory}
+                  />
+                ))}
+              </div>
+            )}
+            
+            <CategoriesFormModal
+              isOpen={isCategoryModalOpen}
+              onClose={handleCloseCategoryModal}
+              onSubmit={categoryToEdit ? handleUpdateCategory : handleAddCategory}
+              initialData={categoryToEdit || {}}
+            />
+          </div>
+        )}
+
+{/* products */}
+        {activeTab === 'products_t' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => openProductModal(null)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+              >
+                Thêm sản phẩm
+              </button>
+            </div>
+
+            {productsLoading ? (
+              <p>Đang tải...</p>
+            ) : products.length === 0 ? (
+              <p className="text-gray-600">Không có tin tức.</p>
+            ) : (
+              <div className="flex flex-col gap-4 w-full">
+                {products.map(item => (
+                  <ProductCard
+                    key={item.id}
+                    products={item}
+                    onEdit={() => openProductModal(item)}
+                    onDelete={deleteProduct}
+                  />
+                ))}
+              </div>
+            )}
+            
+            <ProductFormModal
+              isOpen={isProductModalOpen}
+              onClose={closeProductModal}
+              onSubmit={productToEdit ? updateProduct : addProduct}
+              initialData={productToEdit || {}}
+            />
+          </div>
+        )}
 
         {activeTab === 'users' && <UsersPanel />}
         {activeTab === 'settings' && <SettingsPanel />}

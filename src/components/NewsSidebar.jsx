@@ -1,7 +1,7 @@
 function SidebarNews({ 
   newsItems = [], 
   onSelectNews,
-  currentNewsId // ID của bài đang xem để highlight
+  currentNewsId
 }) {
   return (
     <aside className="w-full md:w-80 bg-white p-0 border rounded-md shadow-sm self-start mt-12 overflow-hidden">
@@ -15,7 +15,7 @@ function SidebarNews({
         {newsItems.map((newsItem, index) => (
           <div
             key={newsItem.id}
-            onClick={() => onSelectNews(newsItem.id)}
+            onClick={() => onSelectNews(newsItem)}
             className={`
               flex items-center p-4 border-b border-gray-100 cursor-pointer 
               hover:bg-gray-50 hover:pl-6 transition-all duration-300

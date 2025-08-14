@@ -6,7 +6,7 @@ import NewsDetail from "../components/NewsDetail";
 import SidebarNews from "../components/NewsSidebar";
 
 function News_Detail() {
-  const { newsId } = useParams();
+  const { slug } = useParams();
   const navigate = useNavigate();
   const [newsData, setNewsData] = useState(null);
   const [allNews, setAllNews] = useState([]); 
@@ -16,7 +16,7 @@ function News_Detail() {
     const fetchData = async () => {
       try {
         // Fetch chi tiết bài viết hiện tại
-        const newsRes = await fetch(`/api/news/${newsId}`);
+        const newsRes = await fetch(`/api/news/${slug}`);
         const newsDetail = await newsRes.json();
 
         // Fetch tất cả bài viết cho sidebar
@@ -38,14 +38,14 @@ function News_Detail() {
       }
     };
 
-    if (newsId) {
+    if (slug) {
       fetchData();
     }
-  }, [newsId]);
+  }, [slug]);
 
   // Handler khi click vào bài khác trong sidebar
-  const handleSelectNews = (selectedNewsId) => {
-    navigate(`/news/news-detail/${selectedNewsId}`);
+  const handleSelectNews = (n) => {
+    navigate(`/news/news-detail/${n.slug}`);
   };
 
   if (loading) {
@@ -67,7 +67,7 @@ function News_Detail() {
         <div className="container mx-auto px-4 py-20">
           <div className="text-center text-gray-600">
             <h2 className="text-2xl font-semibold mb-4">Không tìm thấy bài viết</h2>
-            <p>Bài viết với ID "{newsId}" không tồn tại hoặc đã bị xóa.</p>
+            <p>Bài viết với ID "{slug}" không tồn tại hoặc đã bị xóa.</p>
           </div>
         </div>
         <Footer />
@@ -85,7 +85,7 @@ function News_Detail() {
           <div className="lg:w-80 flex-shrink-0">
             <SidebarNews 
               newsItems={allNews}
-              currentNewsId={parseInt(newsId)}
+              currentNewsId={slug}
               onSelectNews={handleSelectNews}
             />
           </div>

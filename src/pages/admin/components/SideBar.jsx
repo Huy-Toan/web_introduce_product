@@ -2,10 +2,12 @@ import { Home, BookOpen, Users, Settings, Newspaper, Info } from 'lucide-react';
 
 const navItems = [
   { id: 'dashboard', label: 'Tổng quan', icon: Home },
-  { id: 'books', label: 'Sách', icon: BookOpen },
+  { id: 'products', label: 'Sản phẩm', icon: BookOpen },
   { id: 'users', label: 'Người dùng', icon: Users },
   { id: 'news', label: 'Tin tức', icon: Newspaper },
   { id: 'about_us', label: 'Giới thiệu', icon: Info },
+  { id: 'categories', label: 'Danh mục', icon: Info },
+  { id: 'products_t', label: 'Sản phẩm(test)', icon: Info },
   { id: 'settings', label: 'Cài đặt', icon: Settings }
 ];
 

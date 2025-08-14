@@ -1,4 +1,4 @@
-function ProductHeaderBanner() {
+function AboutHeaderBanner() {
   return (
     <div className="relative h-48 md:h-64 bg-gradient-to-r from-gray-900 to-gray-800 overflow-hidden mt-12">
       {/* Background Image */}
@@ -8,15 +8,13 @@ function ProductHeaderBanner() {
           backgroundImage: "url('./banner_product.jpg')",
         }}
       >
-        {/* Dark Overlay */}
-       
       </div>
       
       {/* Content */}
       <div className="relative z-10 flex items-center justify-center h-full">
         <div className="text-center text-white px-4">
           <h1 className="text-4xl md:text-6xl font-bold mb-4 tracking-wider">
-            PRODUCTS
+            ABOUT US
           </h1>
           
           {/* Breadcrumb */}
@@ -28,7 +26,7 @@ function ProductHeaderBanner() {
               Home
             </a>
             <span className="text-yellow-400 text-xl">/</span>
-            <span className="text-yellow-400 font-semibold">PRODUCTS</span>
+            <span className="text-yellow-400 font-semibold">ABOUT US</span>
           </div>
         </div>
       </div>
@@ -40,4 +38,4 @@ function ProductHeaderBanner() {
   );
 }
 
-export default ProductHeaderBanner;
+export default AboutHeaderBanner;
