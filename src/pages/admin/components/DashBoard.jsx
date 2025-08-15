@@ -1,7 +1,6 @@
-import React from 'react';
 import { Library, Shapes, Newspaper, Activity } from 'lucide-react';
 
-const DashboardOverview = ({ bookCount, genreCount, aboutCount }) => (
+const DashboardOverview = ({ products, categories, news }) => (
   <div>
     <h2 className="text-2xl font-bold text-gray-900 mb-6">Tổng quan</h2>
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -13,8 +12,8 @@ const DashboardOverview = ({ bookCount, genreCount, aboutCount }) => (
             <Library className="text-blue-600" size={24} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Tổng số sách</h3>
-            <p className="text-2xl font-bold text-blue-600">{bookCount}</p>
+            <h3 className="text-lg font-semibold text-gray-900">Tổng số sản phẩm</h3>
+            <p className="text-2xl font-bold text-blue-600">{products}</p>
           </div>
         </div>
       </div>
@@ -26,8 +25,8 @@ const DashboardOverview = ({ bookCount, genreCount, aboutCount }) => (
             <Shapes className="text-green-600" size={24} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Thể loại</h3>
-            <p className="text-2xl font-bold text-green-600">{genreCount}</p>
+            <h3 className="text-lg font-semibold text-gray-900">Tổng số danh mục</h3>
+            <p className="text-2xl font-bold text-green-600">{categories}</p>
           </div>
         </div>
       </div>
@@ -40,7 +39,7 @@ const DashboardOverview = ({ bookCount, genreCount, aboutCount }) => (
           </div>
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Tin tức</h3>
-            <p className="text-2xl font-bold text-yellow-600">{aboutCount}</p>
+            <p className="text-2xl font-bold text-yellow-600">{news}</p>
           </div>
         </div>
       </div>

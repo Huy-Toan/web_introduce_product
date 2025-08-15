@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import TopNavigation from "../components/Navigation";
+import MarkdownOnly from "../components/MarkdownOnly";
 import Footer from "../components/Footer";
 
 export default function ProductDetailPage() {
@@ -84,6 +85,18 @@ export default function ProductDetailPage() {
     navigate(`/product/product-detail/${item.slug || item.id}`);
   };
 
+  const handleCategoryClick = () => {
+  // Cố gắng lấy slug trước, nếu không có thì fallback sang id
+  const catSlug =
+    product.category_slug ??
+    product.category?.slug ??
+    (product.category_id ? String(product.category_id) : null);
+
+  if (!catSlug) return;
+
+  navigate(`/product?category=${encodeURIComponent(catSlug)}`);
+};
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -131,13 +144,19 @@ export default function ProductDetailPage() {
               <h1 className="text-2xl font-semibold mb-3">{product.title}</h1>
 
               {/* Category badge nếu có */}
-              {product.category_name && (
-                <div className="mb-3">
-                  <span className="inline-block px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-800">
-                    {product.category_name}
-                  </span>
-                </div>
-              )}
+            {product.category_name && ( 
+              <div className="mb-3"> 
+                <button 
+                  type="button" 
+                  onClick={handleCategoryClick} 
+                  className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-800 
+                              hover:bg-green-100 hover:text-green-800 transition-colors cursor-pointer" 
+                  title={`Xem sản phẩm trong ${product.category_name}`} 
+                > 
+                  {product.category_name} 
+                </button> 
+              </div> 
+            )}
 
               {/* Description ngắn */}
               {product.description && (
@@ -147,16 +166,10 @@ export default function ProductDetailPage() {
           </div>
 
           {/* Content đầy đủ */}
-          <section className="prose max-w-none">
-            <h2 className="text-xl font-semibold mb-3">Nội dung</h2>
-
-            {/* Nếu content là HTML đã sanitize từ server */}
-            <article
-              className="prose max-w-none"
-              dangerouslySetInnerHTML={{ __html: product.content || "" }}
-            />
-
-          </section>
+             <section className="prose max-w-none">
+               <h2 className="text-xl font-semibold mb-3">Nội dung</h2>
+               <MarkdownOnly value={product.content || ""} />
+             </section>
         </div>
 
         {/* Related */}

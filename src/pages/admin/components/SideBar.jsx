@@ -7,14 +7,13 @@ const navItems = [
   { id: 'news', label: 'Tin tức', icon: Newspaper },
   { id: 'about_us', label: 'Giới thiệu', icon: Info },
   { id: 'categories', label: 'Danh mục', icon: Info },
-  { id: 'products_t', label: 'Sản phẩm(test)', icon: Info },
   { id: 'settings', label: 'Cài đặt', icon: Settings }
 ];
 
 const SidebarNav = ({ activeTab, setActiveTab }) => (
   <div className="w-64 bg-white shadow-lg">
     <div className="p-6 border-b">
-      <h1 className="text-xl font-bold text-gray-800">Books Admin</h1>
+      <h1 className="text-xl font-bold text-gray-800">AllXone Admin</h1>
     </div>
     <nav className="mt-6">
       {navItems.map(({ id, label, icon: Icon }) => (

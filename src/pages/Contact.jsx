@@ -26,16 +26,15 @@ function ContactPage() {
           <div>
             <h2 className="text-2xl font-bold text-yellow-700 mb-4">CONTACT US</h2>
             <div className="text-gray-800 space-y-2 mb-6">
-              <p><strong>Company:</strong> TAKIMEX GLOBAL CO., LTD</p>
+              <p><strong>Company:</strong> ALLXONE</p>
               <p>
-                LAND PARCEL NO. 2635, MAP SHEET NO. 26, STREET DL14, THOI HOA
-                WARD, BEN CAT TOWN, BINH DUONG PROVINCE, VIETNAM
+                140 Nguyen Xi Street, Binh Thanh District, Ho Chi Minh City, Vietnam
               </p>
               <p>
                 <strong>Mobile phone / Whatsapp:</strong> +84 383 655 628 (Ms.
                 Amy) / +84 905 926 612 (Ms. Jenny)
               </p>
-              <p><strong>Email:</strong> info@takimex.com</p>
+              <p><strong>Email:</strong> info@allxone.com</p>
             </div>
 
             {/* Form liên lạc */}

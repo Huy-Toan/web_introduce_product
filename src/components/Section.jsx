@@ -95,7 +95,7 @@ export const AboutSection = () => {
             <div className="rounded-xl overflow-hidden shadow-2xl transform hover:-translate-y-2 transition-transform duration-300">
               <img 
                 src={aboutData[0]?.image_url} 
-                alt={aboutData[0]?.title || "Thư viện"}
+                alt={aboutData[0]?.title || "About Image"}
                 className="w-full h-[500px] object-cover"
               />
             </div>
@@ -357,8 +357,8 @@ export const NewsSection = () => {
     fetchNewsData();
   }, []);
 
-  const handleNewsSelect = (newsId) => {
-    navigate(`/news/news-detail/${newsId}`);
+  const handleNewsSelect = (item) => {
+    navigate(`/news/news-detail/${item.slug}`);
   };
 
 
@@ -381,7 +381,7 @@ export const NewsSection = () => {
               <NewsCard
                 key={newsItem.id}
                 news={newsItem}
-                onClick={() => handleNewsSelect(newsItem.id)}
+                onClick={() => handleNewsSelect(newsItem)}
               />
             ))}
           </div>

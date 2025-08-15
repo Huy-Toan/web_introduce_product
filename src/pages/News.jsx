@@ -38,8 +38,7 @@ function News() {
       
       <main className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="mb-8">
-          <h2 className="text-3xl font-bold text-gray-800 mb-2">Tin Tức Mới Nhất</h2>
-          <p className="text-gray-600">Cập nhật những thông tin mới nhất từ thư viện</p>
+          <h2 className="text-3xl font-bold text-gray-800 mb-2">Latest News</h2>
         </div>
 
         {loading ? (

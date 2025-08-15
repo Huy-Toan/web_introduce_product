@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { X, Upload, Loader2, Wand2 } from 'lucide-react';
+import EditorMd from './EditorMd'; // <— đường dẫn tới component EditorMd của bạn
 
 const slugify = (s = '') =>
   s
@@ -19,10 +20,13 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     title: '',
     slug: '',
     description: '',
-    content: '',
+    content: '',      // <-- Markdown từ EditorMd sẽ nằm ở đây
     image_url: '',
     category_id: null,
   });
+
+  // (tuỳ chọn) nếu muốn lưu thêm HTML đã render:
+  const [contentHTML, setContentHTML] = useState('');
 
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
@@ -32,6 +36,9 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   // Categories
   const [categories, setCategories] = useState([]);
   const [catLoading, setCatLoading] = useState(false);
+
+  // Ref tới EditorMd để có thể refresh/đổi readOnly
+  const editorRef = useRef(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -58,7 +65,6 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
         description: initialData.description || '',
         content: initialData.content || '',
         image_url: initialData.image_url || '',
-        // chấp nhận cả id hoặc null
         category_id:
           typeof initialData.category_id === 'number'
             ? initialData.category_id
@@ -66,12 +72,19 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       });
       setImagePreview(initialData.image_url || '');
       setSlugError('');
+      // làm mới editor khi mở modal
+      setTimeout(() => editorRef.current?.refresh?.(), 0);
     }
   }, [initialData, isOpen]);
 
+  // Toggle readOnly khi đang upload
+  useEffect(() => {
+    if (!editorRef.current?.cm) return;
+    editorRef.current.cm.setOption('readOnly', isUploading ? 'nocursor' : false);
+  }, [isUploading]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    // category_id cần ép số hoặc null
     if (name === 'category_id') {
       setForm((prev) => ({ ...prev, category_id: value ? Number(value) : null }));
       return;
@@ -118,7 +131,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
     if (!response.ok) throw new Error('Upload failed');
     const data = await response.json();
-    return data.url; // URL R2
+    return data.url;
   };
 
   const handleSubmit = async (e) => {
@@ -164,6 +177,9 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
       if (initialData.id) finalForm.id = initialData.id;
 
+      // (tuỳ chọn) nếu muốn gửi luôn HTML:
+      // finalForm.content_html = contentHTML;
+
       onSubmit(finalForm);
       onClose();
 
@@ -176,6 +192,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
         image_url: '',
         category_id: null,
       });
+      setContentHTML('');
       setImageFile(null);
       setImagePreview('');
       setSlugError('');
@@ -312,21 +329,40 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             />
           </div>
 
-          {/* Content (bắt buộc theo schema) */}
+          {/* Content (bắt buộc theo schema) — EditorMd */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Nội dung chi tiết *
             </label>
-            <textarea
-              name="content"
-              value={form.content}
-              onChange={handleChange}
-              rows={10}
-              placeholder="Mô tả chi tiết, HTML/Markdown tuỳ ý (backend lưu vào cột content)"
-              required
-              disabled={isUploading}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 font-mono"
-            />
+
+            <div className="relative">
+              <EditorMd
+                ref={editorRef}
+                value={form.content}
+                height={500}
+                onChangeMarkdown={(md) => setForm((f) => ({ ...f, content: md }))}
+                onChangeHTML={(html) => setContentHTML(html)} // tuỳ chọn
+                onReady={() => {
+                  // focus khi sẵn sàng
+                  // editorRef.current?.cm?.focus();
+                  // đảm bảo layout chuẩn khi nằm trong modal
+                  editorRef.current?.refresh?.();
+                }}
+              />
+              {isUploading && (
+                <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] cursor-not-allowed flex items-center justify-center rounded-md">
+                  <span className="text-sm text-gray-600">Đang tải lên…</span>
+                </div>
+              )}
+            </div>
+
+            {/* (tuỳ chọn) nếu submit qua form native, có thể thêm hidden input:
+                <input type="hidden" name="content" value={form.content} />
+                <input type="hidden" name="content_html" value={contentHTML} />
+            */}
+            <p className="text-xs text-gray-500 mt-1">
+              Hỗ trợ Markdown + chèn ảnh (dán trực tiếp hoặc nút upload).
+            </p>
           </div>
 
           {/* Image */}

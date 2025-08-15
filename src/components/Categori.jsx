@@ -181,10 +181,10 @@ function ProductCategories({ categories = [], onSelectCategory }) {
         {/* Header */}
         <div className="text-center mb-8 sm:mb-12">
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-3 sm:mb-4">
-            Danh mục sản phẩm
+            Product Categories
           </h2>
           <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto px-4">
-            Chọn danh mục để xem sản phẩm liên quan
+            Select a category to view related products
           </p>
         </div>
 
@@ -296,7 +296,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
             onClick={() => navigate("/product")}
             className="bg-green-600 hover:bg-green-700 cursor-pointer text-white px-6 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors duration-300 shadow-lg hover:shadow-xl text-sm sm:text-base"
           >
-            Xem tất cả sản phẩm
+           Brown all products
           </button>
         </div>
       </div>

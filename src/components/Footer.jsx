@@ -4,10 +4,10 @@ function Footer() {
       <div className="max-w-7xl mx-auto px-4 py-10 grid grid-cols-1 md:grid-cols-4 gap-8">
         {/* Company Info */}
         <div>
-          <h3 className="text-lg font-semibold text-yellow-700 mb-2">BookLib</h3>
-          <p className="mb-1">123 Library Street, Hanoi, Vietnam</p>
+          <h3 className="text-lg font-semibold text-yellow-700 mb-2">AllXone</h3>
+          <p className="mb-1">123 Street, Hanoi, Vietnam</p>
           <p className="mb-1">Tel: +84 123 456 789</p>
-          <p>Email: support@booklib.com</p>
+          <p>Email: support@allxone.com</p>
         </div>
 
         {/* Services */}

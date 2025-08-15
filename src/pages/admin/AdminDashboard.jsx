@@ -155,13 +155,13 @@ const AdminDashboard = () => {
       
         {activeTab === 'dashboard' && (
           <DashboardOverview 
-            bookCount={books.length} 
-            genreCount={genres.length} 
-            aboutCount={about.length} 
+            products={products.length} 
+            categories={categories.length} 
+            news={news.length} 
           />
         )}
        
-        {activeTab === 'products' && (
+        {/* {activeTab === 'products' && (
           <div>
             <div className="flex items-center justify-between mb-4">
             <FilterSortBar
@@ -206,7 +206,7 @@ const AdminDashboard = () => {
               initialData={bookToEdit || {}}
             />
           </div>
-        )}
+        )} */}
 
 {/* news */}
         {activeTab === 'news' && (
@@ -328,7 +328,7 @@ const AdminDashboard = () => {
         )}
 
 {/* products */}
-        {activeTab === 'products_t' && (
+        {activeTab === 'products' && (
           <div>
             <div className="flex items-center justify-between mb-4">
               <button
