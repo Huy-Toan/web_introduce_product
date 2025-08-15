@@ -2,6 +2,8 @@ import TopNavigation from "../components/Navigation";
 import Footer from "../components/Footer";
 import { useEffect, useState } from "react";
 import AboutHeaderBanner from "../components/AboutBanner";
+import MarkdownOnly from "../components/MarkdownOnly"; 
+
 function AboutPage() {
   const [aboutContent, setAboutContent] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -86,7 +88,7 @@ function AboutPage() {
                           
                           <div className="space-y-6 text-gray-600 leading-relaxed">
                             <p className="whitespace-pre-wrap text-justify">
-                              {item.content}
+                              <MarkdownOnly value={item.content} />
                             </p>
                           </div>
                         </div>
@@ -108,7 +110,7 @@ function AboutPage() {
                           
                           <div className="space-y-6 text-gray-600">
                             <div className="whitespace-pre-wrap text-justify">
-                              {item.content}
+                              <MarkdownOnly value={item.content} />
                             </div>
                           </div>
                         </div>

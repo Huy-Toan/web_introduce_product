@@ -1,18 +1,16 @@
 import { Menu, X } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { groupByGenre } from "../lib/utils";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
+import LanguageSwitcher from "./LanguageSwitcher";
+import {useTWithNamespace } from "../context/TContext";
 
 
 function TopNavigation() {
   const [isGenreDropdownOpen, setIsGenreDropdownOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [genres, setGenres] = useState([]);
   const navigate = useNavigate();
-  const { genreId } = useParams();
-
-  const activeGenre = genreId ? decodeURIComponent(genreId) : null;
+  const { t, i18n } = useTWithNamespace('nav');
 
   const location = useLocation();
     const pathname = location.pathname;
@@ -22,26 +20,6 @@ function TopNavigation() {
     return pathname.startsWith(targetPath);
     };
 
-  useEffect(() => {
-    const fetchGenres = async () => {
-      try {
-        const res = await fetch("/api/books");
-        const data = await res.json();
-        const booksArray = data.books || [];
-        const grouped = groupByGenre(booksArray);
-        setGenres(grouped);
-      } catch (err) {
-        console.error("Failed to load genres:", err);
-      }
-    };
-    fetchGenres();
-  }, []);
-
-  const handleGenreClick = (genreName) => {
-    setIsGenreDropdownOpen(false);
-    setIsMobileMenuOpen(false);
-    navigate(`/genre/${encodeURIComponent(genreName)}`);
-  };
 
   const handlePageNavigation = (pageName) => {
     setIsMobileMenuOpen(false);
@@ -49,7 +27,14 @@ function TopNavigation() {
     else navigate(`/${pageName}`);
   };
 
-  const totalBooks = genres.reduce((sum, genre) => sum + genre.books.length, 0);
+  const pages = [
+    { key: 'auto.trang_chu', path: '/' },
+    { key: 'auto.ve_chung_toi', path: '/about' },
+    { key: 'auto.san_pham', path: '/product' },
+    { key: 'auto.tin_tuc', path: '/news' },
+    { key: 'auto.lien_he', path: '/contact' }
+  ];
+
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200 fixed top-0 left-0 right-0 z-50">
@@ -57,6 +42,7 @@ function TopNavigation() {
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center space-x-2">
             <span className="text-xl font-semibold text-gray-900">AllXone</span>
+            {t('brand')}
           </div>
 
           {/* Desktop */}
@@ -74,41 +60,11 @@ function TopNavigation() {
                 }`}
                 >
                 {page === "home" ? "Home" : page === "about" ? "About Us" : page ==="contact" ? "Contact" : page === "news" ? "News" : "Products"}
+                {t('brand')}
                 </button>
             );
             })}
-
-            {/* Genres Dropdown */}
-            {/* <div className="relative">
-              <button
-                onClick={() => setIsGenreDropdownOpen(!isGenreDropdownOpen)}
-                className="flex items-center px-3 py-2 rounded-md text-lg font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
-              >
-                Genres
-                <ChevronDown className="ml-1 h-4 w-4" />
-              </button>
-
-              {isGenreDropdownOpen && (
-                <div className="absolute top-full left-0 mt-1 w-64 bg-white rounded-md shadow-lg border border-gray-200 z-50 max-h-80 overflow-y-auto">
-                  {genres.map((genre) => (
-                    <button
-                      key={genre.name}
-                      onClick={() => handleGenreClick(genre.name)}
-                      className={`w-full text-left px-4 py-2 text-base hover:bg-gray-50 flex items-center justify-between ${
-                        activeGenre === genre.name
-                          ? "bg-blue-50 text-blue-700"
-                          : "text-gray-700"
-                      }`}
-                    >
-                      <span>{genre.name}</span>
-                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
-                        {genre.books.length}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div> */}
+            <LanguageSwitcher variant="flags" />
           </div>
 
           {/* Mobile Button */}
@@ -118,6 +74,7 @@ function TopNavigation() {
               className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-50"
             >
               {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              {t(key)}
             </button>
           </div>
         </div>
@@ -137,37 +94,13 @@ function TopNavigation() {
               ))}
             </div>
 
-            {/* <div className="border-t border-gray-100 mt-2 pt-2">
-              <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Genres
-              </div>
-              {genres.map((genre) => (
-                <button
-                  key={genre.name}
-                  onClick={() => handleGenreClick(genre.name)}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${
-                    activeGenre === genre.name
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-gray-700"
-                  }`}
-                >
-                  <span>{genre.name}</span>
-                  <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
-                    {genre.books.length}
-                  </span>
-                </button>
-              ))}
-            </div> */}
+            <div className="px-4 pt-3 pb-2 border-t border-gray-100">
+              <div className="text-xs text-gray-500 mb-2">{t('auto.language_ngon_ngu')}</div>
+                <LanguageSwitcher variant="select" />
+            </div>
           </div>
         )}
       </div>
-
-      {isGenreDropdownOpen && (
-        <div
-          className="fixed inset-0 z-10"
-          onClick={() => setIsGenreDropdownOpen(false)}
-        />
-      )}
     </nav>
   );
 }

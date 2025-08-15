@@ -1,15 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, Upload, Loader2 } from 'lucide-react';
+import EditorMd from './EditorMd';
 
 const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const [form, setForm] = useState({
     title: '',
-    content: '',
+    content: '',       // Markdown từ EditorMd
     image_url: ''
   });
+
+  // (tuỳ chọn) nếu muốn lưu thêm HTML đã render:
+  const [contentHTML, setContentHTML] = useState('');
+
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+
+  // Ref tới EditorMd để refresh / set readOnly
+  const editorRef = useRef(null);
 
   useEffect(() => {
     if (initialData && isOpen) {
@@ -19,8 +27,15 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
         image_url: initialData.image_url || ''
       });
       setImagePreview(initialData.image_url || '');
+      setTimeout(() => editorRef.current?.refresh?.(), 0); // đảm bảo layout khi nằm trong modal
     }
   }, [initialData, isOpen]);
+
+  // Toggle readOnly khi đang upload
+  useEffect(() => {
+    if (!editorRef.current?.cm) return;
+    editorRef.current.cm.setOption('readOnly', isUploading ? 'nocursor' : false);
+  }, [isUploading]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -28,50 +43,51 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        alert('Vui lòng chọn file ảnh hợp lệ!');
-        return;
-      }
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Kích thước ảnh không được vượt quá 5MB!');
-        return;
-      }
-
-      setImageFile(file);
-
-      const reader = new FileReader();
-      reader.onload = (e) => setImagePreview(e.target.result);
-      reader.readAsDataURL(file);
+    if (!file.type.startsWith('image/')) {
+      alert('Vui lòng chọn file ảnh hợp lệ!');
+      return;
     }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Kích thước ảnh không được vượt quá 5MB!');
+      return;
+    }
+
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = (evt) => setImagePreview(evt.target.result);
+    reader.readAsDataURL(file);
   };
 
   const uploadImage = async (file) => {
     const formData = new FormData();
     formData.append('image', file);
 
-    try {
-      const response = await fetch('/api/upload-image', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) throw new Error('Upload failed');
-
-      const data = await response.json();
-      return data.url;
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      throw error;
-    }
+    const response = await fetch('/api/upload-image', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) throw new Error('Upload failed');
+    const data = await response.json();
+    return data.url;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsUploading(true);
 
+    // Validate bắt buộc: title + content
+    if (!form.title?.trim()) {
+      alert('Vui lòng nhập Tiêu đề');
+      return;
+    }
+    if (!form.content?.trim()) {
+      alert('Vui lòng nhập Nội dung');
+      return;
+    }
+
+    setIsUploading(true);
     try {
       let finalForm = { ...form };
 
@@ -84,14 +100,20 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
         finalForm.id = initialData.id;
       }
 
+      // (tuỳ chọn) nếu muốn gửi luôn HTML:
+      // finalForm.content_html = contentHTML;
+
       onSubmit(finalForm);
       onClose();
 
+      // reset
       setForm({ title: '', content: '', image_url: '' });
+      setContentHTML('');
       setImageFile(null);
       setImagePreview('');
     } catch (error) {
-      alert('Có lỗi xảy ra khi upload ảnh. Vui lòng thử lại!');
+      console.error(error);
+      alert('Có lỗi xảy ra khi upload ảnh hoặc gửi dữ liệu. Vui lòng thử lại!');
     } finally {
       setIsUploading(false);
     }
@@ -100,7 +122,7 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const removeImage = () => {
     setImageFile(null);
     setImagePreview('');
-    setForm(prev => ({ ...prev, image_url: '' }));
+    setForm((prev) => ({ ...prev, image_url: '' }));
   };
 
   if (!isOpen) return null;
@@ -122,6 +144,7 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Title */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Tiêu đề *
@@ -137,22 +160,35 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             />
           </div>
 
+          {/* Content — EditorMd */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Nội dung *
             </label>
-            <textarea
-              name="content"
-              value={form.content}
-              onChange={handleChange}
-              rows={10}
-              placeholder="Nhập nội dung giới thiệu"
-              required
-              disabled={isUploading}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-            />
+            <div className="relative">
+              <EditorMd
+                ref={editorRef}
+                value={form.content}
+                height={500}
+                onChangeMarkdown={(md) => setForm((f) => ({ ...f, content: md }))}
+                onChangeHTML={(html) => setContentHTML(html)} // tuỳ chọn
+                onReady={() => {
+                  // editorRef.current?.cm?.focus();
+                  editorRef.current?.refresh?.();
+                }}
+              />
+              {isUploading && (
+                <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] cursor-not-allowed flex items-center justify-center rounded-md">
+                  <span className="text-sm text-gray-600">Đang tải lên…</span>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Hỗ trợ Markdown
+            </p>
           </div>
 
+          {/* Image */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Ảnh minh họa

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { X, Upload, Loader2, Wand2 } from 'lucide-react';
-import EditorMd from './EditorMd'; // <— đường dẫn tới component EditorMd của bạn
+import EditorMd from './EditorMd'; 
 
 const slugify = (s = '') =>
   s

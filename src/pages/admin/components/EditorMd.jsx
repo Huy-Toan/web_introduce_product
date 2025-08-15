@@ -36,6 +36,7 @@ const EditorMd = forwardRef(function EditorMd(
     onChangeHTML,
     onReady,
     height = 500,
+    
   },
   ref
 ) {
@@ -55,6 +56,7 @@ const EditorMd = forwardRef(function EditorMd(
         await loadCSS('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/codemirror/codemirror.min.css');
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/marked.min.js');
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/prettify.min.js');
+        await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/languages/en.js');
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/raphael.min.js');
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/underscore.min.js');
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/sequence-diagram.min.js');
@@ -69,6 +71,7 @@ const EditorMd = forwardRef(function EditorMd(
         const inst = window.editormd(idRef.current, {
           width: '100%',
           height,
+          language: 'en',
           markdown: '',
           path: 'https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/',
           imageUpload: true,
