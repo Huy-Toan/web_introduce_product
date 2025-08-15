@@ -344,11 +344,11 @@ const AdminDashboard = () => {
             ) : products.length === 0 ? (
               <p className="text-gray-600">Không có tin tức.</p>
             ) : (
-              <div className="flex flex-col gap-4 w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {products.map(item => (
                   <ProductCard
                     key={item.id}
-                    products={item}
+                    product={item}
                     onEdit={() => openProductModal(item)}
                     onDelete={deleteProduct}
                   />

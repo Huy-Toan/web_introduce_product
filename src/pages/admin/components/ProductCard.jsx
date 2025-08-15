@@ -1,16 +1,12 @@
 import { Edit2, Trash2 } from 'lucide-react';
 
 const ProductCard = ({ product, onEdit, onDelete }) => {
-  console.log("Rendering ProductCard for:", product);
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <img
         src={product.image_url}
         alt={product.title}
         className="w-full h-48 object-cover"
-        onError={(e) => {
-          e.target.src = 'fallback_url.jpg';
-        }}
       />
       <div className="p-4">
         <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">{product.title}</h3>

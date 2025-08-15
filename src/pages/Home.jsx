@@ -69,11 +69,6 @@ export default function HomePage() {
     navigate(genre ? `/genre/${encodeURIComponent(genre)}` : "/");
   };
 
-  const handleSelectBook = (bookId) => {
-    navigate(`/book/${bookId}`);
-  };
-
-  const isBookDetailPage = location.pathname.startsWith("/book/");
 
   return (
     <div className="min-h-screen bg-gray-50">

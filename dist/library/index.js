@@ -2710,10 +2710,10 @@ newsRouter.get("/", async (c) => {
     return c.json({ error: "Failed to fetch news" }, 500);
   }
 });
-newsRouter.get("/:id", async (c) => {
-  const id = parseInt(c.req.param("id"));
+newsRouter.get("/:slug", async (c) => {
+  const id = c.req.param("slug");
   try {
-    const news = await c.env.DB.prepare("SELECT * FROM news WHERE id = ?").bind(id).first();
+    const news = await c.env.DB.prepare("SELECT * FROM news WHERE slug = ?").bind(id).first();
     if (!news) return c.json({ error: "News not found" }, 404);
     return c.json({ news });
   } catch (e) {
@@ -2799,7 +2799,7 @@ function cleanText(text) {
   return text.replace(/^\s*[-*•]\s*/gm, "").replace(/^\s*\d+\.\s*/gm, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 const seoApp = new Hono2();
-const slugify = (str = "") => (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+const slugify$2 = (str = "") => (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
 const safeJSONParse = (raw) => {
   try {
     return { ok: true, data: JSON.parse(raw) };
@@ -2900,7 +2900,7 @@ Yêu cầu:
         title: title2 || keyword,
         meta,
         keywords: keywordsArr.join(", "),
-        slug: slugify(title2 || keyword),
+        slug: slugify$2(title2 || keyword),
         content: contentMarkdown,
         outline
       },
@@ -2989,7 +2989,7 @@ ${truncated}
         title: title2,
         meta,
         keywords: keywordsArr.join(", "),
-        slug: slugify(title2),
+        slug: slugify$2(title2),
         focus_keyword,
         score,
         tips,
@@ -3020,6 +3020,160 @@ seoApp.get("/test", (c) => {
     ],
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   });
+});
+const hasDB$1 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
+const slugify$1 = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+const categoriesRouter = new Hono2();
+categoriesRouter.get("/", async (c) => {
+  try {
+    if (!hasDB$1(c.env)) {
+      return c.json({ categories: [], source: "fallback", count: 0 });
+    }
+    const sql = `
+      SELECT id, name, slug, description, image_url, created_at
+      FROM categories
+      ORDER BY created_at DESC
+    `;
+    const result = await c.env.DB.prepare(sql).all();
+    const categories = result?.results ?? [];
+    return c.json({ categories, count: categories.length, source: "database" });
+  } catch (err) {
+    console.error("Error fetching categories:", err);
+    return c.json({ error: "Failed to fetch categories" }, 500);
+  }
+});
+categoriesRouter.get("/:idOrSlug", async (c) => {
+  const idOrSlug = c.req.param("idOrSlug");
+  try {
+    if (!hasDB$1(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const isNumeric = /^\d+$/.test(idOrSlug);
+    const sql = `
+      SELECT id, name, slug, description, image_url, created_at
+      FROM categories
+      WHERE ${isNumeric ? "id = ?" : "slug = ?"}
+      LIMIT 1
+    `;
+    const cat = await c.env.DB.prepare(sql).bind(isNumeric ? Number(idOrSlug) : idOrSlug).first();
+    if (!cat) return c.json({ error: "Category not found" }, 404);
+    return c.json({ category: cat, source: "database" });
+  } catch (err) {
+    console.error("Error fetching category:", err);
+    return c.json({ error: "Failed to fetch category" }, 500);
+  }
+});
+categoriesRouter.post("/", async (c) => {
+  try {
+    if (!hasDB$1(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const body = await c.req.json();
+    const { name, slug: rawSlug, description, image_url } = body || {};
+    if (!name?.trim()) {
+      return c.json({ error: "Missing required field: name" }, 400);
+    }
+    const slug = rawSlug?.trim() || slugify$1(name);
+    const sql = `
+      INSERT INTO categories (name, slug, description, image_url)
+      VALUES (?, ?, ?, ?)
+    `;
+    const res = await c.env.DB.prepare(sql).bind(name.trim(), slug, description || null, image_url || null).run();
+    if (!res.success) throw new Error("Insert failed");
+    const newId = res.meta?.last_row_id;
+    const cat = await c.env.DB.prepare(
+      `SELECT id, name, slug, description, image_url, created_at
+         FROM categories WHERE id = ?`
+    ).bind(newId).first();
+    return c.json({ category: cat, source: "database" }, 201);
+  } catch (err) {
+    console.error("Error creating category:", err);
+    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug already exists" : "Failed to create category";
+    return c.json({ error: msg }, 500);
+  }
+});
+categoriesRouter.put("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$1(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const body = await c.req.json();
+    const { name, slug, description, image_url } = body || {};
+    const sets = [];
+    const params = [];
+    if (name !== void 0) {
+      sets.push("name = ?");
+      params.push(name);
+    }
+    if (slug !== void 0) {
+      sets.push("slug = ?");
+      params.push(slug);
+    }
+    if (description !== void 0) {
+      sets.push("description = ?");
+      params.push(description);
+    }
+    if (image_url !== void 0) {
+      sets.push("image_url = ?");
+      params.push(image_url);
+    }
+    if (!sets.length) return c.json({ error: "No fields to update" }, 400);
+    const sql = `UPDATE categories SET ${sets.join(", ")} WHERE id = ?`;
+    params.push(id);
+    const res = await c.env.DB.prepare(sql).bind(...params).run();
+    if ((res.meta?.changes || 0) === 0) {
+      return c.json({ error: "Category not found" }, 404);
+    }
+    const cat = await c.env.DB.prepare(
+      `SELECT id, name, slug, description, image_url, created_at
+         FROM categories WHERE id = ?`
+    ).bind(id).first();
+    return c.json({ category: cat, source: "database" });
+  } catch (err) {
+    console.error("Error updating category:", err);
+    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug already exists" : "Failed to update category";
+    return c.json({ error: msg }, 500);
+  }
+});
+categoriesRouter.delete("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$1(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const existing = await c.env.DB.prepare("SELECT id FROM categories WHERE id = ?").bind(id).first();
+    if (!existing) return c.json({ error: "Category not found" }, 404);
+    const res = await c.env.DB.prepare("DELETE FROM categories WHERE id = ?").bind(id).run();
+    if ((res.meta?.changes || 0) > 0) {
+      return c.json({ success: true, message: "Category deleted successfully" });
+    }
+    return c.json({ error: "Category not found" }, 404);
+  } catch (err) {
+    console.error("Error deleting category:", err);
+    return c.json({ error: "Failed to delete category" }, 500);
+  }
+});
+categoriesRouter.get("/:slug/products", async (c) => {
+  const slug = c.req.param("slug");
+  try {
+    if (!hasDB$1(c.env)) {
+      return c.json({ products: [], source: "fallback", count: 0 });
+    }
+    const sql = `
+      SELECT p.*, c.name AS category_name, c.slug AS category_slug
+      FROM products p
+      JOIN categories c ON c.id = p.category_id
+      WHERE c.slug = ?
+      ORDER BY p.created_at DESC
+    `;
+    const res = await c.env.DB.prepare(sql).bind(slug).all();
+    const products = res?.results ?? [];
+    return c.json({ products, count: products.length, source: "database" });
+  } catch (err) {
+    console.error("Error fetching products by category:", err);
+    return c.json({ error: "Failed to fetch products by category" }, 500);
+  }
 });
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -4388,6 +4542,215 @@ authRouter.post("/logout", auth, async (c) => {
     return c.json({ error: "Logout failed" }, 500);
   }
 });
+const hasDB = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
+const findProductByIdOrSlug = async (db, idOrSlug) => {
+  const isNumericId = /^\d+$/.test(idOrSlug);
+  const sql = `
+    SELECT p.*, c.name AS category_name, c.slug AS category_slug
+    FROM products p
+    LEFT JOIN categories c ON c.id = p.category_id
+    WHERE ${isNumericId ? "p.id = ?" : "p.slug = ?"}
+    LIMIT 1
+  `;
+  return db.prepare(sql).bind(isNumericId ? Number(idOrSlug) : idOrSlug).first();
+};
+const slugify = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+const productsRouter = new Hono2();
+productsRouter.get("/", async (c) => {
+  const { category_id, category_slug } = c.req.query();
+  try {
+    if (!hasDB(c.env)) {
+      const products2 = [];
+      return c.json({ products: products2, source: "fallback", count: products2.length });
+    }
+    const conds = [];
+    const params = [];
+    let joinCat = "";
+    if (category_id) {
+      conds.push("p.category_id = ?");
+      params.push(Number(category_id));
+    }
+    if (category_slug) {
+      joinCat = "LEFT JOIN categories c ON c.id = p.category_id";
+      conds.push("c.slug = ?");
+      params.push(category_slug);
+    }
+    const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+    const sql = `
+      SELECT p.*, c.name AS category_name, c.slug AS category_slug
+      FROM products p
+      LEFT JOIN categories c ON c.id = p.category_id
+      ${where}
+      ORDER BY p.created_at DESC
+    `;
+    const stmt = c.env.DB.prepare(sql).bind(...params);
+    const result = await stmt.all();
+    const products = result?.results ?? [];
+    return c.json({
+      products,
+      count: products.length,
+      source: "database",
+      debug: { sql, params }
+    });
+  } catch (err) {
+    console.error("Error fetching products:", err);
+    return c.json(
+      { error: "Failed to fetch products", source: "error_fallback" },
+      500
+    );
+  }
+});
+productsRouter.get("/:idOrSlug", async (c) => {
+  const idOrSlug = c.req.param("idOrSlug");
+  try {
+    if (!hasDB(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const product = await findProductByIdOrSlug(c.env.DB, idOrSlug);
+    if (!product) return c.json({ error: "Product not found" }, 404);
+    return c.json({ product, source: "database" });
+  } catch (err) {
+    console.error("Error fetching product:", err);
+    return c.json({ error: "Failed to fetch product" }, 500);
+  }
+});
+productsRouter.post("/", async (c) => {
+  try {
+    if (!hasDB(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const body = await c.req.json();
+    const {
+      title: title2,
+      slug: rawSlug,
+      description,
+      content,
+      image_url,
+      category_id
+    } = body || {};
+    console.log("Adding product:", body);
+    if (!title2 || !content) {
+      return c.json(
+        { error: "Missing required fields: title, content" },
+        400
+      );
+    }
+    const slug = rawSlug?.trim() || slugify(title2);
+    console.log("Generated slug:", slug);
+    const sql = `
+      INSERT INTO products (title, slug, description, content, image_url, category_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+    const runRes = await c.env.DB.prepare(sql).bind(
+      title2,
+      slug,
+      description || null,
+      content,
+      image_url || null,
+      typeof category_id === "number" ? category_id : null
+    ).run();
+    const newId = runRes.meta?.last_row_id;
+    const product = await c.env.DB.prepare(
+      `SELECT p.*, c.name AS category_name, c.slug AS category_slug
+         FROM products p
+         LEFT JOIN categories c ON c.id = p.category_id
+         WHERE p.id = ?`
+    ).bind(newId).first();
+    return c.json({ product, source: "database" }, 201);
+  } catch (err) {
+    console.error("Error adding product:", err);
+    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug already exists" : "Failed to add product";
+    console.error("Error details:", err);
+    return c.json({ error: msg }, 500);
+  }
+});
+productsRouter.put("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const body = await c.req.json();
+    const {
+      title: title2,
+      slug,
+      description,
+      content,
+      image_url,
+      category_id
+    } = body || {};
+    const sets = [];
+    const params = [];
+    if (title2 !== void 0) {
+      sets.push("title = ?");
+      params.push(title2);
+    }
+    if (slug !== void 0) {
+      sets.push("slug = ?");
+      params.push(slug);
+    }
+    if (description !== void 0) {
+      sets.push("description = ?");
+      params.push(description);
+    }
+    if (content !== void 0) {
+      sets.push("content = ?");
+      params.push(content);
+    }
+    if (image_url !== void 0) {
+      sets.push("image_url = ?");
+      params.push(image_url);
+    }
+    if (category_id !== void 0) {
+      sets.push("category_id = ?");
+      params.push(
+        category_id === null ? null : typeof category_id === "number" ? category_id : null
+      );
+    }
+    if (!sets.length) {
+      return c.json({ error: "No fields to update" }, 400);
+    }
+    const sql = `
+      UPDATE products
+      SET ${sets.join(", ")}
+      WHERE id = ?
+    `;
+    params.push(id);
+    const res = await c.env.DB.prepare(sql).bind(...params).run();
+    if ((res.meta?.changes || 0) === 0) {
+      return c.json({ error: "Product not found" }, 404);
+    }
+    const product = await c.env.DB.prepare(
+      `SELECT p.*, c.name AS category_name, c.slug AS category_slug
+         FROM products p
+         LEFT JOIN categories c ON c.id = p.category_id
+         WHERE p.id = ?`
+    ).bind(id).first();
+    return c.json({ product, source: "database" });
+  } catch (err) {
+    console.error("Error updating product:", err);
+    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug already exists" : "Failed to update product";
+    return c.json({ error: msg }, 500);
+  }
+});
+productsRouter.delete("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const existing = await c.env.DB.prepare("SELECT id FROM products WHERE id = ?").bind(id).first();
+    if (!existing) return c.json({ error: "Product not found" }, 404);
+    const res = await c.env.DB.prepare("DELETE FROM products WHERE id = ?").bind(id).run();
+    if ((res.meta?.changes || 0) > 0) {
+      return c.json({ success: true, message: "Product deleted successfully" });
+    }
+    return c.json({ error: "Product not found" }, 404);
+  } catch (err) {
+    console.error("Error deleting product:", err);
+    return c.json({ error: "Failed to delete product" }, 500);
+  }
+});
 const app = new Hono2();
 app.use("*", async (c, next) => {
   if (c.env.DB) {
@@ -4410,6 +4773,8 @@ app.route("/api/books", booksRouter);
 app.route("/api/about", aboutRouter);
 app.route("/api/news", newsRouter);
 app.route("/api/seo", seoApp);
+app.route("/api/products", productsRouter);
+app.route("/api/categories", categoriesRouter);
 app.route("/api/books/:id/related", bookRelatedRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);

@@ -30,9 +30,9 @@ export const productsRouter = new Hono();
 
 productsRouter.get("/", async (c) => {
   const { category_id, category_slug } = c.req.query();
+
   try {
     if (!hasDB(c.env)) {
-      // fallback tối giản
       const products = [];
       return c.json({ products, source: "fallback", count: products.length });
     }
@@ -141,8 +141,6 @@ productsRouter.post("/", async (c) => {
         typeof category_id === "number" ? category_id : null
       )
       .run();
-
-    if (!runRes.success) throw new Error("Insert failed");
 
     const newId = runRes.meta?.last_row_id;
     const product = await c.env.DB

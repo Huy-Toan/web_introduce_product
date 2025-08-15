@@ -14,9 +14,6 @@ const CategoriesCard = ({ categories, onEdit, onDelete }) => {
             e.target.src = 'fallback_url.jpg';
         }}
         />
-
-
-
       {/* Nội dung ở giữa */}
       <div className="flex-1 p-4">
         <h3 className="font-semibold text-gray-900 mb-2">{categories.name}</h3>

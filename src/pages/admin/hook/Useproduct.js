@@ -43,9 +43,9 @@ const useProducts = () => {
 
       const res = await fetch(`/api/products${query ? `?${query}` : ''}`);
       const data = await res.json();
-      console.log("Fetched products:", data);
 
       setProducts(data?.products || []);
+
       setTotalProducts(
         typeof data?.count === 'number'
           ? data.count
@@ -67,6 +67,7 @@ const useProducts = () => {
   useEffect(() => {
     fetchProducts();
   }, [selectedProductCategoryId, selectedProductCategorySlug]);
+
 
   // -------- Modal handlers --------
   const openProductModal = (product = null) => {
