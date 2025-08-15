@@ -9,6 +9,8 @@ import seoApp from "./routes/seo";
 import categoriesRouter from "./routes/categories";
 import authRouter from "./routes/auth";
 import productsRouter from "./routes/products";
+import contactRouter from "./routes/contact";
+import userRouter from "./routes/user";
 
 const app = new Hono();
 
@@ -35,6 +37,8 @@ app.use("*", async (c, next) => {
 });
 
 app.route("/api/auth", authRouter);
+app.route("/api/users", userRouter);
+app.route("/api/contacts", contactRouter);
 app.route("/api/books", booksRouter);
 app.route("/api/about", aboutRouter);
 app.route("/api/news", newsRouter);

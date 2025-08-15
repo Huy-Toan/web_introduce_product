@@ -1,10 +1,10 @@
 function ProductCard({ product, onClick }) {
   return (
     <div
-      className="book-card cursor-pointer flex flex-col"
+      className="cursor-pointer flex flex-col"
       onClick={onClick}
     >
-      <div className="book-card-image w-full h-50">
+      <div className="w-full h-60">
         <img
           src={product.image_url}
           alt={product.title}
@@ -12,7 +12,7 @@ function ProductCard({ product, onClick }) {
         />
       </div>
 
-      <div className="book-card-content mt-2">
+      <div className="mt-2">
         <h3 className="text-sm font-medium line-clamp-1">{product.title}</h3>
       </div>
     </div>

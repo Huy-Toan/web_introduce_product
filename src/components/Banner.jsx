@@ -1,9 +1,8 @@
 import { useNavigate } from "react-router";
-import { useTranslation } from 'react-i18next';
+
 
 function Banner() {
   const navigate = useNavigate();
-  const { t } = useTranslation('banner');
 
   return (
     <section
@@ -16,13 +15,11 @@ function Banner() {
         <div className="bg-black/50 backdrop-blur-sm rounded-2xl p-4 sm:p-6 md:p-8 lg:p-12 shadow-2xl w-full max-w-xs sm:max-w-md md:max-w-2xl lg:max-w-3xl mx-4">
           <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl !text-white font-bold mb-3 sm:mb-4 md:mb-6 leading-tight">
             PREMIUM VIETNAMESE FRUITS
-            {t('auto.chon_chung_toi_chon_chat_luong')}
           </h1>
           <p className="text-sm sm:text-base md:text-lg lg:text-xl !text-white mb-4 sm:mb-6 md:mb-8 leading-relaxed">
             Fresh, juicy, and naturally grown tropical fruits straight from
             Vietnam's finest farms to your table. Experience the real taste of
             nature!
-            {t('auto.mo_ta_banner')}
           </p>
           <div className="flex justify-center">
             <button
@@ -35,7 +32,6 @@ function Banner() {
                   →
                 </span>
               </span>
-               {t('auto.lien_he_chung_toi')}
             </button>
           </div>
         </div>

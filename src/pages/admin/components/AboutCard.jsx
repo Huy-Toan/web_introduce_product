@@ -28,14 +28,14 @@ const AboutCard = ({ about, onEdit, onDelete }) => {
       <div className="flex flex-col gap-2 p-4">
         <button
           onClick={() => onEdit(about)}
-          className="bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-3 rounded flex items-center justify-center gap-1"
+          className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-3 rounded flex items-center justify-center gap-1"
         >
           <Edit2 size={16} />
           Sửa
         </button>
         <button
           onClick={() => onDelete(about.id)}
-          className="bg-red-100 hover:bg-red-200 text-red-700 py-2 px-3 rounded flex items-center justify-center gap-1"
+          className="cursor-pointer bg-red-100 hover:bg-red-200 text-red-700 py-2 px-3 rounded flex items-center justify-center gap-1"
         >
           <Trash2 size={16} />
           Xóa

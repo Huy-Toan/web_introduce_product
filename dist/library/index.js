@@ -4751,6 +4751,178 @@ productsRouter.delete("/:id", async (c) => {
     return c.json({ error: "Failed to delete product" }, 500);
   }
 });
+const contactRouter = new Hono2();
+const bad$1 = (c, msg = "Bad Request", code = 400) => c.json({ ok: false, error: msg }, code);
+const ok$1 = (c, data = {}, code = 200) => c.json({ ok: true, ...data }, code);
+const isEmail$1 = (s = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+const validStatus = (s = "") => ["new", "reviewed", "closed"].includes(s);
+contactRouter.get("/", async (c) => {
+  try {
+    const result = await c.env.DB.prepare(
+      "SELECT * FROM contact_messages ORDER BY created_at DESC"
+    ).all();
+    return ok$1(c, { items: result.results });
+  } catch (e) {
+    console.error(e);
+    return bad$1(c, "Failed to fetch contacts", 500);
+  }
+});
+contactRouter.post("/", async (c) => {
+  try {
+    const body = await c.req.json();
+    const fullName = (body.full_name || "").trim();
+    const email = (body.email || "").trim();
+    const phone = (body.phone || "").trim();
+    const address = (body.address || "").trim();
+    const message2 = (body.message || "").trim();
+    if (!fullName || !email || !message2)
+      return bad$1(c, "fullName, email, message are required");
+    if (!isEmail$1(email)) return bad$1(c, "Invalid email");
+    const result = await c.env.DB.prepare(
+      `INSERT INTO contact_messages (full_name, email, phone, address, message)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(fullName, email, phone, address, message2).run();
+    const newItem = await c.env.DB.prepare(
+      "SELECT * FROM contact_messages WHERE id = ?"
+    ).bind(result.meta.last_row_id).first();
+    return ok$1(c, { item: newItem }, 201);
+  } catch (e) {
+    console.error(e);
+    return bad$1(c, "Failed to create contact", 500);
+  }
+});
+contactRouter.patch("/:id/status", async (c) => {
+  const id = parseInt(c.req.param("id"), 10);
+  try {
+    const { status } = await c.req.json();
+    if (!validStatus(status))
+      return bad$1(c, "Invalid status (new|reviewed|closed)");
+    const res = await c.env.DB.prepare(
+      "UPDATE contact_messages SET status = ? WHERE id = ?"
+    ).bind(status, id).run();
+    if ((res.meta?.changes || 0) === 0) return bad$1(c, "Not found", 404);
+    const updated = await c.env.DB.prepare(
+      "SELECT * FROM contact_messages WHERE id = ?"
+    ).bind(id).first();
+    return ok$1(c, { item: updated });
+  } catch (e) {
+    console.error(e);
+    return bad$1(c, "Failed to update status", 500);
+  }
+});
+contactRouter.delete("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"), 10);
+  try {
+    const res = await c.env.DB.prepare(
+      "DELETE FROM contact_messages WHERE id = ?"
+    ).bind(id).run();
+    if ((res.meta?.changes || 0) === 0) return bad$1(c, "Not found", 404);
+    return ok$1(c, { deleted: true });
+  } catch (e) {
+    console.error(e);
+    return bad$1(c, "Failed to delete contact", 500);
+  }
+});
+const userRouter = new Hono2();
+const bad = (c, msg = "Bad Request", code = 400) => c.json({ ok: false, error: msg }, code);
+const ok = (c, data = {}, code = 200) => c.json({ ok: true, ...data }, code);
+const isEmail = (s = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+userRouter.get("/", async (c) => {
+  try {
+    const { results } = await c.env.DB.prepare(
+      "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC"
+    ).all();
+    return ok(c, { items: results });
+  } catch (e) {
+    console.error(e);
+    return bad(c, "Failed to fetch users", 500);
+  }
+});
+userRouter.get("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"), 10);
+  try {
+    const user = await c.env.DB.prepare(
+      "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
+    ).bind(id).first();
+    if (!user) return bad(c, "Not found", 404);
+    return ok(c, { item: user });
+  } catch (e) {
+    console.error(e);
+    return bad(c, "Failed to fetch user", 500);
+  }
+});
+userRouter.post("/", async (c) => {
+  try {
+    const body = await c.req.json();
+    const name = (body.name || "").trim();
+    const email = (body.email || "").trim();
+    const password = (body.password || "").trim();
+    const role = (body.role || "user").trim();
+    if (!name || !email || !password)
+      return bad(c, "name, email, password are required");
+    if (!isEmail(email)) return bad(c, "Invalid email");
+    const result = await c.env.DB.prepare(
+      `INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`
+    ).bind(name, email, password, role).run();
+    const newUser = await c.env.DB.prepare(
+      "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
+    ).bind(result.meta.last_row_id).first();
+    return ok(c, { item: newUser }, 201);
+  } catch (e) {
+    console.error(e);
+    return bad(c, "Failed to create user", 500);
+  }
+});
+userRouter.put("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"), 10);
+  try {
+    const body = await c.req.json();
+    const fields = [];
+    const binds = [];
+    if (body.name) {
+      fields.push("name = ?");
+      binds.push(body.name.trim());
+    }
+    if (body.email) {
+      if (!isEmail(body.email.trim())) return bad(c, "Invalid email");
+      fields.push("email = ?");
+      binds.push(body.email.trim());
+    }
+    if (body.password) {
+      fields.push("password = ?");
+      binds.push(body.password.trim());
+    }
+    if (body.role) {
+      fields.push("role = ?");
+      binds.push(body.role.trim());
+    }
+    if (!fields.length) return bad(c, "No fields to update");
+    const res = await c.env.DB.prepare(
+      `UPDATE users SET ${fields.join(", ")} WHERE id = ?`
+    ).bind(...binds, id).run();
+    if ((res.meta?.changes || 0) === 0) return bad(c, "Not found", 404);
+    const updated = await c.env.DB.prepare(
+      "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
+    ).bind(id).first();
+    return ok(c, { item: updated });
+  } catch (e) {
+    console.error(e);
+    return bad(c, "Failed to update user", 500);
+  }
+});
+userRouter.delete("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"), 10);
+  try {
+    const res = await c.env.DB.prepare(
+      "DELETE FROM users WHERE id = ?"
+    ).bind(id).run();
+    if ((res.meta?.changes || 0) === 0) return bad(c, "Not found", 404);
+    return ok(c, { deleted: true });
+  } catch (e) {
+    console.error(e);
+    return bad(c, "Failed to delete user", 500);
+  }
+});
 const app = new Hono2();
 app.use("*", async (c, next) => {
   if (c.env.DB) {
@@ -4769,6 +4941,8 @@ app.use("*", async (c, next) => {
   await next();
 });
 app.route("/api/auth", authRouter);
+app.route("/api/users", userRouter);
+app.route("/api/contacts", contactRouter);
 app.route("/api/books", booksRouter);
 app.route("/api/about", aboutRouter);
 app.route("/api/news", newsRouter);

@@ -223,7 +223,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 cursor-pointer hover:text-gray-600"
             disabled={isUploading}
           >
             <X size={20} />
@@ -258,7 +258,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                   type="button"
                   onClick={generateSlugFromTitle}
                   disabled={isUploading}
-                  className="text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
+                  className="cursor-pointer text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
                   title="Sinh slug từ tên sản phẩm"
                 >
                   <Wand2 size={16} />
@@ -343,9 +343,6 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 onChangeMarkdown={(md) => setForm((f) => ({ ...f, content: md }))}
                 onChangeHTML={(html) => setContentHTML(html)} // tuỳ chọn
                 onReady={() => {
-                  // focus khi sẵn sàng
-                  // editorRef.current?.cm?.focus();
-                  // đảm bảo layout chuẩn khi nằm trong modal
                   editorRef.current?.refresh?.();
                 }}
               />
@@ -356,13 +353,6 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               )}
             </div>
 
-            {/* (tuỳ chọn) nếu submit qua form native, có thể thêm hidden input:
-                <input type="hidden" name="content" value={form.content} />
-                <input type="hidden" name="content_html" value={contentHTML} />
-            */}
-            <p className="text-xs text-gray-500 mt-1">
-              Hỗ trợ Markdown + chèn ảnh (dán trực tiếp hoặc nút upload).
-            </p>
           </div>
 
           {/* Image */}
@@ -422,14 +412,14 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               type="button"
               onClick={onClose}
               disabled={isUploading}
-              className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="cursor-pointer px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={isUploading}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
+              className="cursor-pointer px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isUploading && <Loader2 className="animate-spin" size={16} />}
               {isEditing ? 'Cập nhật' : 'Thêm'}

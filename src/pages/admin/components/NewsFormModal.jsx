@@ -193,7 +193,7 @@ const handleSubmit = async (e) => {
       <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[100vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="text-lg font-semibold">{initialData.id ? 'Chỉnh sửa tin tức' : 'Thêm tin tức mới'}</h3>
-          <button onClick={handleClose} disabled={isUploading || isGenerating} className="text-gray-400 hover:text-gray-600">
+          <button onClick={handleClose} disabled={isUploading || isGenerating} className="cursor-pointer text-gray-400 hover:text-gray-600">
             <X size={20} />
           </button>
         </div>
@@ -215,7 +215,7 @@ const handleSubmit = async (e) => {
                 type="button"
                 onClick={handleGenerateClick}
                 disabled={isGenerating || !form.keyword.trim()}
-                className="px-3 py-2 bg-purple-600 text-white rounded flex items-center gap-1 disabled:opacity-50 hover:bg-purple-700"
+                className="cursor-pointer px-3 py-2 bg-purple-600 text-white rounded flex items-center gap-1 disabled:opacity-50 hover:bg-purple-700"
               >
                 <Sparkles size={16} /> {isGenerating ? 'Đang tạo...' : 'Tạo nội dung'}
               </button>
@@ -260,7 +260,7 @@ const handleSubmit = async (e) => {
                 <button
                   type="button"
                   onClick={() => filePickerRef.current?.click()}
-                  className="px-2 py-1 border rounded text-sm flex items-center gap-1 hover:bg-gray-50"
+                  className="cursor-pointer px-2 py-1 border rounded text-sm flex items-center gap-1 hover:bg-gray-50"
                 >
                   <ImagePlus size={16} /> Chèn ảnh
                 </button>
@@ -285,7 +285,7 @@ const handleSubmit = async (e) => {
                 type="button"
                 onClick={generateSEOFromContent}
                 disabled={isGenerating || !md.trim()}
-                className="px-3 py-2 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-50 hover:bg-blue-700"
+                className="cursor-pointer px-3 py-2 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-50 hover:bg-blue-700"
               >
                 <Sparkles size={16} /> {isGenerating ? 'Đang tạo...' : 'Tạo SEO'}
               </button>
@@ -323,11 +323,11 @@ const handleSubmit = async (e) => {
             <label className="block text-sm font-medium mb-1">Ảnh minh họa</label>
             {imagePreview && (
               <div className="mb-3 relative inline-block">
-                <img src={imagePreview} alt="Preview" className="w-40 h-28 object-cover rounded-md border" />
+                <img src={imagePreview} alt="Preview" className="cursor-pointer w-40 h-28 object-cover rounded-md border" />
                 <button
                   type="button"
                   onClick={() => { setImageFile(null); setImagePreview(''); setForm(p => ({ ...p, image_url: '' })) }}
-                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
+                  className="cursor-pointer absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
                 >
                   <X size={12} />
                 </button>
@@ -337,7 +337,7 @@ const handleSubmit = async (e) => {
               type="file"
               accept="image/*"
               onChange={handleImageChange}
-              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              className="cursor-pointer block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
               disabled={isGenerating}
             />
           </div>
@@ -346,7 +346,7 @@ const handleSubmit = async (e) => {
             <button
               type="button"
               onClick={handleClose}
-              className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
+              className="cursor-pointer px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
               disabled={isGenerating}
             >
               Hủy
@@ -354,7 +354,7 @@ const handleSubmit = async (e) => {
             <button
               type="submit"
               disabled={isUploading || isGenerating}
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              className="cursor-pointer px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
             >
               {isUploading ? 'Đang lưu...' : initialData.id ? 'Cập nhật' : 'Thêm'}
             </button>

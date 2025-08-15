@@ -53,7 +53,7 @@ export const AboutSection = () => {
   }
 
   return (
-    <section className="bg-gradient-to-br from-gray-70 to-gray-100 py-20">
+    <section className="bg-white py-20">
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
@@ -136,7 +136,7 @@ export const PromotionSection = () => {
   }, []);
 
   return (
-    <section className="bg-gradient-to-br py-20 bg-white">
+    <section className="bg-gradient-to-br py-20">
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="text-center mb-16">
           <p className="text-gray-600 text-lg mb-4 font-medium">
@@ -266,7 +266,7 @@ export const TestimonialSection = () => {
   }
 
   return (
-      <section className="bg-gray-60 py-20">
+      <section className="bg-white py-20">
         <div className="container mx-auto px-4 max-w-7xl">
           <div className="max-w-4xl mx-auto text-center relative">
             <div className="w-32 h-32 bg-gray-200 rounded-full mx-auto mb-8 flex items-center justify-center overflow-hidden border-4 border-white shadow-lg">
@@ -280,23 +280,25 @@ export const TestimonialSection = () => {
               />
             </div>
             
-            <div className="relative mb-8 flex items-center">
-              {/* Previous Button */}
+            <div className="relative mb-8 flex items-center px-14 overflow-hidden">
+              {/* Nút Previous */}
               <button
                 onClick={goToPrevious}
-                className="absolute -left-16 top-1/2 -translate-y-1/2 w-12 h-12 bg-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group hover:bg-yellow-50 border border-gray-200 z-10"
+                className="absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12 bg-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group hover:bg-yellow-50 border border-gray-200 z-10"
+                aria-label="Previous"
               >
-                <span className="text-gray-600 group-hover:text-yellow-600 transition-colors duration-300 transform group-hover:-translate-x-0.5 text-xl">
+                <span className="text-gray-600 cursor-pointer group-hover:text-yellow-600 transition-transform duration-300 group-hover:-translate-x-0.5 text-xl">
                   ←
                 </span>
               </button>
 
-              {/* Next Button */}
+              {/* Nút Next */}
               <button
                 onClick={goToNext}
-                className="absolute -right-16 top-1/2 -translate-y-1/2 w-12 h-12 bg-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group hover:bg-yellow-50 border border-gray-200 z-10"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-12 h-12 bg-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group hover:bg-yellow-50 border border-gray-200 z-10"
+                aria-label="Next"
               >
-                <span className="text-gray-600 group-hover:text-yellow-600 transition-colors duration-300 transform group-hover:translate-x-0.5 text-xl">
+                <span className="text-gray-600 cursor-pointer group-hover:text-yellow-600 transition-transform duration-300 group-hover:translate-x-0.5 text-xl">
                   →
                 </span>
               </button>
@@ -305,6 +307,7 @@ export const TestimonialSection = () => {
                 {testimonialData[activeSlide].content}
               </p>
             </div>
+
             
             <div className="mb-6">
               <p className="font-bold text-lg text-gray-800 mb-1">
@@ -363,10 +366,10 @@ export const NewsSection = () => {
 
 
   return (
-    <section className="bg-white py-30">
+    <section className="bg-gray-70 py-20">
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="text-center mb-16">
-          <h2 className="text-4xl lg:text-5xl font-bold text-yellow-600 tracking-wider">
+          <h2 className="text-4xl lg:text-5xl font-bold !text-yellow-600 tracking-wider">
             NEWS
           </h2>
         </div>

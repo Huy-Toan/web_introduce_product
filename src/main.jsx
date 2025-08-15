@@ -19,7 +19,7 @@ import RequireAuth from "./pages/admin/components/RequireAuth";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <TProvider>
+    {/* <TProvider> */}
     <BrowserRouter>
     <ScrollToTop />
       <Routes>
@@ -42,6 +42,6 @@ createRoot(document.getElementById("root")).render(
         />
       </Routes>
     </BrowserRouter>
-    </TProvider>
+    {/* </TProvider> */}
   </StrictMode>,
 );

@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import SidebarNav from './components/SideBar';
 import DashboardOverview from './components/DashBoard';
-import SettingsPanel from './components/SettingPanel';
+import ContactsPanel from './components/ContactsPanel';
 import UsersPanel from './components/UserPanel';
-import useBooks from './hook/Usebook';
 import useNews from './hook/Usenews';
 import Newscard from './components/NewsCard';
 import NewsFormModal from './components/NewsFormModal';
@@ -125,7 +124,7 @@ const AdminDashboard = () => {
           <h1 className="text-2xl font-bold">Trang Quản Trị</h1>
           <button
             onClick={doLogout}
-            className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded"
+            className="bg-red-500 hover:bg-red-600 text-white cursor-pointer px-4 py-2 rounded"
           >
             Đăng xuất
           </button>
@@ -143,12 +142,9 @@ const AdminDashboard = () => {
         {activeTab === 'news' && (
           <div>
             <div className="flex items-center justify-between mb-4">
-              <p className="text-gray-700">
-                Tổng số tin tức: {news.length}
-              </p>
               <button
                 onClick={() => handleOpenNewsModal(null)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer"
               >
                 Thêm tin tức
               </button>
@@ -186,9 +182,9 @@ const AdminDashboard = () => {
             <div className="flex items-center justify-between mb-4">
               <button
                 onClick={() => handleOpenAboutModal(null)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer"
               >
-                Thêm tin tức
+                Thêm nội dung giới thiệu
               </button>
             </div>
 
@@ -226,7 +222,7 @@ const AdminDashboard = () => {
             <div className="flex items-center justify-between mb-4">
               <button
                 onClick={() => handleOpenCategoryModal(null)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer"
               >
                 Thêm danh mục
               </button>
@@ -264,7 +260,7 @@ const AdminDashboard = () => {
             <div className="flex items-center justify-between mb-4">
               <button
                 onClick={() => openProductModal(null)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer"
               >
                 Thêm sản phẩm
               </button>
@@ -297,7 +293,7 @@ const AdminDashboard = () => {
         )}
 
         {activeTab === 'users' && <UsersPanel />}
-        {activeTab === 'settings' && <SettingsPanel />}
+        {activeTab === 'contacts' && <ContactsPanel />}
       </main>
     </div>
   );

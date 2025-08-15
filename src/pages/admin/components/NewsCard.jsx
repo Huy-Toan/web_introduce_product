@@ -21,14 +21,14 @@ const Newscard = ({ news, onEdit, onDelete }) => {
         <div className="flex gap-2">
           <button
             onClick={() => onEdit(news)}
-            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-3 rounded flex items-center justify-center gap-1"
+            className="cursor-pointer flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-3 rounded flex items-center justify-center gap-1"
           >
             <Edit2 size={16} />
             Sửa
           </button>
           <button
             onClick={() => onDelete(news.id)}
-            className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 py-2 px-3 rounded flex items-center justify-center gap-1"
+            className="cursor-pointer flex-1 bg-red-100 hover:bg-red-200 text-red-700 py-2 px-3 rounded flex items-center justify-center gap-1"
           >
             <Trash2 size={16} />
             Xóa
