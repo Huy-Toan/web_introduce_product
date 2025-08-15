@@ -1,7 +1,7 @@
 function ProductCard({ product, onClick }) {
   return (
     <div
-      className="cursor-pointer flex flex-col"
+      className="cursor-pointer flex flex-col border border-gray-300 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
       onClick={onClick}
     >
       <div className="w-full h-60">
@@ -12,8 +12,10 @@ function ProductCard({ product, onClick }) {
         />
       </div>
 
-      <div className="mt-2">
-        <h3 className="text-sm font-medium line-clamp-1">{product.title}</h3>
+      <div className="p-2">
+        <h3 className="text-sm font-medium line-clamp-1 text-center">
+          {product.title}
+        </h3>
       </div>
     </div>
   );
