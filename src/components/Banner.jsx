@@ -6,8 +6,7 @@ const SWIPE_THRESHOLD = 50; // px
 
 const DEFAULT_BANNERS = [
   { id: "default-1", content: "PREMIUM VIETNAMESE FRUITS", image_url: "/banner.jpg" },
-  { id: "default-1", content: "PREMIUM VIETNAMESE FRUITS ảnh 1", image_url: "/banner.jpg" },
-  { id: "default-1", content: "PREMIUM VIETNAMESE FRUITS ảnh 2", image_url: "/banner.jpg" },
+  { id: "default-1", content: "PREMIUM VIETNAMESE FRUITS ảnh 1", image_url: "/banner_header.jpg" },
 ];
 
 export default function Banner() {
@@ -197,7 +196,7 @@ function Slide({ banner }) {
       className="relative w-full flex-shrink-0 bg-cover bg-center bg-no-repeat min-h-[70vh] md:min-h-screen"
       style={{ backgroundImage: banner.image_url ? `url(${banner.image_url})` : "none" }}
     >
-      <div className="absolute inset-0 bg-black/30 md:bg-black/40" />
+      <div className="absolute inset-0" />
       <div className="relative container mx-auto px-4 h-full flex flex-col justify-center items-center text-center z-10">
         <div className="bg-black/30 backdrop-blur-sm rounded-2xl p-4 sm:p-6 md:p-10 lg:p-12 shadow-2xl w-full max-w-xs sm:max-w-md md:max-w-2xl lg:max-w-3xl mx-4">
           <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-4 leading-tight !text-white">

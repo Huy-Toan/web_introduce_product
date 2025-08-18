@@ -10,6 +10,8 @@ import productsRouter from "./routes/products";
 import contactRouter from "./routes/contact";
 import userRouter from "./routes/user";
 import bannerRouter from "./routes/banner";
+import fieldRouter from "./routes/field";
+import cerPartnerRouter from "./routes/cer-partner";
 
 const app = new Hono();
 
@@ -35,15 +37,17 @@ app.use("*", async (c, next) => {
   await next();
 });
 
+app.route("/api/seo", seoApp);
 app.route("/api/auth", authRouter);
 app.route("/api/users", userRouter);
-app.route("/api/contacts", contactRouter);
 app.route("/api/banners", bannerRouter);
 app.route("/api/about", aboutRouter);
 app.route("/api/news", newsRouter);
-app.route("/api/seo", seoApp);
+app.route("/api/fields", fieldRouter);
+app.route("/api/contacts", contactRouter);
 app.route("/api/products", productsRouter);
 app.route("/api/categories", categoriesRouter);
+app.route("/api/cer-partners", cerPartnerRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 

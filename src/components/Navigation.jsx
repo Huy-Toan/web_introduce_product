@@ -51,7 +51,7 @@ function TopNavigation() {
 
           {/* Desktop menu */}
           <div className="hidden md:flex items-center space-x-6">
-            {["home", "about","product", "news", "contact"].map((page) => {
+            {["home", "about", "what_we_do","product", "news", "contact"].map((page) => {
               const path = page === "home" ? "/" : `/${page}`;
               const active = isActive(path);
               return (
@@ -68,6 +68,7 @@ function TopNavigation() {
                 >
                   {page === "home" ? "Home" 
                    : page === "about" ? "About Us" 
+                   : page === "what_we_do" ? "What We Do" 
                    : page === "contact" ? "Contact" 
                    : page === "news" ? "News" 
                    : "Products"}
@@ -103,6 +104,7 @@ function TopNavigation() {
                 >
                   {page === "home" ? "Home" 
                    : page === "about" ? "About Us" 
+                   : page === "what_we_do" ? "What We Do"
                    : page === "contact" ? "Contact" 
                    : page === "news" ? "News" 
                    : "Products"}

@@ -7,6 +7,7 @@ import {TProvider} from "./context/TContext";
 
 import HomePage from "./pages/Home";
 import AboutPage from "./pages/AboutUs";
+import FieldPage from "./pages/Field";
 import ContactPage from "./pages/Contact";
 import Products from "./pages/Product";
 import AdminLogin from "./pages/admin/login";
@@ -27,6 +28,7 @@ createRoot(document.getElementById("root")).render(
         <Route path="/product/product-detail/:idOrSlug" element={<ProductDetailPage />} />
         <Route path="/news/news-detail/:slug" element={<News_Detail />} />
         <Route path="/about" element={<AboutPage />} />
+        <Route path="/what_we_do" element={<FieldPage />} />
         <Route path="/product" element={<Products />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/news" element={<News />} />

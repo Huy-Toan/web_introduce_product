@@ -20,7 +20,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     title: '',
     slug: '',
     description: '',
-    content: '',      // <-- Markdown từ EditorMd sẽ nằm ở đây
+    content: '',    
     image_url: '',
     category_id: null,
   });

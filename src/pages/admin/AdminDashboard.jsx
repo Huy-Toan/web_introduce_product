@@ -19,9 +19,11 @@ import useProducts from './hook/Useproduct';
 import BannerCard from './components/BannerCard';
 import BannerFormModal from './components/BannerFormModal';
 import useBanner from './hook/UseBanner';
+import FieldCard from './components/FieldCard';
+import FieldFormModal from './components/FieldFormModal';
+import useField from './hook/UseField';
 
 import { clearAuth } from '../../../api/admin/auth';
-import { Ban, Cat } from 'lucide-react';
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const navigate = useNavigate();
@@ -65,14 +67,10 @@ const AdminDashboard = () => {
     const {
       products,
       productsLoading,
-
-      // modal
       isProductModalOpen,
       productToEdit,
       openProductModal,
       closeProductModal,
-
-      // CRUD
       addProduct,
       updateProduct,
       deleteProduct,
@@ -91,6 +89,18 @@ const AdminDashboard = () => {
       handleDeleteBanner,
     } = useBanner();
 
+    const {
+      fields,
+      fieldsLoading,
+      isFieldModalOpen,
+      fieldToEdit,
+      handleOpenFieldModal,
+      handleCloseFieldModal,
+      handleAddField,
+      handleUpdateField,
+      handleDeleteField,
+      fetchFields,
+    } = useField();
 
     async function doLogout() {
     try {
@@ -321,6 +331,44 @@ const AdminDashboard = () => {
               onClose={handleCloseBannerModal}
               onSubmit={bannerToEdit ? handleUpdateBanner : handleAddBanner}
               initialData={bannerToEdit || {}}
+            />
+          </div>
+        )}
+
+{/* Field */}
+        {activeTab === 'fields' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => handleOpenFieldModal(null)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer"
+              >
+                Thêm nội dung lĩnh vực
+              </button>
+            </div>
+
+            {fieldsLoading ? (
+              <p>Đang tải...</p>
+            ) : fields.length === 0 ? (
+              <p className="text-gray-600">Không có nội dung nào.</p>
+            ) : (
+              <div className="flex flex-col gap-4 w-full">
+                {fields.map(item => (
+                  <FieldCard
+                    key={item.id}
+                    field={item}
+                    onEdit={() => handleOpenFieldModal(item)}
+                    onDelete={handleDeleteField}
+                  />
+                ))}
+              </div>
+            )}
+            
+            <FieldFormModal
+              isOpen={isFieldModalOpen}
+              onClose={handleCloseFieldModal}
+              onSubmit={fieldToEdit ? handleUpdateField : handleAddField}
+              initialData={fieldToEdit || {}}
             />
           </div>
         )}
