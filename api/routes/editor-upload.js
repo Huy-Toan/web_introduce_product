@@ -12,7 +12,7 @@ const editorUploadRouter = new Hono();
 editorUploadRouter.post('/', async (c) => {
   try {
     const formData = await c.req.formData();
-    const file = formData.get('editormd-image-file'); // ⚠ Editor.md mặc định gửi tên này
+    const file = formData.get('editormd-image-file'); 
 
     if (!file || typeof file === 'string') {
       return c.json({ success: 0, message: 'Không có file nào được upload' }, 400);

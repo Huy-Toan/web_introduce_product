@@ -1,10 +1,10 @@
 function ProductCard({ product, onClick }) {
   return (
     <div
-      className="cursor-pointer flex flex-col border border-gray-300 rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
+      className="cursor-pointer flex flex-col border border-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow duration-300"
       onClick={onClick}
     >
-      <div className="w-full h-60">
+      <div className="w-full h-80">
         <img
           src={product.image_url}
           alt={product.title}

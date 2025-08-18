@@ -1,4 +1,4 @@
-// src/seo/SEO.js
+
 import { useEffect, useRef } from 'react'
 
 function setMeta(name, content) {

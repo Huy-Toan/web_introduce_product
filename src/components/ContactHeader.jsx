@@ -1,11 +1,17 @@
 function ContactHeader() {
   return (
     <div className="relative h-48 md:h-64 bg-gradient-to-r from-gray-900 to-gray-800 overflow-hidden mt-12">
-
+      <div 
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: "url('./banner_contact.jpg')",
+        }}
+      >
+      </div>
       {/* Content */}
       <div className="relative z-10 flex items-center justify-center h-full">
         <div className="text-center text-white px-4">
-          <h1 className="text-4xl !text-white md:text-6xl font-bold mb-4 tracking-wider">
+          <h1 className="text-4xl !text-blue-600 md:text-6xl font-bold mb-4 tracking-wider">
             CONTACT NOWS
           </h1>
           

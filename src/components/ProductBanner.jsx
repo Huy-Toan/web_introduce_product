@@ -5,7 +5,7 @@ function ProductHeaderBanner() {
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: "url('./banner_product.jpg')",
+          backgroundImage: "url('./banner_header.jpg')",
         }}
       >
         {/* Dark Overlay */}
