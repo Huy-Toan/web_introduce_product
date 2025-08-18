@@ -1,6 +1,4 @@
 import { Hono } from "hono";
-import booksRouter from "./routes/books";
-import bookRelatedRouter from "./routes/book-related";
 import uploadImageRouter from "./routes/upload-image";
 import editorUploadRouter from "./routes/editor-upload";
 import aboutRouter from "./routes/about";
@@ -11,6 +9,7 @@ import authRouter from "./routes/auth";
 import productsRouter from "./routes/products";
 import contactRouter from "./routes/contact";
 import userRouter from "./routes/user";
+import bannerRouter from "./routes/banner";
 
 const app = new Hono();
 
@@ -39,13 +38,12 @@ app.use("*", async (c, next) => {
 app.route("/api/auth", authRouter);
 app.route("/api/users", userRouter);
 app.route("/api/contacts", contactRouter);
-app.route("/api/books", booksRouter);
+app.route("/api/banners", bannerRouter);
 app.route("/api/about", aboutRouter);
 app.route("/api/news", newsRouter);
 app.route("/api/seo", seoApp);
 app.route("/api/products", productsRouter);
 app.route("/api/categories", categoriesRouter);
-app.route("/api/books/:id/related", bookRelatedRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 

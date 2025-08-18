@@ -24,7 +24,6 @@ createRoot(document.getElementById("root")).render(
     <ScrollToTop />
       <Routes>
         <Route path="/*" element={<HomePage />} />
-        <Route path="/genre/:genreId" element={<Products />} />
         <Route path="/product/product-detail/:idOrSlug" element={<ProductDetailPage />} />
         <Route path="/news/news-detail/:slug" element={<News_Detail />} />
         <Route path="/about" element={<AboutPage />} />

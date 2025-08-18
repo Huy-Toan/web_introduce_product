@@ -2226,312 +2226,6 @@ var Hono2 = class extends Hono$1 {
     });
   }
 };
-const booksRouter = new Hono2();
-const fallbackBooks = [
-  {
-    id: 1,
-    title: "To Kill a Mockingbird",
-    author: "Harper Lee",
-    genre: "Fiction",
-    description: "A classic American novel about racial injustice and moral growth.",
-    image_url: "/images/books/mockingbird.jpg",
-    // Changed to image_url
-    published_year: 1960
-  }
-];
-booksRouter.get("/", async (c) => {
-  const { genre, sort } = c.req.query();
-  try {
-    if (c.env.DB_AVAILABLE) {
-      let query = "SELECT * FROM books";
-      let params = [];
-      if (genre) {
-        query += " WHERE genre = ?";
-        params.push(genre);
-      }
-      if (sort) {
-        switch (sort) {
-          case "title_asc":
-            query += " ORDER BY title ASC";
-            break;
-          case "title_desc":
-            query += " ORDER BY title DESC";
-            break;
-          case "author_asc":
-            query += " ORDER BY author ASC";
-            break;
-          case "author_desc":
-            query += " ORDER BY author DESC";
-            break;
-          case "year_asc":
-            query += " ORDER BY published_year ASC";
-            break;
-          case "year_desc":
-            query += " ORDER BY published_year DESC";
-            break;
-          default:
-            query += " ORDER BY id ASC";
-            break;
-        }
-      }
-      let stmt = c.env.DB.prepare(query);
-      if (params.length > 0) {
-        stmt = stmt.bind(...params);
-      }
-      const result = await stmt.all();
-      const books = result.results || [];
-      return c.json({
-        books,
-        source: "database",
-        count: books.length,
-        debug: { query, params }
-      });
-    } else {
-      console.log("Using fallback data");
-      let books = [...fallbackBooks];
-      if (genre) {
-        console.log("Filtering by genre:", genre);
-        books = books.filter(
-          (book) => book.genre.toLowerCase() === genre.toLowerCase()
-        );
-      }
-      if (sort) {
-        switch (sort) {
-          case "title_asc":
-            books.sort((a, b) => a.title.localeCompare(b.title));
-            break;
-          case "title_desc":
-            books.sort((a, b) => b.title.localeCompare(a.title));
-            break;
-          case "author_asc":
-            books.sort((a, b) => a.author.localeCompare(b.author));
-            break;
-          case "author_desc":
-            books.sort((a, b) => b.author.localeCompare(a.author));
-            break;
-          case "year_asc":
-            books.sort((a, b) => a.published_year - b.published_year);
-            break;
-          case "year_desc":
-            books.sort((a, b) => b.published_year - a.published_year);
-            break;
-        }
-      }
-      return c.json({
-        books,
-        source: "fallback",
-        count: books.length,
-        debug: { genre, sort, originalCount: fallbackBooks.length }
-      });
-    }
-  } catch (error2) {
-    console.error("Error fetching books:", error2);
-    return c.json({
-      error: "Failed to fetch books",
-      books: fallbackBooks,
-      source: "error_fallback"
-    }, 500);
-  }
-});
-booksRouter.get("/:id", async (c) => {
-  const bookId = parseInt(c.req.param("id"));
-  try {
-    if (c.env.DB_AVAILABLE) {
-      const result = await c.env.DB.prepare("SELECT * FROM books WHERE id = ?").bind(bookId).first();
-      if (!result) {
-        return c.json({ error: "Book not found" }, 404);
-      }
-      return c.json({
-        book: result,
-        source: "database"
-      });
-    } else {
-      const book = fallbackBooks.find((b) => b.id === bookId);
-      if (!book) {
-        return c.json({ error: "Book not found" }, 404);
-      }
-      return c.json({
-        book,
-        source: "fallback"
-      });
-    }
-  } catch (error2) {
-    console.error("Error fetching book:", error2);
-    return c.json({ error: "Failed to fetch book" }, 500);
-  }
-});
-booksRouter.post("/", async (c) => {
-  try {
-    if (!c.env.DB_AVAILABLE) {
-      return c.json({ error: "Database not available" }, 503);
-    }
-    const { title: title2, author, genre, description, image_url } = await c.req.json();
-    if (!title2 || !author || !genre) {
-      return c.json({ error: "Missing required fields: title, author, genre" }, 400);
-    }
-    const result = await c.env.DB.prepare(`
-      INSERT INTO books (title, author, genre, description, image_url)
-      VALUES (?, ?, ?, ?, ?)
-    `).bind(title2, author, genre, description || null, image_url || null).run();
-    if (result.success) {
-      const newBook = await c.env.DB.prepare("SELECT * FROM books WHERE id = ?").bind(result.meta.last_row_id).first();
-      return c.json({
-        book: newBook,
-        source: "database"
-      }, 201);
-    } else {
-      throw new Error("Failed to insert book");
-    }
-  } catch (error2) {
-    console.error("Error adding book:", error2);
-    return c.json({ error: "Failed to add book" }, 500);
-  }
-});
-booksRouter.put("/:id", async (c) => {
-  const bookId = parseInt(c.req.param("id"));
-  try {
-    if (!c.env.DB_AVAILABLE) {
-      return c.json({ error: "Database not available" }, 503);
-    }
-    const updates = await c.req.json();
-    const { title: title2, author, genre, description, image_url } = updates;
-    const result = await c.env.DB.prepare(`
-      UPDATE books 
-      SET title = ?, author = ?, genre = ?, description = ?, image_url = ?
-      WHERE id = ?
-    `).bind(title2, author, genre, description, image_url, bookId).run();
-    if (result.meta.changes > 0) {
-      const updatedBook = await c.env.DB.prepare("SELECT * FROM books WHERE id = ?").bind(bookId).first();
-      return c.json({
-        book: updatedBook,
-        source: "database"
-      });
-    } else {
-      return c.json({ error: "Book not found" }, 404);
-    }
-  } catch (error2) {
-    console.error("Error updating book:", error2);
-    return c.json({ error: "Failed to update book" }, 500);
-  }
-});
-booksRouter.delete("/:id", async (c) => {
-  const bookId = c.req.param("id");
-  console.log("Có yêu cầu xóa với ID:", bookId, "Type:", typeof bookId);
-  try {
-    if (!c.env.DB_AVAILABLE) {
-      return c.json({ error: "Database not available" }, 503);
-    }
-    const existingBook = await c.env.DB.prepare("SELECT * FROM books WHERE id = ?").bind(parseInt(bookId)).first();
-    console.log("Book tìm thấy:", existingBook);
-    const result = await c.env.DB.prepare("DELETE FROM books WHERE id = ?").bind(parseInt(bookId)).run();
-    console.log("Delete result:", result);
-    if (result.meta.changes > 0) {
-      return c.json({ success: true, message: "Book deleted successfully" }, 200);
-    } else {
-      return c.json({ error: "Book not found" }, 404);
-    }
-  } catch (error2) {
-    console.error("Lỗi khi xoá:", error2);
-    return c.json({ error: "Failed to delete book" }, 500);
-  }
-});
-const bookRelatedRouter = new Hono2();
-const fallbackRelatedData = {
-  relatedBooks: [
-    {
-      id: 2,
-      title: "1984",
-      author: "George Orwell",
-      genre: "Dystopian",
-      image_url: "https://example.com/1984.jpg"
-    },
-    {
-      id: 3,
-      title: "Pride and Prejudice",
-      author: "Jane Austen",
-      genre: "Romance",
-      image_url: "https://example.com/pride.jpg"
-    }
-  ],
-  recentRecommendations: [
-    {
-      id: 1,
-      title: "To Kill a Mockingbird",
-      author: "Harper Lee",
-      genre: "Fiction",
-      image_url: "https://example.com/mockingbird.jpg"
-    }
-  ],
-  genreStats: [
-    { genre: "Fiction", count: 5 },
-    { genre: "Romance", count: 3 },
-    { genre: "Dystopian", count: 2 }
-  ]
-};
-bookRelatedRouter.get("/", async (c) => {
-  const bookId = parseInt(c.req.param("id"));
-  console.log("Fetching related books for ID:", bookId);
-  try {
-    if (c.env.DB_AVAILABLE) {
-      const book = await c.env.DB.prepare("SELECT * FROM books WHERE id = ?").bind(bookId).first();
-      if (!book) {
-        return c.json({ error: "Book not found" }, 404);
-      }
-      const bookGenre = book.genre;
-      let relatedBooks = [];
-      let recentBooks = [];
-      let genreCounts = [];
-      const relatedResult = await c.env.DB.prepare(`
-        SELECT * FROM books 
-        WHERE genre = ? AND id != ? 
-        LIMIT 5
-      `).bind(bookGenre, bookId).all();
-      relatedBooks = relatedResult.results || [];
-      const genreStatsResult = await c.env.DB.prepare(`
-        SELECT genre, COUNT(*) as count 
-        FROM books 
-        GROUP BY genre 
-        ORDER BY count DESC
-      `).all();
-      genreCounts = genreStatsResult.results || [];
-      const recentResult = await c.env.DB.prepare(`
-        SELECT * FROM books 
-        WHERE id != ? 
-        ORDER BY created_at DESC 
-        LIMIT 3
-      `).bind(bookId).all();
-      recentBooks = recentResult.results || [];
-      return c.json({
-        bookId,
-        bookGenre,
-        relatedBooks,
-        recentRecommendations: recentBooks,
-        genreStats: genreCounts,
-        source: "database"
-      });
-    } else {
-      const book = { id: bookId, genre: "Fiction" };
-      return c.json({
-        bookId,
-        bookGenre: book.genre,
-        relatedBooks: fallbackRelatedData.relatedBooks.filter((b) => b.id !== bookId),
-        recentRecommendations: fallbackRelatedData.recentRecommendations.filter((b) => b.id !== bookId),
-        genreStats: fallbackRelatedData.genreStats,
-        source: "fallback"
-      });
-    }
-  } catch (error2) {
-    console.error("Error fetching related book data:", error2);
-    return c.json({
-      error: "Failed to fetch related books",
-      bookId,
-      relatedBooks: [],
-      recentRecommendations: [],
-      genreStats: [],
-      source: "error_fallback"
-    }, 500);
-  }
-});
 function uuidv4$1() {
   return ("10000000-1000-4000-8000" + -1e11).replace(
     /[018]/g,
@@ -3021,12 +2715,12 @@ seoApp.get("/test", (c) => {
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   });
 });
-const hasDB$1 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
+const hasDB$2 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const slugify$1 = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
 const categoriesRouter = new Hono2();
 categoriesRouter.get("/", async (c) => {
   try {
-    if (!hasDB$1(c.env)) {
+    if (!hasDB$2(c.env)) {
       return c.json({ categories: [], source: "fallback", count: 0 });
     }
     const sql = `
@@ -3045,7 +2739,7 @@ categoriesRouter.get("/", async (c) => {
 categoriesRouter.get("/:idOrSlug", async (c) => {
   const idOrSlug = c.req.param("idOrSlug");
   try {
-    if (!hasDB$1(c.env)) {
+    if (!hasDB$2(c.env)) {
       return c.json({ error: "Database not available" }, 503);
     }
     const isNumeric = /^\d+$/.test(idOrSlug);
@@ -3065,7 +2759,7 @@ categoriesRouter.get("/:idOrSlug", async (c) => {
 });
 categoriesRouter.post("/", async (c) => {
   try {
-    if (!hasDB$1(c.env)) {
+    if (!hasDB$2(c.env)) {
       return c.json({ error: "Database not available" }, 503);
     }
     const body = await c.req.json();
@@ -3095,7 +2789,7 @@ categoriesRouter.post("/", async (c) => {
 categoriesRouter.put("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
-    if (!hasDB$1(c.env)) {
+    if (!hasDB$2(c.env)) {
       return c.json({ error: "Database not available" }, 503);
     }
     const body = await c.req.json();
@@ -3139,7 +2833,7 @@ categoriesRouter.put("/:id", async (c) => {
 categoriesRouter.delete("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
-    if (!hasDB$1(c.env)) {
+    if (!hasDB$2(c.env)) {
       return c.json({ error: "Database not available" }, 503);
     }
     const existing = await c.env.DB.prepare("SELECT id FROM categories WHERE id = ?").bind(id).first();
@@ -3157,7 +2851,7 @@ categoriesRouter.delete("/:id", async (c) => {
 categoriesRouter.get("/:slug/products", async (c) => {
   const slug = c.req.param("slug");
   try {
-    if (!hasDB$1(c.env)) {
+    if (!hasDB$2(c.env)) {
       return c.json({ products: [], source: "fallback", count: 0 });
     }
     const sql = `
@@ -4542,7 +4236,7 @@ authRouter.post("/logout", auth, async (c) => {
     return c.json({ error: "Logout failed" }, 500);
   }
 });
-const hasDB = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
+const hasDB$1 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const findProductByIdOrSlug = async (db, idOrSlug) => {
   const isNumericId = /^\d+$/.test(idOrSlug);
   const sql = `
@@ -4559,7 +4253,7 @@ const productsRouter = new Hono2();
 productsRouter.get("/", async (c) => {
   const { category_id, category_slug } = c.req.query();
   try {
-    if (!hasDB(c.env)) {
+    if (!hasDB$1(c.env)) {
       const products2 = [];
       return c.json({ products: products2, source: "fallback", count: products2.length });
     }
@@ -4603,7 +4297,7 @@ productsRouter.get("/", async (c) => {
 productsRouter.get("/:idOrSlug", async (c) => {
   const idOrSlug = c.req.param("idOrSlug");
   try {
-    if (!hasDB(c.env)) {
+    if (!hasDB$1(c.env)) {
       return c.json({ error: "Database not available" }, 503);
     }
     const product = await findProductByIdOrSlug(c.env.DB, idOrSlug);
@@ -4616,7 +4310,7 @@ productsRouter.get("/:idOrSlug", async (c) => {
 });
 productsRouter.post("/", async (c) => {
   try {
-    if (!hasDB(c.env)) {
+    if (!hasDB$1(c.env)) {
       return c.json({ error: "Database not available" }, 503);
     }
     const body = await c.req.json();
@@ -4667,7 +4361,7 @@ productsRouter.post("/", async (c) => {
 productsRouter.put("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
-    if (!hasDB(c.env)) {
+    if (!hasDB$1(c.env)) {
       return c.json({ error: "Database not available" }, 503);
     }
     const body = await c.req.json();
@@ -4736,7 +4430,7 @@ productsRouter.put("/:id", async (c) => {
 productsRouter.delete("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
-    if (!hasDB(c.env)) {
+    if (!hasDB$1(c.env)) {
       return c.json({ error: "Database not available" }, 503);
     }
     const existing = await c.env.DB.prepare("SELECT id FROM products WHERE id = ?").bind(id).first();
@@ -4923,6 +4617,77 @@ userRouter.delete("/:id", async (c) => {
     return bad(c, "Failed to delete user", 500);
   }
 });
+const hasDB = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
+const bannerRouter = new Hono2();
+bannerRouter.get("/", async (c) => {
+  try {
+    if (!hasDB(c.env)) {
+      return c.json({ ok: true, items: [], count: 0, source: "fallback" });
+    }
+    const sql = `
+      SELECT id, content, image_url, created_at, updated_at
+      FROM banners
+      ORDER BY created_at DESC
+    `;
+    const result = await c.env.DB.prepare(sql).all();
+    const items = result?.results ?? [];
+    return c.json({ ok: true, items, count: items.length, source: "database" });
+  } catch (err) {
+    console.error("Error fetching banners:", err);
+    return c.json({ ok: false, error: "Failed to fetch banners" }, 500);
+  }
+});
+bannerRouter.get("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
+  try {
+    if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);
+    const item = await c.env.DB.prepare("SELECT id, content, image_url, created_at, updated_at FROM banners WHERE id = ?").bind(id).first();
+    if (!item) return c.json({ ok: false, error: "Not found" }, 404);
+    return c.json({ ok: true, item });
+  } catch (e) {
+    return c.json({ ok: false, error: "Failed to fetch banner" }, 500);
+  }
+});
+bannerRouter.post("/", async (c) => {
+  try {
+    if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);
+    const { content, image_url } = await c.req.json();
+    if (!content || typeof content !== "string") {
+      return c.json({ ok: false, error: "content is required" }, 400);
+    }
+    const result = await c.env.DB.prepare("INSERT INTO banners (content, image_url) VALUES (?, ?)").bind(content, image_url || null).run();
+    const item = await c.env.DB.prepare("SELECT id, content, image_url, created_at, updated_at FROM banners WHERE id = ?").bind(result.meta.last_row_id).first();
+    return c.json({ ok: true, item }, 201);
+  } catch (e) {
+    console.error(e);
+    return c.json({ ok: false, error: "Failed to create banner" }, 500);
+  }
+});
+bannerRouter.put("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
+  try {
+    if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);
+    const { content, image_url } = await c.req.json();
+    await c.env.DB.prepare("UPDATE banners SET content = ?, image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(content ?? null, image_url ?? null, id).run();
+    const item = await c.env.DB.prepare("SELECT id, content, image_url, created_at, updated_at FROM banners WHERE id = ?").bind(id).first();
+    return c.json({ ok: true, item });
+  } catch (e) {
+    return c.json({ ok: false, error: "Failed to update banner" }, 500);
+  }
+});
+bannerRouter.delete("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
+  try {
+    if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);
+    await c.env.DB.prepare("DELETE FROM banners WHERE id = ?").bind(id).run();
+    return c.json({ ok: true });
+  } catch (e) {
+    return c.json({ ok: false, error: "Failed to delete banner" }, 500);
+  }
+});
 const app = new Hono2();
 app.use("*", async (c, next) => {
   if (c.env.DB) {
@@ -4943,13 +4708,12 @@ app.use("*", async (c, next) => {
 app.route("/api/auth", authRouter);
 app.route("/api/users", userRouter);
 app.route("/api/contacts", contactRouter);
-app.route("/api/books", booksRouter);
+app.route("/api/banners", bannerRouter);
 app.route("/api/about", aboutRouter);
 app.route("/api/news", newsRouter);
 app.route("/api/seo", seoApp);
 app.route("/api/products", productsRouter);
 app.route("/api/categories", categoriesRouter);
-app.route("/api/books/:id/related", bookRelatedRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.get("/api/health", async (c) => {

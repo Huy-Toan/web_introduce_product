@@ -6,6 +6,7 @@ const navItems = [
   { id: 'categories', label: 'Danh mục', icon: Tags },
   { id: 'news', label: 'Tin tức', icon: Newspaper },
   { id: 'about_us', label: 'Giới thiệu', icon: Info },
+  { id: 'banners', label: 'Banner', icon: Tags },
   { id: 'users', label: 'Người dùng', icon: Users },
   { id: 'contacts', label: 'Liên hệ', icon: Contact }
 ];

@@ -16,9 +16,12 @@ import useCategories from './hook/UseCategories';
 import ProductCard from './components/ProductCard';
 import ProductFormModal from './components/ProductFormModal';
 import useProducts from './hook/Useproduct';
+import BannerCard from './components/BannerCard';
+import BannerFormModal from './components/BannerFormModal';
+import useBanner from './hook/UseBanner';
 
 import { clearAuth } from '../../../api/admin/auth';
-import { Cat } from 'lucide-react';
+import { Ban, Cat } from 'lucide-react';
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const navigate = useNavigate();
@@ -26,7 +29,6 @@ const AdminDashboard = () => {
   const {
       news,
       newsLoading,
-      totalNews,
       isNewsModalOpen,
       newsToEdit,
       handleOpenNewsModal,
@@ -39,7 +41,6 @@ const AdminDashboard = () => {
     const {
       about,
       aboutLoading,
-      totalAbout,
       isAboutModalOpen,
       aboutToEdit,
       handleOpenAboutModal,
@@ -52,10 +53,8 @@ const AdminDashboard = () => {
     const {
       categories,
       categoriesLoading,
-      totalCategories,
       isCategoryModalOpen,
-      categoryToEdit,
-      fetchCategories,            
+      categoryToEdit,          
       handleOpenCategoryModal,
       handleCloseCategoryModal,
       handleAddCategory,
@@ -65,18 +64,7 @@ const AdminDashboard = () => {
 
     const {
       products,
-      totalProducts,
       productsLoading,
-
-      // categories
-      productCategories,
-      productCategoriesLoading,
-
-      // filters
-      selectedProductCategoryId,
-      setSelectedProductCategoryId,
-      selectedProductCategorySlug,
-      setSelectedProductCategorySlug,
 
       // modal
       isProductModalOpen,
@@ -89,11 +77,19 @@ const AdminDashboard = () => {
       updateProduct,
       deleteProduct,
 
-      // fetchers
-      fetchProducts,
-      fetchProductCategories,
-
     } = useProducts();
+
+    const {
+      banners,
+      bannerLoading,
+      isBannerModalOpen,
+      bannerToEdit,
+      handleOpenBannerModal,
+      handleCloseBannerModal,
+      handleAddBanner,
+      handleUpdateBanner,
+      handleDeleteBanner,
+    } = useBanner();
 
 
     async function doLogout() {
@@ -288,6 +284,43 @@ const AdminDashboard = () => {
               onClose={closeProductModal}
               onSubmit={productToEdit ? updateProduct : addProduct}
               initialData={productToEdit || {}}
+            />
+          </div>
+        )}
+{/* Banner */}
+        {activeTab === 'banners' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => handleOpenBannerModal(null)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer"
+              >
+                Thêm nội dung banner
+              </button>
+            </div>
+
+            {bannerLoading ? (
+              <p>Đang tải...</p>
+            ) : banners.length === 0 ? (
+              <p className="text-gray-600">Không có banner nào.</p>
+            ) : (
+              <div className="flex flex-col gap-4 w-full">
+                {banners.map(item => (
+                  <BannerCard
+                    key={item.id}
+                    banner={item}
+                    onEdit={() => handleOpenBannerModal(item)}
+                    onDelete={handleDeleteBanner}
+                  />
+                ))}
+              </div>
+            )}
+            
+            <BannerFormModal
+              isOpen={isBannerModalOpen}
+              onClose={handleCloseBannerModal}
+              onSubmit={bannerToEdit ? handleUpdateBanner : handleAddBanner}
+              initialData={bannerToEdit || {}}
             />
           </div>
         )}

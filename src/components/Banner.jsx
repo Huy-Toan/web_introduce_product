@@ -1,17 +1,23 @@
 import { useNavigate } from "react-router";
 
-
 function Banner() {
   const navigate = useNavigate();
 
   return (
     <section
-      className="relative bg-[url('/banner.jpg')] bg-cover bg-center bg-no-repeat text-white mt-16"
-      style={{ height: "600px" }}
+      className="
+        relative text-white
+        bg-[url('/banner.jpg')] bg-cover bg-center bg-no-repeat
+        min-h-[70vh]      
+        md:min-h-screen 
+        flex
+      "
     >
-   
-      <div className="container mx-auto px-4 h-full flex flex-col justify-center items-center text-center relative z-10">
-        {/* Thẻ nổi - Responsive */}
+      {/* lớp phủ làm tối ảnh nền cho dễ đọc chữ (tùy chọn) */}
+      <div className="absolute inset-0 bg-black/30 md:bg-black/40" />
+
+      <div className="container mx-auto px-4 relative z-10 flex-1 flex flex-col justify-center items-center text-center">
+        {/* Thẻ nổi */}
         <div className="bg-black/50 backdrop-blur-sm rounded-2xl p-4 sm:p-6 md:p-8 lg:p-12 shadow-2xl w-full max-w-xs sm:max-w-md md:max-w-2xl lg:max-w-3xl mx-4">
           <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl !text-white font-bold mb-3 sm:mb-4 md:mb-6 leading-tight">
             PREMIUM VIETNAMESE FRUITS
@@ -28,15 +34,13 @@ function Banner() {
             >
               <span className="flex items-center gap-2">
                 Contact now
-                <span className="transform transition-transform duration-300 group-hover:translate-x-1">
-                  →
-                </span>
+                <span className="transform transition-transform duration-300 group-hover:translate-x-1">→</span>
               </span>
             </button>
           </div>
         </div>
 
-        {/* Thống kê - Responsive */}
+        {/* Thống kê */}
         <div className="grid grid-cols-3 gap-2 sm:gap-4 md:gap-6 lg:gap-8 mt-8 sm:mt-12 md:mt-16 w-full max-w-xs sm:max-w-md md:max-w-2xl lg:max-w-4xl mx-auto px-2">
           <div className="text-center">
             <div className="text-2xl sm:text-3xl md:text-4xl font-bold mb-1 sm:mb-2">10+</div>
