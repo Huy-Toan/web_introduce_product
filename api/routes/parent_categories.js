@@ -115,7 +115,7 @@ parentsRouter.post("/", async (c) => {
     console.error("Error creating parent category:", err);
     const msg =
       String(err?.message || "").toLowerCase().includes("unique") ||
-      String(err).toLowerCase().includes("unique")
+        String(err).toLowerCase().includes("unique")
         ? "Slug or Name already exists"
         : "Failed to create parent category";
     return c.json({ error: msg }, 500);
@@ -178,7 +178,7 @@ parentsRouter.put("/:id", async (c) => {
     console.error("Error updating parent category:", err);
     const msg =
       String(err?.message || "").toLowerCase().includes("unique") ||
-      String(err).toLowerCase().includes("unique")
+        String(err).toLowerCase().includes("unique")
         ? "Slug or Name already exists"
         : "Failed to update parent category";
     return c.json({ error: msg }, 500);
