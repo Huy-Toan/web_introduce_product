@@ -13,6 +13,7 @@ import userRouter from "./routes/user";
 import bannerRouter from "./routes/banner";
 import fieldRouter from "./routes/field";
 import cerPartnerRouter from "./routes/cer-partner";
+import translateRouter from "./routes/translate";
 
 const app = new Hono();
 
@@ -34,7 +35,7 @@ app.use("*", async (c, next) => {
     console.log("No D1 database binding available");
     c.env.DB_AVAILABLE = false;
   }
-  
+
   await next();
 });
 
@@ -52,6 +53,7 @@ app.route("/api/sub_categories", subCategoriesRouter);
 app.route("/api/cer-partners", cerPartnerRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
+app.route("/api/translate", translateRouter);
 
 
 // Health check endpoint
