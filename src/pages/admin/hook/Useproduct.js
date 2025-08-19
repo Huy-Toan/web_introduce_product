@@ -1,32 +1,56 @@
 // src/hooks/useProducts.js
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-const useProducts = () => {
+/**
+ * Hook quản lý sản phẩm + CRUD + subcategories.
+ *
+ * - Giữ nguyên API để Form Modal đang dùng vẫn hoạt động.
+ * - Thêm khả năng khởi tạo filter từ URL qua props { initialSubSlug, initialSubId }.
+ * - Dùng AbortController để tránh race condition (kết quả cũ đè kết quả mới).
+ *
+ * BE assumptions:
+ *   GET /api/products?sub_slug=<slug>&subcategory_id=<id>
+ *   GET /api/sub_categories -> { subcategories: [...] }
+ */
+const useProducts = ({ initialSubSlug = '', initialSubId = '' } = {}) => {
+  // ---------- Data ----------
   const [products, setProducts] = useState([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [productsLoading, setProductsLoading] = useState(false);
 
-  // Filters (theo subcategory)
-  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState('');
-  const [selectedSubcategorySlug, setSelectedSubcategorySlug] = useState('');
+  // ---------- Filters (theo subcategory) ----------
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState(
+    initialSubId ? String(initialSubId) : ''
+  );
+  const [selectedSubcategorySlug, setSelectedSubcategorySlug] = useState(
+    initialSubSlug || ''
+  );
 
-  // Subcategories for filter UI
+  // ---------- Subcategories cho UI ----------
   const [productSubcategories, setProductSubcategories] = useState([]);
   const [productSubcategoriesLoading, setProductSubcategoriesLoading] = useState(false);
 
-  // Modal state
+  // ---------- Modal state (giữ nguyên API cho Form Modal) ----------
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState(null);
 
-  // -------- Fetch helpers --------
-  // Lấy danh mục con (có thể mở rộng thêm filter parent_id/parent_slug nếu cần)
+  // ---------- Internal refs ----------
+  const productsControllerRef = useRef(null);
+
+  // ===== Helpers =====
+  const safeAbort = (controllerRef) => {
+    try {
+      controllerRef.current?.abort?.();
+    } catch {}
+  };
+
+  // ----- Fetch subcategories -----
   const fetchProductSubcategories = async () => {
     try {
       setProductSubcategoriesLoading(true);
       const res = await fetch('/api/sub_categories');
       const data = await res.json();
-      // API trả về { subcategories: [...] }
-      setProductSubcategories(data?.subcategories || []);
+      setProductSubcategories(Array.isArray(data?.subcategories) ? data.subcategories : []);
     } catch (e) {
       console.error('fetchProductSubcategories error:', e);
       setProductSubcategories([]);
@@ -35,27 +59,46 @@ const useProducts = () => {
     }
   };
 
-  // Lấy sản phẩm, filter theo subcategory
+  // ----- Fetch products -----
   const fetchProducts = async () => {
+    // Hủy request trước (nếu đang còn)
+    safeAbort(productsControllerRef);
+    const controller = new AbortController();
+    productsControllerRef.current = controller;
+
     try {
       setProductsLoading(true);
 
+      // Chuẩn hóa params gửi lên BE
       const params = new URLSearchParams();
-      if (selectedSubcategoryId) params.append('subcategory_id', String(selectedSubcategoryId));
-      if (selectedSubcategorySlug) params.append('sub_slug', String(selectedSubcategorySlug));
-      const query = params.toString();
 
-      const res = await fetch(`/api/products${query ? `?${query}` : ''}`);
+      // Ưu tiên ID > SLUG nếu bạn muốn; hiện tại gửi cả 2 nếu có.
+      if (selectedSubcategoryId) params.set('subcategory_id', String(selectedSubcategoryId));
+      if (selectedSubcategorySlug) params.set('sub_slug', String(selectedSubcategorySlug));
+
+      const qs = params.toString();
+      const url = `/api/products${qs ? `?${qs}` : ''}`;
+
+      const res = await fetch(url, { signal: controller.signal });
       const data = await res.json();
 
-      // API trả về { products: [...] }
-      setProducts(data?.products || []);
-      setTotalProducts(
+      const list = Array.isArray(data?.products) ? data.products : [];
+      setProducts(list);
+
+      // Ưu tiên count nếu có, fallback độ dài
+      const total =
         typeof data?.count === 'number'
           ? data.count
-          : (data?.totalProducts ?? (data?.products?.length || 0))
-      );
+          : (typeof data?.totalProducts === 'number'
+              ? data.totalProducts
+              : list.length);
+
+      setTotalProducts(total);
     } catch (err) {
+      if (err?.name === 'AbortError') {
+        // Request bị hủy → bỏ qua
+        return;
+      }
       console.error('fetchProducts error:', err);
       setProducts([]);
       setTotalProducts(0);
@@ -64,15 +107,21 @@ const useProducts = () => {
     }
   };
 
+  // ===== Effects =====
+  // Load subcategories 1 lần
   useEffect(() => {
     fetchProductSubcategories();
   }, []);
 
+  // Mỗi khi filter đổi → fetch products
   useEffect(() => {
     fetchProducts();
+    // cleanup: hủy request đang chạy khi deps đổi/unmount
+    return () => safeAbort(productsControllerRef);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSubcategoryId, selectedSubcategorySlug]);
 
-  // -------- Modal handlers --------
+  // ===== Modal handlers (giữ API cũ) =====
   const openProductModal = (product = null) => {
     setProductToEdit(product);
     setIsProductModalOpen(true);
@@ -83,7 +132,8 @@ const useProducts = () => {
     setProductToEdit(null);
   };
 
-  // newProduct nên dùng { title, description?, content, image_url?, subcategory_id?, slug? }
+  // ===== CRUD =====
+  // newProduct: { title, description?, content, image_url?, subcategory_id?, slug? }
   const addProduct = async (newProduct) => {
     try {
       const res = await fetch('/api/products', {
@@ -126,18 +176,18 @@ const useProducts = () => {
 
   const deleteProduct = async (id) => {
     if (!id) return;
-    if (confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) {
-      try {
-        const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err?.error || 'Failed to delete product');
-        }
-        await fetchProducts();
-      } catch (e) {
-        console.error('deleteProduct error:', e);
-        alert(e.message || 'Không thể xóa sản phẩm');
+    if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) return;
+
+    try {
+      const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error || 'Failed to delete product');
       }
+      await fetchProducts();
+    } catch (e) {
+      console.error('deleteProduct error:', e);
+      alert(e.message || 'Không thể xóa sản phẩm');
     }
   };
 

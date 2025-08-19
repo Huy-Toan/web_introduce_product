@@ -294,6 +294,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Danh mục *
             </label>
+            
             <select
               name="subcategory_id"
               value={form.subcategory_id ?? ''}
@@ -301,6 +302,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               disabled={isUploading || subcatLoading}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
             >
+              <option value="">— Chọn danh mục con —</option>
               {subcategories.map((cat) => (
                 <option key={cat.id} value={cat.id}>
                   {cat.name}
