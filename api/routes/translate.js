@@ -34,8 +34,4 @@ translateRouter.post('/', async (c) => {
     }
 });
 
-<<<<<<< HEAD
 export default translateRouter;
-=======
-export default translateRouter;
->>>>>>> feature/lead

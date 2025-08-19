@@ -225,56 +225,9 @@ aboutRouter.put("/:id/translations", async (c) => {
         .run();
     }
     return c.json({ ok: true });
-<<<<<<< HEAD
   } catch (e) {
     console.error("Error upserting about translations:", e);
     return c.json({ error: "Failed to upsert translations" }, 500);
-  }
-});
-
-/** DELETE /api/about/:id */
-aboutRouter.delete("/:id", async (c) => {
-  const id = Number(c.req.param("id"));
-  try {
-    if (!hasDB(c.env)) return c.json({ error: "Database not available" }, 503);
-
-    const existing = await c.env.DB
-      .prepare("SELECT id FROM about_us WHERE id = ?")
-      .bind(id)
-      .first();
-    if (!existing) return c.json({ error: "Not found" }, 404);
-
-    await c.env.DB.prepare("DELETE FROM about_us WHERE id = ?").bind(id).run();
-    return c.json({ success: true });
-  } catch (e) {
-    console.error("Error deleting about:", e);
-    return c.json({ error: "Failed to delete about" }, 500);
-=======
-  } catch (e) {
-    console.error("Error upserting about translations:", e);
-    return c.json({ error: "Failed to upsert translations" }, 500);
->>>>>>> feature/lead
-  }
-});
-// dịch
-aboutRouter.get("/:id/translations", async (c) => {
-  const id = Number(c.req.param("id"));
-  try {
-    const sql = `
-      SELECT locale, title, content
-      FROM about_us_translations
-      WHERE about_id = ?
-      ORDER BY locale ASC
-    `;
-    const { results = [] } = await c.env.DB.prepare(sql).bind(id).all();
-    const translations = {};
-    for (const r of results) {
-      translations[r.locale] = { title: r.title || "", content: r.content || "" };
-    }
-    return c.json({ translations });
-  } catch (e) {
-    console.error(e);
-    return c.json({ error: "Failed to fetch translations" }, 500);
   }
 });
 
