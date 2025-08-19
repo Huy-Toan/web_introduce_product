@@ -1,105 +1,177 @@
-import { useState, useEffect, useCallback } from 'react';
+// src/hooks/useCerPartner.js
+import { useState, useEffect, useCallback } from "react";
 
-const useBanner = () => {
-  const [banners, setBanners] = useState([]);
-  const [bannerLoading, setBannerLoading] = useState(false);
-  const [totalBanner, setTotalBanner] = useState(0);
+const API_BASE = "/api/cer-partners";
+const normalizeType = (t) => (t || "").toString().trim().toLowerCase();
 
-  const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
-  const [bannerToEdit, setBannerToEdit] = useState(null);
+/**
+ * Hook quản lý Certifications/Partners
+ */
+const useCerPartner = () => {
+  // State với prefix rõ ràng
+  const [itemsCerPartner, setItemsCerPartner] = useState([]);
+  const [loadingCerPartner, setLoadingCerPartner] = useState(false);
+  const [totalCerPartner, setTotalCerPartner] = useState(0);
 
-  const fetchBanner = useCallback(async () => {
+  const [currentTypeCerPartner, setCurrentTypeCerPartner] = useState("");
+  const [isModalOpenCerPartner, setIsModalOpenCerPartner] = useState(false);
+  const [editingItemCerPartner, setEditingItemCerPartner] = useState(null);
+
+  /** Lấy tất cả CerPartner */
+  const getAllCerPartners = useCallback(async () => {
     try {
-      setBannerLoading(true);
-      const res = await fetch(`/api/banners`);
+      setLoadingCerPartner(true);
+      const res = await fetch(API_BASE);
       const data = await res.json();
       if (!res.ok || data.ok === false) {
-        console.error(data.error || "Failed to load banners");
-        setBanners([]);
-        setTotalBanner(0);
-        return;
+        console.error(data.error || "Failed to load cer_partner");
+        setItemsCerPartner([]);
+        setTotalCerPartner(0);
+        return { ok: false, error: data.error };
       }
-      // hỗ trợ cả items (mới) hoặc banners (cũ)
-      const list = data.items || data.banners || [];
-      setBanners(list);
-      setTotalBanner(typeof data.count === 'number' ? data.count : list.length);
+      const list = data.items || [];
+      setItemsCerPartner(list);
+      setTotalCerPartner(
+        typeof data.count === "number" ? data.count : list.length
+      );
+      return { ok: true, items: list };
     } catch (err) {
       console.error(err);
-      setBanners([]);
-      setTotalBanner(0);
+      setItemsCerPartner([]);
+      setTotalCerPartner(0);
+      return { ok: false, error: err.message };
     } finally {
-      setBannerLoading(false);
+      setLoadingCerPartner(false);
     }
   }, []);
 
+  /** Lấy CerPartner theo type */
+  const getCerPartnersByType = useCallback(
+    async (type) => {
+      const t = normalizeType(type);
+      if (!t) {
+        const r = await getAllCerPartners();
+        setCurrentTypeCerPartner("");
+        return r;
+      }
+      try {
+        setLoadingCerPartner(true);
+        const res = await fetch(`${API_BASE}/type/${encodeURIComponent(t)}`);
+        const data = await res.json();
+        if (!res.ok || data.ok === false) {
+          console.error(data.error || "Failed to load cer_partner by type");
+          setItemsCerPartner([]);
+          setTotalCerPartner(0);
+          return { ok: false, error: data.error };
+        }
+        const list = data.items || [];
+        setItemsCerPartner(list);
+        setTotalCerPartner(
+          typeof data.count === "number" ? data.count : list.length
+        );
+        setCurrentTypeCerPartner(t);
+        return { ok: true, items: list, type: t };
+      } catch (err) {
+        console.error(err);
+        setItemsCerPartner([]);
+        setTotalCerPartner(0);
+        return { ok: false, error: err.message };
+      } finally {
+        setLoadingCerPartner(false);
+      }
+    },
+    [getAllCerPartners]
+  );
+
+  // mặc định load tất cả
   useEffect(() => {
-    fetchBanner();
-  }, [fetchBanner]);
+    getAllCerPartners();
+  }, [getAllCerPartners]);
 
-  const handleOpenBannerModal = (item = null) => {
-    setBannerToEdit(item);
-    setIsBannerModalOpen(true);
+  /** UI helpers */
+  const openCerPartnerModal = (item = null) => {
+    setEditingItemCerPartner(item);
+    setIsModalOpenCerPartner(true);
+  };
+  const closeCerPartnerModal = () => {
+    setIsModalOpenCerPartner(false);
+    setEditingItemCerPartner(null);
   };
 
-  const handleCloseBannerModal = () => {
-    setIsBannerModalOpen(false);
-    setBannerToEdit(null);
-  };
-
-  const handleAddBanner = async (newItem) => {
-    const res = await fetch('/api/banners', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newItem),
+  /** Tạo mới */
+  const createCerPartner = async (payload) => {
+    const res = await fetch(API_BASE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok || data.ok === false) {
-      alert(data.error || 'Tạo banner thất bại');
-      return;
+      alert(data.error || "Tạo mục thất bại");
+      return { ok: false, error: data.error };
     }
-    await fetchBanner();
-    handleCloseBannerModal();
+    if (currentTypeCerPartner) await getCerPartnersByType(currentTypeCerPartner);
+    else await getAllCerPartners();
+    closeCerPartnerModal();
+    return { ok: true, item: data.item };
   };
 
-  const handleUpdateBanner = async (updatedItem) => {
-    const res = await fetch(`/api/banners/${updatedItem.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedItem),
+  /** Cập nhật */
+  const updateCerPartner = async (payload) => {
+    const res = await fetch(`${API_BASE}/${payload.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok || data.ok === false) {
-      alert(data.error || 'Cập nhật banner thất bại');
-      return;
+      alert(data.error || "Cập nhật thất bại");
+      return { ok: false, error: data.error };
     }
-    await fetchBanner();
-    handleCloseBannerModal();
+    if (currentTypeCerPartner) await getCerPartnersByType(currentTypeCerPartner);
+    else await getAllCerPartners();
+    closeCerPartnerModal();
+    return { ok: true, item: data.item };
   };
 
-  const handleDeleteBanner = async (id) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa mục này?')) return;
-    const res = await fetch(`/api/banners/${id}`, { method: 'DELETE' });
+  /** Xoá */
+  const deleteCerPartner = async (id) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xoá mục này?"))
+      return { ok: false, canceled: true };
+    const res = await fetch(`${API_BASE}/${id}`, { method: "DELETE" });
     const data = await res.json();
     if (!res.ok || data.ok === false) {
-      alert(data.error || 'Xóa thất bại');
-      return;
+      alert(data.error || "Xoá thất bại");
+      return { ok: false, error: data.error };
     }
-    await fetchBanner();
+    if (currentTypeCerPartner) await getCerPartnersByType(currentTypeCerPartner);
+    else await getAllCerPartners();
+    return { ok: true };
   };
+
+  const setTypeAndFetchCerPartners = (t) => getCerPartnersByType(t);
 
   return {
-    banners,
-    bannerLoading,
-    totalBanner,
-    isBannerModalOpen,
-    bannerToEdit,
-    handleOpenBannerModal,
-    handleCloseBannerModal,
-    handleAddBanner,
-    handleUpdateBanner,
-    handleDeleteBanner,
-    fetchBanner,
+    // data
+    itemsCerPartner,
+    loadingCerPartner,
+    totalCerPartner,
+    currentTypeCerPartner,
+
+    // modal/edit
+    isModalOpenCerPartner,
+    editingItemCerPartner,
+    openCerPartnerModal,
+    closeCerPartnerModal,
+
+    // actions
+    getAllCerPartners,
+    getCerPartnersByType,
+    createCerPartner,
+    updateCerPartner,
+    deleteCerPartner,
+    setTypeAndFetchCerPartners,
   };
 };
 
-export default useBanner;
+export default useCerPartner;

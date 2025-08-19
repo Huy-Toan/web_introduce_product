@@ -7,7 +7,7 @@ const BannerCard = ({ banner, onEdit, onDelete }) => {
       {/* Ảnh bên trái */}
         <img
         src={banner.image_url}
-        className="w-48 h-48 object-contain bg-gray-100 flex-shrink-0"
+        className="w-48 h-full object-contain bg-gray-100 flex-shrink-0"
         onError={(e) => {
             e.target.src = 'fallback_url.jpg';
         }}

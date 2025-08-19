@@ -22,6 +22,9 @@ import useBanner from './hook/UseBanner';
 import FieldCard from './components/FieldCard';
 import FieldFormModal from './components/FieldFormModal';
 import useField from './hook/UseField';
+import Cer_PartnerCard from './components/Cer_PartnerCard';
+import CertPartnerFormModal from './components/Cer_PartnerFormModal';
+import useCerPartner from './hook/UseCer_Partner';
 
 import { clearAuth } from '../../../api/admin/auth';
 const AdminDashboard = () => {
@@ -99,8 +102,29 @@ const AdminDashboard = () => {
       handleAddField,
       handleUpdateField,
       handleDeleteField,
-      fetchFields,
     } = useField();
+
+    const {
+      // data
+      itemsCerPartner,
+      loadingCerPartner,
+      totalCerPartner,
+      currentTypeCerPartner,
+
+      // modal/edit
+      isModalOpenCerPartner,
+      editingItemCerPartner,
+      openCerPartnerModal,
+      closeCerPartnerModal,
+
+      // actions
+      getAllCerPartners,
+      getCerPartnersByType,
+      createCerPartner,
+      updateCerPartner,
+      deleteCerPartner,
+      setTypeAndFetchCerPartners,
+    } = useCerPartner();
 
     async function doLogout() {
     try {
@@ -331,6 +355,44 @@ const AdminDashboard = () => {
               onClose={handleCloseBannerModal}
               onSubmit={bannerToEdit ? handleUpdateBanner : handleAddBanner}
               initialData={bannerToEdit || {}}
+            />
+          </div>
+        )}
+
+{/* Cer_Partner */}
+        {activeTab === 'cer_partner' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => openCerPartnerModal(null)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer"
+              >
+                Thêm nội dung chứng nhận & đối tác
+              </button>
+            </div>
+
+            {loadingCerPartner ? (
+              <p>Đang tải...</p>
+            ) : itemsCerPartner.length === 0 ? (
+              <p className="text-gray-600">Không có chứng nhận và đối tác nào nào.</p>
+            ) : (
+              <div className="flex flex-col gap-4 w-full">
+                {itemsCerPartner.map(item => (
+                  <Cer_PartnerCard
+                    key={item.id}
+                    cer_partner={item}
+                    onEdit={() => openCerPartnerModal(item)}
+                    onDelete={deleteCerPartner}
+                  />
+                ))}
+              </div>
+            )}
+            
+            <CertPartnerFormModal
+              isOpen={isModalOpenCerPartner}
+              onClose={closeCerPartnerModal}
+              onSubmit={editingItemCerPartner ? updateCerPartner : createCerPartner}
+              initialData={editingItemCerPartner || {}}
             />
           </div>
         )}

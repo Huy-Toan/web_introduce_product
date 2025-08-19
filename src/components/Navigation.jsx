@@ -96,7 +96,7 @@ function TopNavigation() {
         <div className="md:hidden bg-white border-t border-gray-200 w-full">
           <div className="px-4 py-2">
             <div className="space-y-1">
-              {["home", "about","product", "news", "contact"].map((page) => (
+              {["home", "about", "what_we_do","product", "news", "contact"].map((page) => (
                 <button
                   key={page}
                   onClick={() => handlePageNavigation(page)}
