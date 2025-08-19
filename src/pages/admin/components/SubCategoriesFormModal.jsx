@@ -1,6 +1,5 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { X, Upload, Loader2, Wand2 } from 'lucide-react';
-import EditorMd from './EditorMd'; 
 
 const slugify = (s = '') =>
   s
@@ -13,104 +12,91 @@ const slugify = (s = '') =>
 
 const isValidSlug = (s = '') => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s);
 
-const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
+const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id);
 
   const [form, setForm] = useState({
-    title: '',
+    parent_id: '',
+    name: '',
     slug: '',
     description: '',
-    content: '',    
-    image_url: '',
-    subcategory_id: null,
+    image_url: ''
   });
 
-  // (tuỳ chọn) nếu muốn lưu thêm HTML đã render:
-  const [contentHTML, setContentHTML] = useState('');
+  const [parents, setParents] = useState([]); // [{id,name,slug,...}]
+  const [parentsLoading, setParentsLoading] = useState(false);
 
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [slugError, setSlugError] = useState('');
 
-  // SubCategories
-  const [subcategories, setSubCategories] = useState([]);
-  const [subcatLoading, setSubCatLoading] = useState(false);
+  const selectedParent = useMemo(
+    () => parents.find(p => String(p.id) === String(form.parent_id)),
+    [parents, form.parent_id]
+  );
 
-  // Ref tới EditorMd để có thể refresh/đổi readOnly
-  const editorRef = useRef(null);
-
+  // nạp dữ liệu khi mở modal
   useEffect(() => {
     if (!isOpen) return;
-    (async () => {
+
+    // load parents
+    const fetchParents = async () => {
       try {
-        setSubCatLoading(true);
-        const res = await fetch('/api/sub_categories');
+        setParentsLoading(true);
+        // Đổi endpoint ở đây nếu bạn dùng /api/parents
+        const res = await fetch('/api/parent_categories');
         const data = await res.json();
-        setSubCategories(data?.subcategories || []);
+        const list = data.parents || data.parent_categories || data.items || [];
+        setParents(list);
       } catch (e) {
-        console.error('Load subcategories error:', e);
-        setSubCategories([]);
+        console.error('fetch parents error:', e);
+        setParents([]);
       } finally {
-        setSubCatLoading(false);
+        setParentsLoading(false);
       }
-    })();
-  }, [isOpen]);
+    };
 
-  useEffect(() => {
-    if (initialData && isOpen) {
-      setForm({
-        title: initialData.title || '',
-        slug: initialData.slug || '',
-        description: initialData.description || '',
-        content: initialData.content || '',
-        image_url: initialData.image_url || '',
-        subcategory_id:
-          typeof initialData.subcategory_id === 'number'
-            ? initialData.subcategory_id
-            : null,
-      });
-      setImagePreview(initialData.image_url || '');
-      setSlugError('');
-      // làm mới editor khi mở modal
-      setTimeout(() => editorRef.current?.refresh?.(), 0);
-    }
-  }, [initialData, isOpen]);
+    fetchParents();
 
-  // Toggle readOnly khi đang upload
-  useEffect(() => {
-    if (!editorRef.current?.cm) return;
-    editorRef.current.cm.setOption('readOnly', isUploading ? 'nocursor' : false);
-  }, [isUploading]);
+    // set form
+    setForm({
+      parent_id: initialData.parent_id ?? '',
+      name: initialData.name || '',
+      slug: initialData.slug || '',
+      description: initialData.description || '',
+      image_url: initialData.image_url || ''
+    });
+    setImagePreview(initialData.image_url || '');
+    setImageFile(null);
+    setSlugError('');
+  }, [isOpen, initialData]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === 'subcategory_id') {
-      setForm((prev) => ({ ...prev, subcategory_id: value ? Number(value) : null }));
-      return;
-    }
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm(prev => ({ ...prev, [name]: value }));
     if (name === 'slug') setSlugError('');
   };
 
   const handleSlugBlur = () => {
     if (!isEditing) return;
     const normalized = slugify(form.slug || '');
-    setForm((prev) => ({ ...prev, slug: normalized }));
+    setForm(prev => ({ ...prev, slug: normalized }));
     if (normalized && !isValidSlug(normalized)) {
       setSlugError('Slug chỉ gồm a-z, 0-9 và dấu gạch nối (-), không bắt đầu/kết thúc bằng -.');
     }
   };
 
-  const generateSlugFromTitle = () => {
-    const s = slugify(form.title || '');
-    setForm((prev) => ({ ...prev, slug: s }));
+  const generateSlugFromName = () => {
+    const s = slugify(form.name || '');
+    setForm(prev => ({ ...prev, slug: s }));
     setSlugError(s && !isValidSlug(s) ? 'Slug không hợp lệ.' : '');
   };
 
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
     if (!file.type.startsWith('image/')) {
       alert('Vui lòng chọn file ảnh hợp lệ!');
       return;
@@ -119,6 +105,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       alert('Kích thước ảnh không được vượt quá 5MB!');
       return;
     }
+
     setImageFile(file);
     const reader = new FileReader();
     reader.onload = (evt) => setImagePreview(evt.target.result);
@@ -137,15 +124,17 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validate bắt buộc theo schema: title, content
-    if (!form.title?.trim()) {
-      alert('Vui lòng nhập Tên sản phẩm');
+    // validate bắt buộc
+    if (!form.parent_id) {
+      alert('Vui lòng chọn Danh mục cha.');
       return;
     }
-    if (!form.content?.trim()) {
-      alert('Vui lòng nhập Nội dung sản phẩm');
+    if (!form.name?.trim()) {
+      alert('Vui lòng nhập Tên danh mục con.');
       return;
     }
+
+    // validate slug khi EDIT
     if (isEditing) {
       if (!form.slug) {
         setSlugError('Vui lòng nhập slug hoặc dùng “Tạo từ tên”.');
@@ -159,40 +148,28 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
     setIsUploading(true);
     try {
-      let finalForm = { ...form };
+      let finalForm = { ...form, parent_id: Number(form.parent_id) };
 
       if (imageFile) {
         const uploadedImageUrl = await uploadImage(imageFile);
         finalForm.image_url = uploadedImageUrl;
       }
 
-      // Thêm mới: không gửi slug để backend tự sinh
+      // thêm mới: không gửi slug → backend tự sinh
       if (!isEditing) {
         const { slug, ...rest } = finalForm;
         finalForm = rest;
       } else {
-        // Edit: chuẩn hóa slug lần cuối
         finalForm.slug = slugify(finalForm.slug || '');
       }
 
       if (initialData.id) finalForm.id = initialData.id;
 
-      // (tuỳ chọn) nếu muốn gửi luôn HTML:
-      // finalForm.content_html = contentHTML;
-
-      onSubmit(finalForm);
+      await onSubmit(finalForm);
       onClose();
 
-      // Reset form
-      setForm({
-        title: '',
-        slug: '',
-        description: '',
-        content: '',
-        image_url: '',
-        subcategory_id: null,
-      });
-      setContentHTML('');
+      // reset
+      setForm({ parent_id: '', name: '', slug: '', description: '', image_url: '' });
       setImageFile(null);
       setImagePreview('');
       setSlugError('');
@@ -207,7 +184,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const removeImage = () => {
     setImageFile(null);
     setImagePreview('');
-    setForm((prev) => ({ ...prev, image_url: '' }));
+    setForm(prev => ({ ...prev, image_url: '' }));
   };
 
   if (!isOpen) return null;
@@ -216,38 +193,71 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="text-lg font-semibold">
-            {isEditing ? 'Chỉnh sửa sản phẩm' : 'Thêm sản phẩm mới'}
+          <h3 className="text-xl font-semibold">
+            {isEditing ? 'Chỉnh sửa Danh mục con' : 'Thêm Danh mục con mới'}
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 cursor-pointer hover:text-gray-600"
+            className="text-gray-400 hover:text-gray-600"
             disabled={isUploading}
           >
-            <X size={20} />
+            <X size={24} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-5">
-          {/* Title */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Parent Category */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tên sản phẩm *
+              Danh mục cha *
+            </label>
+            <div className="relative">
+              <select
+                name="parent_id"
+                value={form.parent_id}
+                onChange={handleChange}
+                disabled={isUploading || parentsLoading}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+              >
+                <option value="">— Chọn danh mục cha —</option>
+                {parents.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              {parentsLoading && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <Loader2 className="animate-spin text-gray-400" size={18} />
+                </div>
+              )}
+            </div>
+            {selectedParent && (
+              <p className="text-xs text-gray-500 mt-1">
+                Đã chọn: <span className="font-medium">{selectedParent.name}</span> ({selectedParent.slug})
+              </p>
+            )}
+          </div>
+
+          {/* Name */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tên danh mục con *
             </label>
             <input
-              name="title"
-              value={form.title}
+              name="name"
+              value={form.name}
               onChange={handleChange}
-              placeholder="Nhập tên sản phẩm"
+              placeholder="Nhập tên danh mục con"
               required
               disabled={isUploading}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
             />
           </div>
 
-          {/* Slug chỉ hiển thị khi EDIT */}
+          {/* Slug (chỉ hiện khi edit) */}
           {isEditing && (
             <div>
               <div className="flex items-center justify-between">
@@ -256,10 +266,10 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 </label>
                 <button
                   type="button"
-                  onClick={generateSlugFromTitle}
+                  onClick={generateSlugFromName}
                   disabled={isUploading}
-                  className="cursor-pointer text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
-                  title="Sinh slug từ tên sản phẩm"
+                  className="text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
+                  title="Sinh slug từ tên danh mục"
                 >
                   <Wand2 size={16} />
                   Tạo từ tên
@@ -270,7 +280,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 value={form.slug}
                 onChange={handleChange}
                 onBlur={handleSlugBlur}
-                placeholder="vd: ao-thun-basic"
+                placeholder="vd: dien-thoai-phu-kien"
                 disabled={isUploading}
                 className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 disabled:bg-gray-100 ${
                   slugError ? 'border-red-400 focus:ring-red-300' : 'border-gray-300 focus:ring-blue-500'
@@ -280,81 +290,47 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 <p className="text-sm text-red-600 mt-1">{slugError}</p>
               ) : (
                 <p className="text-xs text-gray-500 mt-1">
-                  {siteURL
-                    ? <>URL xem trước: <span className="font-mono">{siteURL}/products/{form.slug || '<slug>'}</span></>
-                    : <>Slug dùng trong đường dẫn: <span className="font-mono">/products/{form.slug || '<slug>'}</span></>
-                  }
+                  {siteURL ? (
+                    <>
+                      URL xem trước:{' '}
+                      <span className="font-mono">
+                        {siteURL}/categories/{selectedParent?.slug || '<parent>'}/{form.slug || '<slug>'}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      Slug dùng trong đường dẫn:{' '}
+                      <span className="font-mono">
+                        /categories/{selectedParent?.slug || '<parent>'}/{form.slug || '<slug>'}
+                      </span>
+                    </>
+                  )}
                 </p>
               )}
             </div>
           )}
 
-          {/* Category */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Danh mục *
-            </label>
-            <select
-              name="subcategory_id"
-              value={form.subcategory_id ?? ''}
-              onChange={handleChange}
-              disabled={isUploading || subcatLoading}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-            >
-              {subcategories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Mô tả ngắn
+              Nội dung *
             </label>
             <textarea
               name="description"
               value={form.description}
               onChange={handleChange}
-              rows={3}
-              placeholder="Mô tả ngắn về sản phẩm"
+              rows={8}
+              placeholder="Nhập mô tả danh mục con"
+              required
               disabled={isUploading}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
             />
           </div>
 
-          {/* Content (bắt buộc theo schema) — EditorMd */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Nội dung chi tiết *
-            </label>
-
-            <div className="relative">
-              <EditorMd
-                ref={editorRef}
-                value={form.content}
-                height={500}
-                onChangeMarkdown={(md) => setForm((f) => ({ ...f, content: md }))}
-                onChangeHTML={(html) => setContentHTML(html)} // tuỳ chọn
-                onReady={() => {
-                  editorRef.current?.refresh?.();
-                }}
-              />
-              {isUploading && (
-                <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] cursor-not-allowed flex items-center justify-center rounded-md">
-                  <span className="text-sm text-gray-600">Đang tải lên…</span>
-                </div>
-              )}
-            </div>
-
-          </div>
-
           {/* Image */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Hình ảnh sản phẩm
+              Ảnh minh họa
             </label>
 
             {imagePreview && (
@@ -362,7 +338,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 <img
                   src={imagePreview}
                   alt="Preview"
-                  className="w-40 h-40 object-cover rounded-md border"
+                  className="w-64 h-40 object-cover rounded-md border"
                 />
                 <button
                   type="button"
@@ -375,49 +351,47 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               </div>
             )}
 
-            <div className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center hover:border-blue-400 transition-colors">
+            <div className="border-2 border-dashed border-gray-300 rounded-md p-6 text-center hover:border-blue-400 transition-colors">
               <input
                 type="file"
                 accept="image/*"
                 onChange={handleImageChange}
                 disabled={isUploading}
                 className="hidden"
-                id="product-image-upload"
+                id="subcat-image-upload"
               />
               <label
-                htmlFor="product-image-upload"
+                htmlFor="subcat-image-upload"
                 className={`cursor-pointer flex flex-col items-center space-y-2 ${isUploading ? 'cursor-not-allowed opacity-50' : ''}`}
               >
                 {isUploading ? (
-                  <Loader2 className="animate-spin text-blue-500" size={24} />
+                  <Loader2 className="animate-spin text-blue-500" size={28} />
                 ) : (
-                  <Upload className="text-gray-400" size={24} />
+                  <Upload className="text-gray-400" size={28} />
                 )}
                 <span className="text-sm text-gray-600">
                   {isUploading ? 'Đang upload...' : 'Chọn ảnh từ máy tính'}
                 </span>
-                <span className="text-xs text-gray-400">
-                  PNG, JPG, GIF tối đa 5MB
-                </span>
+                <span className="text-xs text-gray-400">PNG, JPG, GIF tối đa 5MB</span>
               </label>
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t">
+          <div className="flex justify-end gap-3 pt-6 border-t">
             <button
               type="button"
               onClick={onClose}
               disabled={isUploading}
-              className="cursor-pointer px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="px-5 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={isUploading}
-              className="cursor-pointer px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {isUploading && <Loader2 className="animate-spin" size={16} />}
+              {isUploading && <Loader2 className="animate-spin" size={18} />}
               {isEditing ? 'Cập nhật' : 'Thêm'}
             </button>
           </div>
@@ -427,4 +401,4 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   );
 };
 
-export default ProductFormModal;
+export default SubCategoriesFormModal;

@@ -3,20 +3,7 @@ import { Hono } from "hono";
 // Helpers
 const hasDB = (env) => Boolean(env?.DB) || Boolean(env?.DB_AVAILABLE);
 
-// Dùng cho lấy chi tiết qua id hoặc slug
-const findProductByIdOrSlug = async (db, idOrSlug) => {
-  const isNumericId = /^\d+$/.test(idOrSlug);
-  const sql = `
-    SELECT p.*, c.name AS category_name, c.slug AS category_slug
-    FROM products p
-    LEFT JOIN categories c ON c.id = p.category_id
-    WHERE ${isNumericId ? "p.id = ?" : "p.slug = ?"}
-    LIMIT 1
-  `;
-  return db.prepare(sql).bind(isNumericId ? Number(idOrSlug) : idOrSlug).first();
-};
-
-// (tùy chọn) tạo slug đơn giản khi không truyền vào
+// tạo slug đơn giản khi không truyền vào
 const slugify = (s = "") =>
   s
     .toLowerCase()
@@ -26,10 +13,33 @@ const slugify = (s = "") =>
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
 
+// Lấy chi tiết sản phẩm qua id hoặc slug (kèm sub + parent)
+const findProductByIdOrSlug = async (db, idOrSlug) => {
+  const isNumericId = /^\d+$/.test(idOrSlug);
+  const sql = `
+    SELECT
+      p.*,
+      s.id   AS subcategory_id,
+      s.name AS subcategory_name,
+      s.slug AS subcategory_slug,
+      pc.id  AS parent_id,
+      pc.name AS parent_name,
+      pc.slug AS parent_slug
+    FROM products p
+    LEFT JOIN subcategories s ON s.id = p.subcategory_id
+    LEFT JOIN parent_categories pc ON pc.id = s.parent_id
+    WHERE ${isNumericId ? "p.id = ?" : "p.slug = ?"}
+    LIMIT 1
+  `;
+  return db.prepare(sql).bind(isNumericId ? Number(idOrSlug) : idOrSlug).first();
+};
+
 export const productsRouter = new Hono();
 
+// GET /api/products
+// Query hỗ trợ: parent_id, parent_slug, subcategory_id, sub_slug
 productsRouter.get("/", async (c) => {
-  const { category_id, category_slug } = c.req.query();
+  const { parent_id, parent_slug, subcategory_id, sub_slug, limit, offset } = c.req.query();
 
   try {
     if (!hasDB(c.env)) {
@@ -39,37 +49,62 @@ productsRouter.get("/", async (c) => {
 
     const conds = [];
     const params = [];
-    let joinCat = "";
 
-    if (category_id) {
-      conds.push("p.category_id = ?");
-      params.push(Number(category_id));
+    if (subcategory_id) {
+      conds.push("p.subcategory_id = ?");
+      params.push(Number(subcategory_id));
     }
-
-    if (category_slug) {
-      joinCat = "LEFT JOIN categories c ON c.id = p.category_id";
-      conds.push("c.slug = ?");
-      params.push(category_slug);
+    if (sub_slug) {
+      conds.push("s.slug = ?");
+      params.push(String(sub_slug));
+    }
+    if (parent_id) {
+      conds.push("pc.id = ?");
+      params.push(Number(parent_id));
+    }
+    if (parent_slug) {
+      conds.push("pc.slug = ?");
+      params.push(String(parent_slug));
     }
 
     const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+
+    // Phân trang nhẹ (tuỳ chọn)
+    const hasLimit = Number.isFinite(Number(limit));
+    const hasOffset = Number.isFinite(Number(offset));
+    const limitSql = hasLimit ? " LIMIT ?" : "";
+    const offsetSql = hasOffset ? " OFFSET ?" : "";
+
     const sql = `
-      SELECT p.*, c.name AS category_name, c.slug AS category_slug
+      SELECT
+        p.*,
+        s.id   AS subcategory_id,
+        s.name AS subcategory_name,
+        s.slug AS subcategory_slug,
+        pc.id  AS parent_id,
+        pc.name AS parent_name,
+        pc.slug AS parent_slug
       FROM products p
-      LEFT JOIN categories c ON c.id = p.category_id
+      LEFT JOIN subcategories s ON s.id = p.subcategory_id
+      LEFT JOIN parent_categories pc ON pc.id = s.parent_id
       ${where}
       ORDER BY p.created_at DESC
+      ${limitSql}
+      ${offsetSql}
     `;
 
-    const stmt = c.env.DB.prepare(sql).bind(...params);
-    const result = await stmt.all();
+    const bindParams = [...params];
+    if (hasLimit) bindParams.push(Number(limit));
+    if (hasOffset) bindParams.push(Number(offset));
+
+    const result = await c.env.DB.prepare(sql).bind(...bindParams).all();
     const products = result?.results ?? [];
 
     return c.json({
       products,
       count: products.length,
       source: "database",
-      debug: { sql, params },
+      debug: { sql, params: bindParams },
     });
   } catch (err) {
     console.error("Error fetching products:", err);
@@ -80,6 +115,7 @@ productsRouter.get("/", async (c) => {
   }
 });
 
+// GET /api/products/:idOrSlug
 productsRouter.get("/:idOrSlug", async (c) => {
   const idOrSlug = c.req.param("idOrSlug");
   try {
@@ -97,6 +133,7 @@ productsRouter.get("/:idOrSlug", async (c) => {
   }
 });
 
+// POST /api/products
 productsRouter.post("/", async (c) => {
   try {
     if (!hasDB(c.env)) {
@@ -110,10 +147,8 @@ productsRouter.post("/", async (c) => {
       description,
       content,
       image_url,
-      category_id,
+      subcategory_id, // mới
     } = body || {};
-
-    console.log("Adding product:", body);
 
     if (!title || !content) {
       return c.json(
@@ -122,12 +157,20 @@ productsRouter.post("/", async (c) => {
       );
     }
 
-    const slug = rawSlug?.trim() || slugify(title);
-    console.log("Generated slug:", slug);
+    const slug = (rawSlug?.trim() || slugify(title)).toLowerCase();
+
+    // Kiểm tra subcategory tồn tại (nếu có truyền)
+    if (subcategory_id !== undefined && subcategory_id !== null) {
+      const sub = await c.env.DB
+        .prepare("SELECT id FROM subcategories WHERE id = ?")
+        .bind(Number(subcategory_id))
+        .first();
+      if (!sub) return c.json({ error: "subcategory_id not found" }, 400);
+    }
 
     // Insert
     const sql = `
-      INSERT INTO products (title, slug, description, content, image_url, category_id)
+      INSERT INTO products (title, slug, description, content, image_url, subcategory_id)
       VALUES (?, ?, ?, ?, ?, ?)
     `;
     const runRes = await c.env.DB
@@ -138,16 +181,24 @@ productsRouter.post("/", async (c) => {
         description || null,
         content,
         image_url || null,
-        typeof category_id === "number" ? category_id : null
+        typeof subcategory_id === "number" ? subcategory_id : null
       )
       .run();
 
     const newId = runRes.meta?.last_row_id;
     const product = await c.env.DB
       .prepare(
-        `SELECT p.*, c.name AS category_name, c.slug AS category_slug
+        `SELECT
+           p.*,
+           s.id   AS subcategory_id,
+           s.name AS subcategory_name,
+           s.slug AS subcategory_slug,
+           pc.id  AS parent_id,
+           pc.name AS parent_name,
+           pc.slug AS parent_slug
          FROM products p
-         LEFT JOIN categories c ON c.id = p.category_id
+         LEFT JOIN subcategories s ON s.id = p.subcategory_id
+         LEFT JOIN parent_categories pc ON pc.id = s.parent_id
          WHERE p.id = ?`
       )
       .bind(newId)
@@ -161,12 +212,11 @@ productsRouter.post("/", async (c) => {
       String(err).toLowerCase().includes("unique")
         ? "Slug already exists"
         : "Failed to add product";
-
-    console.error("Error details:", err);
     return c.json({ error: msg }, 500);
   }
 });
 
+// PUT /api/products/:id
 productsRouter.put("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
@@ -181,8 +231,17 @@ productsRouter.put("/:id", async (c) => {
       description,
       content,
       image_url,
-      category_id,
+      subcategory_id, // mới
     } = body || {};
+
+    // Validate subcategory nếu có truyền
+    if (subcategory_id !== undefined && subcategory_id !== null) {
+      const sub = await c.env.DB
+        .prepare("SELECT id FROM subcategories WHERE id = ?")
+        .bind(Number(subcategory_id))
+        .first();
+      if (!sub) return c.json({ error: "subcategory_id not found" }, 400);
+    }
 
     // Build dynamic update
     const sets = [];
@@ -208,13 +267,13 @@ productsRouter.put("/:id", async (c) => {
       sets.push("image_url = ?");
       params.push(image_url);
     }
-    if (category_id !== undefined) {
-      sets.push("category_id = ?");
+    if (subcategory_id !== undefined) {
+      sets.push("subcategory_id = ?");
       params.push(
-        category_id === null
+        subcategory_id === null
           ? null
-          : typeof category_id === "number"
-          ? category_id
+          : typeof subcategory_id === "number"
+          ? subcategory_id
           : null
       );
     }
@@ -225,23 +284,29 @@ productsRouter.put("/:id", async (c) => {
 
     const sql = `
       UPDATE products
-      SET ${sets.join(", ")}
+      SET ${sets.join(", ")}, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `;
     params.push(id);
 
     const res = await c.env.DB.prepare(sql).bind(...params).run();
-
     if ((res.meta?.changes || 0) === 0) {
       return c.json({ error: "Product not found" }, 404);
     }
 
-    // Trigger 'products_updated_at' sẽ tự set updated_at
     const product = await c.env.DB
       .prepare(
-        `SELECT p.*, c.name AS category_name, c.slug AS category_slug
+        `SELECT
+           p.*,
+           s.id   AS subcategory_id,
+           s.name AS subcategory_name,
+           s.slug AS subcategory_slug,
+           pc.id  AS parent_id,
+           pc.name AS parent_name,
+           pc.slug AS parent_slug
          FROM products p
-         LEFT JOIN categories c ON c.id = p.category_id
+         LEFT JOIN subcategories s ON s.id = p.subcategory_id
+         LEFT JOIN parent_categories pc ON pc.id = s.parent_id
          WHERE p.id = ?`
       )
       .bind(id)
@@ -259,6 +324,7 @@ productsRouter.put("/:id", async (c) => {
   }
 });
 
+// DELETE /api/products/:id
 productsRouter.delete("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {

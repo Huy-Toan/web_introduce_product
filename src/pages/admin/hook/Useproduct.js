@@ -1,3 +1,4 @@
+// src/hooks/useProducts.js
 import { useState, useEffect } from 'react';
 
 const useProducts = () => {
@@ -5,47 +6,50 @@ const useProducts = () => {
   const [totalProducts, setTotalProducts] = useState(0);
   const [productsLoading, setProductsLoading] = useState(false);
 
-  // Filters
-  const [selectedProductCategoryId, setSelectedProductCategoryId] = useState('');
-  const [selectedProductCategorySlug, setSelectedProductCategorySlug] = useState('');
+  // Filters (theo subcategory)
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState('');
+  const [selectedSubcategorySlug, setSelectedSubcategorySlug] = useState('');
 
-  // Categories for filter UI
-  const [productCategories, setProductCategories] = useState([]);
-  const [productCategoriesLoading, setProductCategoriesLoading] = useState(false);
+  // Subcategories for filter UI
+  const [productSubcategories, setProductSubcategories] = useState([]);
+  const [productSubcategoriesLoading, setProductSubcategoriesLoading] = useState(false);
 
   // Modal state
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState(null);
 
   // -------- Fetch helpers --------
-  const fetchProductCategories = async () => {
+  // Lấy danh mục con (có thể mở rộng thêm filter parent_id/parent_slug nếu cần)
+  const fetchProductSubcategories = async () => {
     try {
-      setProductCategoriesLoading(true);
-      const res = await fetch('/api/categories');
+      setProductSubcategoriesLoading(true);
+      const res = await fetch('/api/sub_categories');
       const data = await res.json();
-      setProductCategories(data?.categories || []);
+      // API trả về { subcategories: [...] }
+      setProductSubcategories(data?.subcategories || []);
     } catch (e) {
-      console.error('fetchProductCategories error:', e);
-      setProductCategories([]);
+      console.error('fetchProductSubcategories error:', e);
+      setProductSubcategories([]);
     } finally {
-      setProductCategoriesLoading(false);
+      setProductSubcategoriesLoading(false);
     }
   };
 
+  // Lấy sản phẩm, filter theo subcategory
   const fetchProducts = async () => {
     try {
       setProductsLoading(true);
 
       const params = new URLSearchParams();
-      if (selectedProductCategoryId) params.append('category_id', String(selectedProductCategoryId));
-      if (selectedProductCategorySlug) params.append('category_slug', String(selectedProductCategorySlug));
+      if (selectedSubcategoryId) params.append('subcategory_id', String(selectedSubcategoryId));
+      if (selectedSubcategorySlug) params.append('sub_slug', String(selectedSubcategorySlug));
       const query = params.toString();
 
       const res = await fetch(`/api/products${query ? `?${query}` : ''}`);
       const data = await res.json();
 
+      // API trả về { products: [...] }
       setProducts(data?.products || []);
-
       setTotalProducts(
         typeof data?.count === 'number'
           ? data.count
@@ -61,13 +65,12 @@ const useProducts = () => {
   };
 
   useEffect(() => {
-    fetchProductCategories();
+    fetchProductSubcategories();
   }, []);
 
   useEffect(() => {
     fetchProducts();
-  }, [selectedProductCategoryId, selectedProductCategorySlug]);
-
+  }, [selectedSubcategoryId, selectedSubcategorySlug]);
 
   // -------- Modal handlers --------
   const openProductModal = (product = null) => {
@@ -80,6 +83,7 @@ const useProducts = () => {
     setProductToEdit(null);
   };
 
+  // newProduct nên dùng { title, description?, content, image_url?, subcategory_id?, slug? }
   const addProduct = async (newProduct) => {
     try {
       const res = await fetch('/api/products', {
@@ -99,7 +103,7 @@ const useProducts = () => {
     }
   };
 
-  // updatedProduct: { id, title?, slug?, description?, content?, image_url?, category_id? }
+  // updatedProduct: { id, title?, slug?, description?, content?, image_url?, subcategory_id? }
   const updateProduct = async (updatedProduct) => {
     if (!updatedProduct?.id) return;
     try {
@@ -143,15 +147,15 @@ const useProducts = () => {
     totalProducts,
     productsLoading,
 
-    // categories
-    productCategories,
-    productCategoriesLoading,
+    // subcategories (for filter UI)
+    productSubcategories,
+    productSubcategoriesLoading,
 
     // filters
-    selectedProductCategoryId,
-    setSelectedProductCategoryId,
-    selectedProductCategorySlug,
-    setSelectedProductCategorySlug,
+    selectedSubcategoryId,
+    setSelectedSubcategoryId,
+    selectedSubcategorySlug,
+    setSelectedSubcategorySlug,
 
     // modal
     isProductModalOpen,
@@ -166,7 +170,7 @@ const useProducts = () => {
 
     // fetchers
     fetchProducts,
-    fetchProductCategories,
+    fetchProductSubcategories,
   };
 };
 

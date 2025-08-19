@@ -10,9 +10,14 @@ import NewsFormModal from './components/NewsFormModal';
 import useAbout from './hook/Useabout';
 import AboutFormModal from './components/AboutFormModal';
 import AboutCard from './components/AboutCard';
-import CategoriesCard from './components/CategoriesCard';
-import CategoriesFormModal from './components/CategoriesFormModal';
-import useCategories from './hook/UseCategories';
+import ParentCategoriesCard from './components/ParentCategoriesCard';
+import ParentCategoriesFormModal from './components/ParentCategoriesFormModal';
+import useParentCategories from './hook/UseParentCategories';
+
+import useSubCategories from './hook/UseSubCategories';
+import SubCategoriesCard from './components/SubCategoriesCard';
+import SubCategoriesFormModal from './components/SubCategoriesFormModal';
+
 import ProductCard from './components/ProductCard';
 import ProductFormModal from './components/ProductFormModal';
 import useProducts from './hook/Useproduct';
@@ -56,16 +61,19 @@ const AdminDashboard = () => {
     } = useAbout();
 
     const {
-      categories,
-      categoriesLoading,
-      isCategoryModalOpen,
-      categoryToEdit,          
-      handleOpenCategoryModal,
-      handleCloseCategoryModal,
-      handleAddCategory,
-      handleUpdateCategory,
-      handleDeleteCategory,
-    } = useCategories();
+      parents,
+      parentsLoading,
+      totalParents,
+      isParentModalOpen,
+      parentToEdit,
+      handleOpenParentModal,
+      handleCloseParentModal,
+      fetchParents,
+      handleAddParent,
+      handleUpdateParent,
+      handleDeleteParent,
+    } = useParentCategories();
+
 
     const {
       products,
@@ -108,23 +116,30 @@ const AdminDashboard = () => {
       // data
       itemsCerPartner,
       loadingCerPartner,
-      totalCerPartner,
-      currentTypeCerPartner,
-
-      // modal/edit
       isModalOpenCerPartner,
       editingItemCerPartner,
       openCerPartnerModal,
       closeCerPartnerModal,
-
-      // actions
-      getAllCerPartners,
-      getCerPartnersByType,
       createCerPartner,
       updateCerPartner,
       deleteCerPartner,
-      setTypeAndFetchCerPartners,
     } = useCerPartner();
+
+    const {
+      subcategories,
+      subcategoriesLoading,
+      totalSubcategories,
+      currentParentFilter,
+      setParentAndFetch,
+      isSubModalOpen,
+      subToEdit,
+      handleOpenSubModal,
+      handleCloseSubModal,
+      fetchSubCategories,
+      handleAddSub,
+      handleUpdateSub,
+      handleDeleteSub,
+    } = useSubCategories();
 
     async function doLogout() {
     try {
@@ -163,7 +178,7 @@ const AdminDashboard = () => {
         {activeTab === 'dashboard' && (
           <DashboardOverview 
             products={products.length} 
-            categories={categories.length} 
+            parents={parents.length} 
             news={news.length} 
           />
         )}
@@ -246,40 +261,78 @@ const AdminDashboard = () => {
         )}
 
 
-{/* category */}
-        {activeTab === 'categories' && (
+{/* parent category */}
+        {activeTab === 'parent_categories' && (
           <div>
             <div className="flex items-center justify-between mb-4">
               <button
-                onClick={() => handleOpenCategoryModal(null)}
+                onClick={() => handleOpenParentModal(null)}
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer"
               >
-                Thêm danh mục
+                Thêm danh mục lớn
               </button>
             </div>
 
-            {categoriesLoading ? (
+            {parentsLoading ? (
               <p>Đang tải...</p>
-            ) : categories.length === 0 ? (
+            ) : parents.length === 0 ? (
               <p className="text-gray-600">Không có tin tức.</p>
             ) : (
               <div className="flex flex-col gap-4 w-full">
-                {categories.map(item => (
-                  <CategoriesCard
+                {parents.map(item => (
+                  <ParentCategoriesCard
                     key={item.id}
-                    categories={item}
-                    onEdit={() => handleOpenCategoryModal(item)}
-                    onDelete={handleDeleteCategory}
+                    parentcategories={item}
+                    onEdit={() => handleOpenParentModal(item)}
+                    onDelete={handleDeleteParent}
                   />
                 ))}
               </div>
             )}
             
-            <CategoriesFormModal
-              isOpen={isCategoryModalOpen}
-              onClose={handleCloseCategoryModal}
-              onSubmit={categoryToEdit ? handleUpdateCategory : handleAddCategory}
-              initialData={categoryToEdit || {}}
+            <ParentCategoriesFormModal
+              isOpen={isParentModalOpen}
+              onClose={handleCloseParentModal}
+              onSubmit={parentToEdit ? handleUpdateParent : handleAddParent}
+              initialData={parentToEdit || {}}
+            />
+          </div>
+        )}
+
+{/* sub category */}
+        {activeTab === 'sub_categories' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => handleOpenSubModal(null)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer"
+              >
+                Thêm danh mục con
+              </button>
+            </div>
+
+            {subcategoriesLoading ? (
+              <p>Đang tải...</p>
+            ) : subcategories.length === 0 ? (
+              <p className="text-gray-600">Không có tin tức.</p>
+            ) : (
+              <div className="flex flex-col gap-4 w-full">
+                {subcategories.map(item => (
+                  <SubCategoriesCard
+                    key={item.id}
+                    subcategories={item}
+                    onEdit={() => handleOpenSubModal(item)}
+                    onDelete={handleDeleteSub}
+                  />
+                ))}
+              </div>
+            )}
+            
+            <SubCategoriesFormModal
+              isOpen={isSubModalOpen}
+              onClose={handleCloseSubModal}
+              onSubmit={subToEdit ? handleUpdateSub : handleAddSub}
+              initialData={subToEdit || {}}
             />
           </div>
         )}
