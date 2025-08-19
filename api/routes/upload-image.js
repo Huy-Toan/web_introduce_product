@@ -1,7 +1,4 @@
 // api/upload-image.js (Next.js API route)
-// hoặc routes/upload.js (Express.js)
-
-
 import { Hono } from 'hono';
 
 // Hàm tạo UUID v4 thuần JS cho môi trường Cloudflare Workers
@@ -35,7 +32,7 @@ uploadImageRouter.post('/', async (c) => {
     const fileName = `books/${uuidv4()}.${ext}`;
 
     // Upload lên R2 Cloudflare qua binding
-    const r2 = c.env.IMAGES; // binding từ wrangler.toml
+    const r2 = c.env.IMAGES;
     await r2.put(fileName, await file.arrayBuffer(), {
       httpMetadata: { contentType: file.type },
     });

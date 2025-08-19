@@ -3,7 +3,8 @@ import { Home, Package, Users, Newspaper, Info, Tags, Mail, Image, Briefcase,Awa
 const navItems = [
   { id: 'dashboard', label: 'Tổng quan', icon: Home },
   { id: 'products', label: 'Sản phẩm', icon: Package },
-  { id: 'categories', label: 'Danh mục', icon: Tags },
+  { id: 'parent_categories', label: 'Danh mục lớn', icon: Tags },
+  { id: 'sub_categories', label: 'Danh mục con', icon: Tags },
   { id: 'news', label: 'Tin tức', icon: Newspaper },
   { id: 'about_us', label: 'Giới thiệu', icon: Info },
   { id: 'banners', label: 'Banner', icon: Image },
