@@ -25,11 +25,14 @@ createRoot(document.getElementById("root")).render(
     <ScrollToTop />
       <Routes>
         <Route path="/*" element={<HomePage />} />
-        <Route path="/product/product-detail/:idOrSlug" element={<ProductDetailPage />} />
+        
         <Route path="/news/news-detail/:slug" element={<News_Detail />} />
         <Route path="/about" element={<AboutPage />} />
         <Route path="/what_we_do" element={<FieldPage />} />
         <Route path="/product" element={<Products />} />
+        <Route path="/product/:parentSlug" element={<Products />} />
+        <Route path="/product/:parentSlug/:subSlug" element={<Products />} />
+        <Route path="/product/product-detail/:idOrSlug" element={<ProductDetailPage />} />
         <Route path="/contact" element={<ContactPage />} />
         <Route path="/news" element={<News />} />
         <Route path="/api/admin/login" element={<AdminLogin />} />

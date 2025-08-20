@@ -1,107 +1,68 @@
 // src/components/SidebarCategoriesTwoLevel.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ChevronRight, ChevronDown, Layers } from "lucide-react";
-
-const indexByParent = (subs = []) => {
-  const map = {};
-  for (const s of subs) {
-    const pid = String(s.parent_id ?? "");
-    if (!map[pid]) map[pid] = [];
-    map[pid].push(s);
-  }
-  return map;
-};
+import { useNavigate } from "react-router-dom";
 
 function SidebarCategoriesTwoLevel({
   activeParentSlug = null,
   activeSubSlug = null,
-
-  // callbacks cho trang danh sách sản phẩm
-  onSelectParentSlug = () => {},
-  onSelectSubSlug = () => {},
-
-  // optional: hiển thị "Tất cả"
   showAll = true,
 }) {
+  const navigate = useNavigate();
+
   const [parents, setParents] = useState([]);
   const [parentsLoading, setParentsLoading] = useState(false);
-
-  // Cache sub theo parent_id
-  const [subsByParent, setSubsByParent] = useState({}); 
-  const [subsLoadingFor, setSubsLoadingFor] = useState(null); 
-
-  // Theo dõi parent nào đang mở
+  const [subsByParent, setSubsByParent] = useState({}); // { [parentId]: Sub[] }
+  const [subsLoadingFor, setSubsLoadingFor] = useState(null);
   const [openParentIds, setOpenParentIds] = useState(new Set());
 
-  // --- Fetch parents ---
   const fetchParents = async () => {
     try {
       setParentsLoading(true);
       const res = await fetch("/api/parent_categories");
       const data = await res.json();
-      const list = data?.parents || [];
-      setParents(list);
-    } catch (e) {
-      console.error("fetchParents error:", e);
-      setParents([]);
+      setParents(data?.parents || []);
     } finally {
       setParentsLoading(false);
     }
   };
 
-  // --- Fetch subs for a parent (with cache) ---
-  const fetchSubsForParent = async (parentId) => {
-    const key = String(parentId);
-    if (subsByParent[key]) return;// đã có cache
+  const fetchSubsForParent = async (parent) => {
+    const key = String(parent.id);
+    if (subsByParent[key]) return;
     try {
       setSubsLoadingFor(key);
-      const res = await fetch(`/api/sub_categories?parent_id=${encodeURIComponent(parentId)}`);
+      // dùng query ?parent_id= rõ ràng hơn
+      const res = await fetch(`/api/sub_categories?parent_id=${encodeURIComponent(parent.id)}`);
       const data = await res.json();
-      const list = data?.subcategories || [];
+      const list = (data?.subcategories || []).map(s => ({
+        ...s,
+        // đảm bảo luôn có parent_slug để build URL
+        parent_slug: s.parent_slug || parent.slug,
+      }));
       setSubsByParent((prev) => ({ ...prev, [key]: list }));
-    } catch (e) {
-      console.error("fetchSubsForParent error:", e);
-      setSubsByParent((prev) => ({ ...prev, [key]: [] }));
     } finally {
       setSubsLoadingFor(null);
     }
   };
 
-  useEffect(() => {
-    fetchParents();
-  }, []);
+  useEffect(() => { fetchParents(); }, []);
 
-  // Toggle mở/đóng 1 parent
   const toggleParent = async (parent) => {
     const id = String(parent.id);
-    const newSet = new Set(openParentIds);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-      // Lúc mở thì fetch sub nếu chưa có
-      fetchSubsForParent(parent.id);
+    const next = new Set(openParentIds);
+    if (next.has(id)) next.delete(id);
+    else {
+      next.add(id);
+      fetchSubsForParent(parent);
     }
-    setOpenParentIds(newSet);
+    setOpenParentIds(next);
   };
 
-  // Chọn "Tất cả"
-  const handleSelectAll = () => {
-    onSelectSubSlug(null);
-    onSelectParentSlug(null);
-  };
-
-  // Chọn parent
-  const handleSelectParent = (parent) => {
-    onSelectSubSlug(null); // reset sub
-    onSelectParentSlug(parent.slug);
-  };
-
-  // Chọn sub
-  const handleSelectSub = (sub) => {
-    onSelectParentSlug(sub.parent_slug || null); // có thể set luôn parent_slug nếu BE trả
-    onSelectSubSlug(sub.slug);
-  };
+  // —— Điều hướng path-based —— //
+  const goAll = () => navigate("/product");
+  const goParent = (parent) => navigate(`/product/${parent.slug}`);
+  const goSub = (sub) => navigate(`/product/${sub.parent_slug}/${sub.slug}`);
 
   return (
     <aside className="w-full md:w-72 bg-white p-4 border rounded-md shadow-sm self-start">
@@ -121,7 +82,7 @@ function SidebarCategoriesTwoLevel({
           {showAll && (
             <li>
               <button
-                onClick={handleSelectAll}
+                onClick={goAll}
                 className={`w-full text-left px-3 py-2 rounded-md hover:bg-green-100 ${
                   !activeParentSlug && !activeSubSlug ? "bg-green-200 font-medium" : ""
                 }`}
@@ -140,7 +101,6 @@ function SidebarCategoriesTwoLevel({
 
             return (
               <li key={pid}>
-                {/* Hàng parent */}
                 <div className="flex items-stretch">
                   <button
                     onClick={() => toggleParent(parent)}
@@ -152,7 +112,7 @@ function SidebarCategoriesTwoLevel({
                   </button>
 
                   <button
-                    onClick={() => handleSelectParent(parent)}
+                    onClick={() => goParent(parent)}
                     className={`flex-1 text-left px-3 py-2 rounded-md hover:bg-green-100 ${
                       isActiveParent ? "bg-green-200 font-medium" : ""
                     }`}
@@ -162,7 +122,6 @@ function SidebarCategoriesTwoLevel({
                   </button>
                 </div>
 
-                {/* Danh sách con */}
                 {isOpen && (
                   <div className="mt-1 ml-9">
                     {isLoadingSubs ? (
@@ -178,7 +137,7 @@ function SidebarCategoriesTwoLevel({
                           return (
                             <li key={sub.id ?? sub.slug}>
                               <button
-                                onClick={() => handleSelectSub(sub)}
+                                onClick={() => goSub(sub)}
                                 className={`w-full text-left px-3 py-1.5 rounded-md hover:bg-green-50 ${
                                   isActiveSub ? "bg-green-100 font-medium" : ""
                                 }`}

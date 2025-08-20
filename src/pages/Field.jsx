@@ -16,7 +16,7 @@ function CerPartnerLogoCard({ item }) {
             className="max-h-full max-w-full object-contain"
             onError={(e) => {
               e.currentTarget.onerror = null;
-              e.currentTarget.src = "/fallback.jpg";
+              e.currentTarget.src = "/banner.jpg";
             }}
           />
         ) : (
@@ -116,12 +116,12 @@ return (
                   {item.image_url && (
                     <div className="mt-8">
                       <img
-                        src={item.image_url || "./banner.jpg"}
+                        src={item.image_url || "/banner.jpg"}
                         alt={item.name || "Field image"}
                         className="w-full max-h-[520px] object-cover rounded-lg shadow"
                         onError={(e) => {
                           e.currentTarget.onerror = null;
-                          e.currentTarget.src = "./banner.jpg";
+                          e.currentTarget.src = "/banner.jpg";
                         }}
                       />
                     </div>
