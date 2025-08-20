@@ -14,6 +14,210 @@ const LANGUAGES = [
   { code: 'de', label: 'Deutsch' },
 ]
 
+// ===== i18n labels/placeholder theo locale đang mở =====
+const LABELS = {
+  vi: {
+    tab_title: (isEditing) => (isEditing ? 'Chỉnh sửa tin tức (đa ngôn ngữ)' : 'Thêm tin tức mới (đa ngôn ngữ)'),
+    autoTranslate: 'Tự dịch từ VI',
+    addLang: 'Thêm ngôn ngữ',
+    keyword: 'Từ khóa',
+    keyword_ph: 'Nhập từ khóa...',
+    gen_content: (loading) => (loading ? 'Đang tạo...' : 'Tạo nội dung'),
+    gen_content_hint: (lc) => `Tạo nội dung cho ngôn ngữ đang chọn: ${lc.toUpperCase()}`,
+    title: (lc) => `Tiêu đề (${lc.toUpperCase()})`,
+    slug: (lc) => `Slug (${lc.toUpperCase()})`,
+    meta: (lc) => `Meta description (${lc.toUpperCase()})`,
+    meta_ph: (lc) => `Meta (${lc.toUpperCase()})`,
+    keywords: (lc) => `Từ khóa SEO (${lc.toUpperCase()})`,
+    keywords_ph: 'keyword1, keyword2, keyword3...',
+    from_vi: 'Dịch từ VI',
+    make_from_title: 'Tạo từ tên',
+    slug_hint_ok: 'Chỉ gồm a-z, 0-9 và dấu gạch nối (-).',
+    slug_hint_bad: 'Slug không hợp lệ.',
+    content: (lc) => `Nội dung (${lc.toUpperCase()})`,
+    insert_image: 'Chèn ảnh',
+    translate_content: 'Dịch nội dung từ VI',
+    gen_seo: (loading) => (loading ? 'Đang tạo...' : 'Tạo SEO'),
+    cover: 'Ảnh minh họa (cover)',
+    cancel: 'Hủy',
+    submit_add: 'Thêm',
+    submit_update: 'Cập nhật',
+    translating: 'Đang tự dịch sang các ngôn ngữ khác…',
+  },
+  en: {
+    tab_title: (isEditing) => (isEditing ? 'Edit news (multi-language)' : 'Add news (multi-language)'),
+    autoTranslate: 'Auto-translate from VI',
+    addLang: 'Add language',
+    keyword: 'Keyword',
+    keyword_ph: 'Enter a keyword...',
+    gen_content: (loading) => (loading ? 'Generating...' : 'Generate content'),
+    gen_content_hint: (lc) => `Generate content for active language: ${lc.toUpperCase()}`,
+    title: (lc) => `Title (${lc.toUpperCase()})`,
+    slug: (lc) => `Slug (${lc.toUpperCase()})`,
+    meta: (lc) => `Meta description (${lc.toUpperCase()})`,
+    meta_ph: (lc) => `Meta (${lc.toUpperCase()})`,
+    keywords: (lc) => `SEO keywords (${lc.toUpperCase()})`,
+    keywords_ph: 'keyword1, keyword2, keyword3...',
+    from_vi: 'Translate from VI',
+    make_from_title: 'From title',
+    slug_hint_ok: 'Only a-z, 0-9 and hyphens (-).',
+    slug_hint_bad: 'Invalid slug.',
+    content: (lc) => `Content (${lc.toUpperCase()})`,
+    insert_image: 'Insert image',
+    translate_content: 'Translate content from VI',
+    gen_seo: (loading) => (loading ? 'Generating...' : 'Generate SEO'),
+    cover: 'Cover image',
+    cancel: 'Cancel',
+    submit_add: 'Add',
+    submit_update: 'Update',
+    translating: 'Auto-translating to other languages…',
+  },
+  ja: {
+    tab_title: (e) => (e ? 'ニュース編集（多言語）' : 'ニュース追加（多言語）'),
+    autoTranslate: 'VI から自動翻訳',
+    addLang: '言語を追加',
+    keyword: 'キーワード',
+    keyword_ph: 'キーワードを入力...',
+    gen_content: (l) => (l ? '生成中...' : 'コンテンツ生成'),
+    gen_content_hint: (lc) => `現在の言語で生成: ${lc.toUpperCase()}`,
+    title: (lc) => `タイトル（${lc.toUpperCase()}）`,
+    slug: (lc) => `スラッグ（${lc.toUpperCase()}）`,
+    meta: (lc) => `メタ説明（${lc.toUpperCase()}）`,
+    meta_ph: (lc) => `メタ（${lc.toUpperCase()}）`,
+    keywords: (lc) => `SEOキーワード（${lc.toUpperCase()}）`,
+    keywords_ph: 'keyword1, keyword2, keyword3...',
+    from_vi: 'VI から翻訳',
+    make_from_title: 'タイトルから作成',
+    slug_hint_ok: 'a-z, 0-9 とハイフン (-) のみ。',
+    slug_hint_bad: '無効なスラッグです。',
+    content: (lc) => `本文（${lc.toUpperCase()}）`,
+    insert_image: '画像を挿入',
+    translate_content: '本文を VI から翻訳',
+    gen_seo: (l) => (l ? '生成中...' : 'SEO 作成'),
+    cover: 'カバー画像',
+    cancel: 'キャンセル',
+    submit_add: '追加',
+    submit_update: '更新',
+    translating: '他の言語に自動翻訳中…',
+  },
+  ko: {
+    tab_title: (e) => (e ? '뉴스 편집(다국어)' : '뉴스 추가(다국어)'),
+    autoTranslate: '베트남어에서 자동 번역',
+    addLang: '언어 추가',
+    keyword: '키워드',
+    keyword_ph: '키워드를 입력...',
+    gen_content: (l) => (l ? '생성 중...' : '콘텐츠 생성'),
+    gen_content_hint: (lc) => `현재 언어로 생성: ${lc.toUpperCase()}`,
+    title: (lc) => `제목 (${lc.toUpperCase()})`,
+    slug: (lc) => `슬러그 (${lc.toUpperCase()})`,
+    meta: (lc) => `메타 설명 (${lc.toUpperCase()})`,
+    meta_ph: (lc) => `메타 (${lc.toUpperCase()})`,
+    keywords: (lc) => `SEO 키워드 (${lc.toUpperCase()})`,
+    keywords_ph: 'keyword1, keyword2, keyword3...',
+    from_vi: 'VI에서 번역',
+    make_from_title: '제목에서 생성',
+    slug_hint_ok: 'a-z, 0-9, 하이픈(-)만.',
+    slug_hint_bad: '유효하지 않은 슬러그.',
+    content: (lc) => `콘텐츠 (${lc.toUpperCase()})`,
+    insert_image: '이미지 삽입',
+    translate_content: 'VI에서 콘텐츠 번역',
+    gen_seo: (l) => (l ? '생성 중...' : 'SEO 생성'),
+    cover: '커버 이미지',
+    cancel: '취소',
+    submit_add: '추가',
+    submit_update: '업데이트',
+    translating: '다른 언어로 자동 번역 중…',
+  },
+  zh: {
+    tab_title: (e) => (e ? '编辑新闻（多语言）' : '新增新闻（多语言）'),
+    autoTranslate: '从越南语自动翻译',
+    addLang: '添加语言',
+    keyword: '关键词',
+    keyword_ph: '输入关键词…',
+    gen_content: (l) => (l ? '生成中…' : '生成内容'),
+    gen_content_hint: (lc) => `为当前语言生成：${lc.toUpperCase()}`,
+    title: (lc) => `标题（${lc.toUpperCase()}）`,
+    slug: (lc) => `Slug（${lc.toUpperCase()}）`,
+    meta: (lc) => `Meta 描述（${lc.toUpperCase()}）`,
+    meta_ph: (lc) => `Meta（${lc.toUpperCase()}）`,
+    keywords: (lc) => `SEO 关键词（${lc.toUpperCase()}）`,
+    keywords_ph: 'keyword1, keyword2, keyword3...',
+    from_vi: '从 VI 翻译',
+    make_from_title: '由标题生成',
+    slug_hint_ok: '仅包含 a-z、0-9 和连字符 (-)。',
+    slug_hint_bad: '无效的 Slug。',
+    content: (lc) => `正文（${lc.toUpperCase()}）`,
+    insert_image: '插入图片',
+    translate_content: '从 VI 翻译正文',
+    gen_seo: (l) => (l ? '生成中…' : '生成 SEO'),
+    cover: '封面图',
+    cancel: '取消',
+    submit_add: '新增',
+    submit_update: '更新',
+    translating: '正在自动翻译到其他语言…',
+  },
+  fr: {
+    tab_title: (e) => (e ? 'Modifier l’article (multilingue)' : 'Ajouter un article (multilingue)'),
+    autoTranslate: 'Traduire automatiquement depuis le VI',
+    addLang: 'Ajouter une langue',
+    keyword: 'Mot-clé',
+    keyword_ph: 'Saisir un mot-clé…',
+    gen_content: (l) => (l ? 'Génération…' : 'Générer le contenu'),
+    gen_content_hint: (lc) => `Générer pour la langue active : ${lc.toUpperCase()}`,
+    title: (lc) => `Titre (${lc.toUpperCase()})`,
+    slug: (lc) => `Slug (${lc.toUpperCase()})`,
+    meta: (lc) => `Meta description (${lc.toUpperCase()})`,
+    meta_ph: (lc) => `Meta (${lc.toUpperCase()})`,
+    keywords: (lc) => `Mots-clés SEO (${lc.toUpperCase()})`,
+    keywords_ph: 'mot1, mot2, mot3…',
+    from_vi: 'Traduire depuis VI',
+    make_from_title: 'Depuis le titre',
+    slug_hint_ok: 'Seulement a-z, 0-9 et tirets (-).',
+    slug_hint_bad: 'Slug invalide.',
+    content: (lc) => `Contenu (${lc.toUpperCase()})`,
+    insert_image: 'Insérer une image',
+    translate_content: 'Traduire le contenu depuis VI',
+    gen_seo: (l) => (l ? 'Génération…' : 'Générer le SEO'),
+    cover: 'Image de couverture',
+    cancel: 'Annuler',
+    submit_add: 'Ajouter',
+    submit_update: 'Mettre à jour',
+    translating: 'Traduction automatique vers d’autres langues…',
+  },
+  de: {
+    tab_title: (e) => (e ? 'News bearbeiten (mehrsprachig)' : 'News hinzufügen (mehrsprachig)'),
+    autoTranslate: 'Automatisch aus VI übersetzen',
+    addLang: 'Sprache hinzufügen',
+    keyword: 'Schlüsselwort',
+    keyword_ph: 'Schlüsselwort eingeben…',
+    gen_content: (l) => (l ? 'Wird erstellt…' : 'Inhalt erstellen'),
+    gen_content_hint: (lc) => `Für aktive Sprache generieren: ${lc.toUpperCase()}`,
+    title: (lc) => `Titel (${lc.toUpperCase()})`,
+    slug: (lc) => `Slug (${lc.toUpperCase()})`,
+    meta: (lc) => `Meta-Beschreibung (${lc.toUpperCase()})`,
+    meta_ph: (lc) => `Meta (${lc.toUpperCase()})`,
+    keywords: (lc) => `SEO-Schlüsselwörter (${lc.toUpperCase()})`,
+    keywords_ph: 'keyword1, keyword2, keyword3...',
+    from_vi: 'Aus VI übersetzen',
+    make_from_title: 'Aus Titel',
+    slug_hint_ok: 'Nur a-z, 0-9 und Bindestriche (-).',
+    slug_hint_bad: 'Ungültiger Slug.',
+    content: (lc) => `Inhalt (${lc.toUpperCase()})`,
+    insert_image: 'Bild einfügen',
+    translate_content: 'Inhalt aus VI übersetzen',
+    gen_seo: (l) => (l ? 'Wird erstellt…' : 'SEO erstellen'),
+    cover: 'Titelbild',
+    cancel: 'Abbrechen',
+    submit_add: 'Hinzufügen',
+    submit_update: 'Aktualisieren',
+    translating: 'Automatische Übersetzung in andere Sprachen…',
+  },
+}
+const L = (lc, key, ...args) =>
+  (LABELS[lc] && LABELS[lc][key])
+    ? (typeof LABELS[lc][key] === 'function' ? LABELS[lc][key](...args) : LABELS[lc][key])
+    : (typeof LABELS.en[key] === 'function' ? LABELS.en[key](...args) : LABELS.en[key])
+
 const slugify = (s = '') =>
   s.toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -175,7 +379,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
     return hasTags ? turndown.turndown(src) : src
   }, [rawData.content, isOpen])
 
-  // —— Khởi tạo: ưu tiên translations.[lc]; chỉ VI mới fallback base —— //
+  // —— Khởi tạo (giữ nguyên logic cũ) —— //
   useEffect(() => {
     if (!isOpen) return
 
@@ -212,13 +416,11 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
       return fromTr
     }
 
-    // Fill VI + others
     nextTr.vi = pickLocaleBlock('vi')
     LANGUAGES.map(l => l.code).filter(lc => lc !== 'vi').forEach(lc => {
       nextTr[lc] = pickLocaleBlock(lc)
     })
 
-    // Tabs mở mặc định: vi + en + các locale có data thật
     const haveData = (b) =>
       (b.title && b.title.trim()) ||
       (b.meta && b.meta.trim()) ||
@@ -231,7 +433,6 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
       .filter(lc => lc === 'vi' || haveData(nextTr[lc]))
     const nextOpen = Array.from(new Set([].concat(defaults, localesWithData)))
 
-    // Chuẩn hoá markdown
     const nextMd = {}
     LANGUAGES.map(l => l.code).forEach(lc => {
       const src = (nextTr[lc]?.content || '').trim()
@@ -244,16 +445,13 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
     setMdByLocale(nextMd)
     setOpenLocales(nextOpen)
 
-    // Nếu EN có dữ liệu → mở EN, không thì VI
     const enHas = haveData(nextTr.en || empty)
     setActiveLang(enHas ? 'en' : 'vi')
 
-    // Refresh editors
     setTimeout(() => {
       Object.values(editorRefs.current).forEach(ref => ref?.cm?.refresh?.())
     }, 0)
 
-    // Ghi dấu nguồn VI cho auto-translate
     lastSourceVI.current = {
       title: nextTr.vi.title || '',
       meta: nextTr.vi.meta || '',
@@ -262,13 +460,12 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
     }
   }, [isOpen, rawData])
 
-  // —— Lazy load bản dịch từng locale từ API /api/news/:id/translation?locale=xx —— //
+  // —— Lazy load bản dịch (giữ nguyên) —— //
   useEffect(() => {
     if (!isOpen || !rawData?.id) return
     const controller = new AbortController()
 
       ; (async () => {
-        // Tải cho các tab đang mở (trừ VI) nếu thiếu dữ liệu
         const targets = openLocales.filter(lc => lc !== 'vi')
         for (const lc of targets) {
           const cur = translations[lc] || emptyLocaleBlock
@@ -285,7 +482,6 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
             })
             if (!r.ok) continue
             const v = await r.json()
-            // Kỳ vọng: { id, locale, title, slug, content, meta_description, keywords, updated_at }
             const merged = {
               title: v?.title || '',
               slug: v?.slug || '',
@@ -305,7 +501,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
       })()
 
     return () => controller.abort()
-  }, [isOpen, rawData?.id, openLocales]) // cố tình không include translations để tránh vòng lặp
+  }, [isOpen, rawData?.id, openLocales])
 
   const pickInlineImage = async (lc, e) => {
     const f = e.target.files?.[0]; if (!f) return
@@ -579,7 +775,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
       <div className="bg-white rounded-lg shadow-xl max-w-7xl w-full max-h-[100vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="text-lg font-semibold">{isEditing ? 'Chỉnh sửa tin tức (đa ngôn ngữ)' : 'Thêm tin tức mới (đa ngôn ngữ)'}</h3>
+          <h3 className="text-lg font-semibold">{L(activeLang, 'tab_title', isEditing)}</h3>
           <div className="flex items-center gap-4">
             <label className="inline-flex items-center gap-2 text-sm">
               <input
@@ -589,7 +785,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                 disabled={isGenerating || isUploading}
               />
               <span className="inline-flex items-center gap-1">
-                <Sparkles size={16} /> Tự dịch từ VI
+                <Sparkles size={16} /> {L(activeLang, 'autoTranslate')}
               </span>
             </label>
             <button onClick={handleClose} disabled={isUploading || isGenerating} className="cursor-pointer text-gray-400 hover:text-gray-600">
@@ -629,7 +825,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
               <div className="relative">
                 <details className="dropdown">
                   <summary className="px-3 py-1 rounded-full border cursor-pointer inline-flex items-center gap-1">
-                    <Plus size={16} /> Thêm ngôn ngữ
+                    <Plus size={16} /> {L(activeLang, 'addLang')}
                   </summary>
                   <div className="absolute z-10 mt-2 w-44 rounded-lg border bg-white shadow">
                     {canAddLocales.map((l) => (
@@ -654,13 +850,13 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
             <div className="lg:col-span-2 space-y-4">
               {/* Keyword + Tạo nội dung */}
               <div>
-                <label className="block text-sm font-medium mb-1">Từ khóa</label>
+                <label className="block text-sm font-medium mb-1">{L(activeLang, 'keyword')}</label>
                 <div className="flex gap-2">
                   <input
                     name="keyword"
                     value={shared.keyword}
                     onChange={(e) => setShared(prev => ({ ...prev, keyword: e.target.value }))}
-                    placeholder="Nhập từ khóa..."
+                    placeholder={L(activeLang, 'keyword_ph')}
                     className="flex-1 px-3 py-2 border rounded focus:ring-2 focus:ring-purple-500"
                     disabled={isGenerating || isUploading}
                   />
@@ -670,11 +866,11 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                     disabled={isGenerating || isUploading || !shared.keyword.trim()}
                     className="cursor-pointer px-3 py-2 bg-purple-600 text-white rounded flex items-center gap-1 disabled:opacity-50 hover:bg-purple-700"
                   >
-                    <Sparkles size={16} /> {isGenerating ? 'Đang tạo...' : 'Tạo nội dung'}
+                    <Sparkles size={16} /> {L(activeLang, 'gen_content', isGenerating)}
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Tạo nội dung cho ngôn ngữ đang chọn: <b>{activeLang.toUpperCase()}</b>
+                  {L(activeLang, 'gen_content_hint', activeLang)}
                 </p>
               </div>
 
@@ -683,7 +879,9 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                 {/* Title */}
                 <div>
                   <div className="flex items-center justify-between">
-                    <label className="block text-sm font-medium mb-1">Tiêu đề ({activeLang.toUpperCase()}) {activeLang === 'vi' ? '*' : ''}</label>
+                    <label className="block text-sm font-medium mb-1">
+                      {L(activeLang, 'title', activeLang)} {activeLang === 'vi' ? '*' : ''}
+                    </label>
                     {activeLang !== 'vi' && (
                       <button
                         type="button"
@@ -693,9 +891,9 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                         }}
                         disabled={isGenerating || isUploading || !translations.vi?.title}
                         className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
-                        title="Dịch từ VI"
+                        title={L(activeLang, 'from_vi')}
                       >
-                        <Languages size={14} /> Dịch từ VI
+                        <Languages size={14} /> {L(activeLang, 'from_vi')}
                       </button>
                     )}
                   </div>
@@ -707,15 +905,15 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                     className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
                     disabled={isGenerating || isUploading}
                     maxLength={120}
-                    placeholder={`Tiêu đề (${activeLang.toUpperCase()})`}
+                    placeholder={L(activeLang, 'title', activeLang)}
                   />
-                  <p className="text-xs text-gray-500 mt-1">{(translations[activeLang]?.title || '').length}/60–120 ký tự gợi ý</p>
+                  <p className="text-xs text-gray-500 mt-1">{(translations[activeLang]?.title || '').length}/60–120</p>
                 </div>
 
                 {/* Slug */}
                 <div>
                   <div className="flex items-center justify-between">
-                    <label className="block text-sm font-medium mb-1">Slug ({activeLang.toUpperCase()})</label>
+                    <label className="block text-sm font-medium mb-1">{L(activeLang, 'slug', activeLang)}</label>
                     <button
                       type="button"
                       onClick={() => {
@@ -724,9 +922,9 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                       }}
                       disabled={isGenerating || isUploading}
                       className="text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
-                      title="Sinh slug từ tiêu đề"
+                      title={L(activeLang, 'make_from_title')}
                     >
-                      <Wand2 size={16} /> Tạo từ tên
+                      <Wand2 size={16} /> {L(activeLang, 'make_from_title')}
                     </button>
                   </div>
                   <input
@@ -736,12 +934,12 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                     onBlur={() => handleSlugBlurLC(activeLang)}
                     className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
                     disabled={isGenerating || isUploading}
-                    placeholder="url-than-thien-seo"
+                    placeholder="url-seo-than-thien"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     {translations[activeLang]?.slug && !isValidSlug(translations[activeLang].slug)
-                      ? <span className="text-red-600">Slug không hợp lệ.</span>
-                      : 'Chỉ gồm a-z, 0-9 và dấu gạch nối (-).'
+                      ? <span className="text-red-600">{L(activeLang, 'slug_hint_bad')}</span>
+                      : L(activeLang, 'slug_hint_ok')
                     }
                   </p>
                 </div>
@@ -749,7 +947,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                 {/* Meta */}
                 <div>
                   <div className="flex items-center justify-between">
-                    <label className="block text-sm font-medium mb-1">Meta description ({activeLang.toUpperCase()})</label>
+                    <label className="block text-sm font-medium mb-1">{L(activeLang, 'meta', activeLang)}</label>
                     {activeLang !== 'vi' && (
                       <button
                         type="button"
@@ -759,9 +957,9 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                         }}
                         disabled={isGenerating || isUploading || !translations.vi?.meta}
                         className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
-                        title="Dịch từ VI"
+                        title={L(activeLang, 'from_vi')}
                       >
-                        <Languages size={14} /> Dịch từ VI
+                        <Languages size={14} /> {L(activeLang, 'from_vi')}
                       </button>
                     )}
                   </div>
@@ -772,15 +970,15 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                     className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
                     disabled={isGenerating || isUploading}
                     maxLength={160}
-                    placeholder={`Meta (${activeLang.toUpperCase()})`}
+                    placeholder={L(activeLang, 'meta_ph', activeLang)}
                   />
-                  <div className="text-xs text-gray-500 mt-1">{(translations[activeLang]?.meta || '').length}/160 ký tự</div>
+                  <div className="text-xs text-gray-500 mt-1">{(translations[activeLang]?.meta || '').length}/160</div>
                 </div>
 
                 {/* Keywords */}
                 <div>
                   <div className="flex items-center justify-between">
-                    <label className="block text-sm font-medium mb-1">Từ khóa SEO ({activeLang.toUpperCase()})</label>
+                    <label className="block text-sm font-medium mb-1">{L(activeLang, 'keywords', activeLang)}</label>
                     {activeLang !== 'vi' && (
                       <button
                         type="button"
@@ -790,9 +988,9 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                         }}
                         disabled={isGenerating || isUploading || !translations.vi?.keywords}
                         className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
-                        title="Dịch từ VI"
+                        title={L(activeLang, 'from_vi')}
                       >
-                        <Languages size={14} /> Dịch từ VI
+                        <Languages size={14} /> {L(activeLang, 'from_vi')}
                       </button>
                     )}
                   </div>
@@ -802,7 +1000,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                     onChange={(e) => handleTrChange(activeLang, 'keywords', e.target.value)}
                     className="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500"
                     disabled={isGenerating || isUploading}
-                    placeholder="keyword1, keyword2, keyword3..."
+                    placeholder={L(activeLang, 'keywords_ph')}
                   />
                 </div>
               </div>
@@ -810,7 +1008,9 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
               {/* Content + chèn ảnh + Tạo SEO */}
               <div>
                 <div className="flex items-center justify-between">
-                  <label className="block text-sm font-medium mb-1">Nội dung ({activeLang.toUpperCase()}) {activeLang === 'vi' ? '*' : ''}</label>
+                  <label className="block text-sm font-medium mb-1">
+                    {L(activeLang, 'content', activeLang)} {activeLang === 'vi' ? '*' : ''}
+                  </label>
                   <div className="flex items-center gap-2">
                     <input
                       type="file"
@@ -825,7 +1025,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                       className="cursor-pointer px-2 py-1 border rounded text-sm flex items-center gap-1 hover:bg-gray-50"
                       disabled={isGenerating || isUploading}
                     >
-                      <ImagePlus size={16} /> Chèn ảnh
+                      <ImagePlus size={16} /> {L(activeLang, 'insert_image')}
                     </button>
 
                     {activeLang !== 'vi' && (
@@ -840,9 +1040,9 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                         }}
                         disabled={isGenerating || isUploading || !(mdByLocale.vi || '').trim()}
                         className="cursor-pointer px-2 py-1 border rounded text-sm flex items-center gap-1 hover:bg-gray-50"
-                        title="Dịch nội dung từ VI"
+                        title={L(activeLang, 'translate_content')}
                       >
-                        <Languages size={16} /> Dịch nội dung từ VI
+                        <Languages size={16} /> {L(activeLang, 'translate_content')}
                       </button>
                     )}
                   </div>
@@ -861,19 +1061,19 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                 />
 
                 <div className="flex justify-between items-center mt-2">
-                  <div className="text-xs text-gray-500">{wordCount} từ</div>
+                  <div className="text-xs text-gray-500">{wordCount} words</div>
                   <button
                     type="button"
                     onClick={handleGenerateSEOClick}
                     disabled={isGenerating || isUploading || !(mdByLocale[activeLang] || '').trim()}
                     className="cursor-pointer px-3 py-2 bg-blue-600 text-white rounded flex items-center gap-1 disabled:opacity-50 hover:bg-blue-700"
                   >
-                    <Sparkles size={16} /> {isGenerating ? 'Đang tạo...' : 'Tạo SEO'}
+                    <Sparkles size={16} /> {L(activeLang, 'gen_seo', isGenerating)}
                   </button>
                 </div>
                 {isTranslating && (
                   <div className="mt-2 text-xs text-gray-500 inline-flex items-center gap-2">
-                    <Loader2 size={14} className="animate-spin" /> Đang tự dịch sang các ngôn ngữ khác…
+                    <Loader2 size={14} className="animate-spin" /> {L(activeLang, 'translating')}
                   </div>
                 )}
               </div>
@@ -881,7 +1081,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
 
             {/* Cột phải: Ảnh cover */}
             <div className="space-y-2">
-              <label className="block text-sm font-medium mb-1">Ảnh minh họa (cover)</label>
+              <label className="block text-sm font-medium mb-1">{L(activeLang, 'cover')}</label>
               {imagePreview && (
                 <div className="mb-3 relative inline-block">
                   <img src={imagePreview} alt="Preview" className="cursor-pointer w-56 h-36 object-cover rounded-md border" />
@@ -902,7 +1102,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                 className="cursor-pointer block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 disabled={isGenerating || isUploading}
               />
-              <p className="text-xs text-gray-500">PNG/JPG/GIF tối đa 5MB.</p>
+              <p className="text-xs text-gray-500">PNG/JPG/GIF ≤ 5MB.</p>
             </div>
           </div>
 
@@ -914,7 +1114,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
               className="cursor-pointer px-4 py-2 bg-gray-200 rounded hover:bg-gray-300"
               disabled={isGenerating || isUploading}
             >
-              Hủy
+              {L(activeLang, 'cancel')}
             </button>
             <button
               type="submit"
@@ -922,7 +1122,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
               className="cursor-pointer px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 inline-flex items-center gap-2"
             >
               {(isUploading || isGenerating) && <Loader2 size={16} className="animate-spin" />}
-              {isEditing ? 'Cập nhật' : 'Thêm'}
+              {isEditing ? L(activeLang, 'submit_update') : L(activeLang, 'submit_add')}
             </button>
           </div>
         </form>

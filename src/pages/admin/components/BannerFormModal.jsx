@@ -1,9 +1,151 @@
-// BannerFormModal.jsx — giữ UI gốc, nâng cấp đa ngôn ngữ như "about"
+// BannerFormModal.jsx — đa ngôn ngữ cho label/placeholder theo activeLang
 import React, { useEffect, useRef, useState } from 'react';
 import { X, Upload, Loader2, Image as ImageIcon, Plus, Languages, Sparkles } from 'lucide-react';
 
 const ALL_LOCALES = ['vi', 'en', 'ja', 'ko', 'zh', 'fr', 'de'];
 
+/* ===== i18n labels ===== */
+const LABELS = {
+  vi: {
+    header: (isEditing) => (isEditing ? 'Chỉnh sửa Banner (đa ngôn ngữ)' : 'Thêm Banner mới (đa ngôn ngữ)'),
+    addLang: 'Thêm ngôn ngữ',
+    autoTranslate: 'Tự dịch từ VI',
+    content_label: (lc) => `Nội dung (${lc.toUpperCase()})`,
+    content_ph_vi: 'Nhập nội dung banner',
+    content_ph: (lc) => `Nhập nội dung (${lc.toUpperCase()})`,
+    translateFromVI: 'Dịch từ VI',
+    translating: 'Đang tự dịch sang các ngôn ngữ khác…',
+    imageSection: 'Ảnh banner',
+    noImage: 'Chưa có ảnh',
+    pickImage: 'Chọn ảnh từ máy tính',
+    uploading: 'Đang upload...',
+    removeImage: 'Gỡ ảnh',
+    cancel: 'Hủy',
+    add: 'Thêm',
+    update: 'Cập nhật',
+    needContentVI: 'Vui lòng nhập Nội dung (VI)',
+  },
+  en: {
+    header: (e) => (e ? 'Edit Banner (multi-language)' : 'Add Banner (multi-language)'),
+    addLang: 'Add language',
+    autoTranslate: 'Auto-translate from VI',
+    content_label: (lc) => `Content (${lc.toUpperCase()})`,
+    content_ph_vi: 'Enter banner content (VI)',
+    content_ph: (lc) => `Enter content (${lc.toUpperCase()})`,
+    translateFromVI: 'Translate from VI',
+    translating: 'Auto-translating to other languages…',
+    imageSection: 'Banner image',
+    noImage: 'No image',
+    pickImage: 'Choose an image',
+    uploading: 'Uploading...',
+    removeImage: 'Remove image',
+    cancel: 'Cancel',
+    add: 'Add',
+    update: 'Update',
+    needContentVI: 'Please enter Content (VI)',
+  },
+  ja: {
+    header: (e) => (e ? 'バナーを編集（多言語）' : 'バナーを追加（多言語）'),
+    addLang: '言語を追加',
+    autoTranslate: 'VI から自動翻訳',
+    content_label: (lc) => `本文（${lc.toUpperCase()}）`,
+    content_ph_vi: 'バナー本文（VI）を入力',
+    content_ph: (lc) => `本文を入力（${lc.toUpperCase()}）`,
+    translateFromVI: 'VI から翻訳',
+    translating: '他の言語へ自動翻訳中…',
+    imageSection: 'バナー画像',
+    noImage: '画像なし',
+    pickImage: '画像を選択',
+    uploading: 'アップロード中...',
+    removeImage: '画像を削除',
+    cancel: 'キャンセル',
+    add: '追加',
+    update: '更新',
+    needContentVI: '本文（VI）を入力してください',
+  },
+  ko: {
+    header: (e) => (e ? '배너 수정(다국어)' : '배너 추가(다국어)'),
+    addLang: '언어 추가',
+    autoTranslate: '베트남어에서 자동 번역',
+    content_label: (lc) => `콘텐츠 (${lc.toUpperCase()})`,
+    content_ph_vi: '배너 콘텐츠(VI)를 입력',
+    content_ph: (lc) => `콘텐츠 입력 (${lc.toUpperCase()})`,
+    translateFromVI: 'VI에서 번역',
+    translating: '다른 언어로 자동 번역 중…',
+    imageSection: '배너 이미지',
+    noImage: '이미지 없음',
+    pickImage: '이미지 선택',
+    uploading: '업로드 중...',
+    removeImage: '이미지 삭제',
+    cancel: '취소',
+    add: '추가',
+    update: '업데이트',
+    needContentVI: '콘텐츠(VI)를 입력하세요',
+  },
+  zh: {
+    header: (e) => (e ? '编辑横幅（多语言）' : '新增横幅（多语言）'),
+    addLang: '添加语言',
+    autoTranslate: '从越南语自动翻译',
+    content_label: (lc) => `正文（${lc.toUpperCase()}）`,
+    content_ph_vi: '请输入横幅正文（VI）',
+    content_ph: (lc) => `请输入正文（${lc.toUpperCase()}）`,
+    translateFromVI: '从 VI 翻译',
+    translating: '正在自动翻译到其他语言…',
+    imageSection: '横幅图片',
+    noImage: '暂无图片',
+    pickImage: '选择图片',
+    uploading: '上传中...',
+    removeImage: '移除图片',
+    cancel: '取消',
+    add: '新增',
+    update: '更新',
+    needContentVI: '请填写正文（VI）',
+  },
+  fr: {
+    header: (e) => (e ? 'Modifier la bannière (multilingue)' : 'Ajouter une bannière (multilingue)'),
+    addLang: 'Ajouter une langue',
+    autoTranslate: 'Traduire automatiquement depuis le VI',
+    content_label: (lc) => `Contenu (${lc.toUpperCase()})`,
+    content_ph_vi: 'Saisir le contenu de la bannière (VI)',
+    content_ph: (lc) => `Saisir le contenu (${lc.toUpperCase()})`,
+    translateFromVI: 'Traduire depuis VI',
+    translating: 'Traduction automatique vers d’autres langues…',
+    imageSection: 'Image de bannière',
+    noImage: 'Aucune image',
+    pickImage: 'Choisir une image',
+    uploading: 'Téléversement...',
+    removeImage: 'Retirer l’image',
+    cancel: 'Annuler',
+    add: 'Ajouter',
+    update: 'Mettre à jour',
+    needContentVI: 'Veuillez saisir le contenu (VI)',
+  },
+  de: {
+    header: (e) => (e ? 'Banner bearbeiten (mehrsprachig)' : 'Banner hinzufügen (mehrsprachig)'),
+    addLang: 'Sprache hinzufügen',
+    autoTranslate: 'Automatisch aus VI übersetzen',
+    content_label: (lc) => `Inhalt (${lc.toUpperCase()})`,
+    content_ph_vi: 'Bannerinhalt (VI) eingeben',
+    content_ph: (lc) => `Inhalt eingeben (${lc.toUpperCase()})`,
+    translateFromVI: 'Aus VI übersetzen',
+    translating: 'Automatische Übersetzung in andere Sprachen…',
+    imageSection: 'Bannerbild',
+    noImage: 'Kein Bild',
+    pickImage: 'Bild auswählen',
+    uploading: 'Wird hochgeladen...',
+    removeImage: 'Bild entfernen',
+    cancel: 'Abbrechen',
+    add: 'Hinzufügen',
+    update: 'Aktualisieren',
+    needContentVI: 'Bitte Inhalt (VI) eingeben',
+  },
+};
+const L = (lc, key, ...args) =>
+  LABELS[lc] && LABELS[lc][key]
+    ? (typeof LABELS[lc][key] === 'function' ? LABELS[lc][key](...args) : LABELS[lc][key])
+    : (typeof LABELS.en[key] === 'function' ? LABELS.en[key](...args) : LABELS.en[key]);
+
+/* ===== translate helpers ===== */
 async function translateText(text, source, target) {
   try {
     const r = await fetch('/api/translate', {
@@ -40,7 +182,8 @@ async function translateMarkdown(md, source, target) {
   return out.join('\n');
 }
 
-function LocaleTabs({ openLocales, active, setActive, addLocale, removeLocale }) {
+/* ===== Tabs (nhận addLabel để i18n) ===== */
+function LocaleTabs({ openLocales, active, setActive, addLocale, removeLocale, addLabel }) {
   const canAdd = ALL_LOCALES.filter((lc) => !openLocales.includes(lc));
   return (
     <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -69,7 +212,7 @@ function LocaleTabs({ openLocales, active, setActive, addLocale, removeLocale })
         <div className="relative">
           <details className="dropdown">
             <summary className="px-3 py-1 rounded-full border cursor-pointer inline-flex items-center gap-1">
-              <Plus size={16} /> Thêm ngôn ngữ
+              <Plus size={16} /> {addLabel}
             </summary>
             <div className="absolute z-10 mt-2 w-44 rounded-lg border bg-white shadow">
               {canAdd.map((lc) => (
@@ -260,7 +403,7 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.content?.trim()) {
-      alert('Vui lòng nhập Nội dung (VI)');
+      alert(L(activeLang, 'needContentVI'));
       return;
     }
     setIsUploading(true);
@@ -318,7 +461,7 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="text-xl font-semibold">
-            {initialData.id ? 'Chỉnh sửa Banner (đa ngôn ngữ)' : 'Thêm Banner mới (đa ngôn ngữ)'}
+            {L(activeLang, 'header', isEditing)}
           </h3>
           <div className="flex items-center gap-3">
             <label className="inline-flex items-center gap-2 text-sm">
@@ -329,14 +472,14 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 disabled={isUploading}
               />
               <span className="inline-flex items-center gap-1">
-                <Sparkles size={16} /> Tự dịch từ VI
+                <Sparkles size={16} /> {L(activeLang, 'autoTranslate')}
               </span>
             </label>
             <button
               onClick={onClose}
               className="cursor-pointer text-gray-400 hover:text-gray-600"
               disabled={isUploading}
-              aria-label="Đóng"
+              aria-label="Close modal"
             >
               <X size={24} />
             </button>
@@ -351,25 +494,28 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             setActive={setActiveLang}
             addLocale={addLocale}
             removeLocale={removeLocale}
+            addLabel={L(activeLang, 'addLang')}
           />
 
           {/* Content */}
           {activeLang === 'vi' ? (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Nội dung (VI) *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {L('vi', 'content_label', 'vi')} *
+              </label>
               <textarea
                 name="content"
                 value={form.content}
                 onChange={handleChangeVI}
                 rows={8}
-                placeholder="Nhập nội dung banner"
+                placeholder={L('vi', 'content_ph_vi')}
                 required
                 disabled={isUploading}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               />
               {isTranslating && (
                 <div className="mt-2 text-xs text-gray-500 inline-flex items-center gap-2">
-                  <Loader2 size={14} className="animate-spin" /> Đang tự dịch sang các ngôn ngữ khác…
+                  <Loader2 size={14} className="animate-spin" /> {L(activeLang, 'translating')}
                 </div>
               )}
             </div>
@@ -377,23 +523,23 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             <div>
               <div className="flex items-center justify-between">
                 <label className="block text-sm font-medium text-gray-700">
-                  Nội dung ({activeLang.toUpperCase()})
+                  {L(activeLang, 'content_label', activeLang)}
                 </label>
                 <button
                   type="button"
                   onClick={() => translateContentFromVI(activeLang)}
                   disabled={isUploading || !(form.content || '').trim()}
                   className="cursor-pointer px-2 py-1 border rounded text-sm flex items-center gap-1 hover:bg-gray-50"
-                  title="Dịch nội dung từ VI"
+                  title={L(activeLang, 'translateFromVI')}
                 >
-                  <Languages size={16} /> Dịch từ VI
+                  <Languages size={16} /> {L(activeLang, 'translateFromVI')}
                 </button>
               </div>
               <textarea
                 value={translations[activeLang]?.content || ''}
                 onChange={(e) => handleChangeTr(activeLang, e.target.value)}
                 rows={8}
-                placeholder={`Nhập nội dung (${activeLang.toUpperCase()})`}
+                placeholder={L(activeLang, 'content_ph', activeLang)}
                 disabled={isUploading}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
               />
@@ -403,7 +549,7 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
           {/* Image big preview */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Ảnh banner
+              {L(activeLang, 'imageSection')}
             </label>
 
             {imagePreview ? (
@@ -420,13 +566,13 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                   disabled={isUploading}
                   className="cursor-pointer absolute top-2 right-2 bg-red-500 text-white rounded px-2 py-1 text-xs hover:bg-red-600 disabled:bg-gray-400"
                 >
-                  Gỡ ảnh
+                  {L(activeLang, 'removeImage')}
                 </button>
               </div>
             ) : (
               <div className="mb-3 w-full aspect-video rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-gray-400">
                 <div className="flex items-center gap-2">
-                  <ImageIcon /> Chưa có ảnh
+                  <ImageIcon /> {L(activeLang, 'noImage')}
                 </div>
               </div>
             )}
@@ -450,9 +596,9 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                   <Upload className="text-gray-400" size={28} />
                 )}
                 <span className="text-sm text-gray-600">
-                  {isUploading ? 'Đang upload...' : 'Chọn ảnh từ máy tính'}
+                  {isUploading ? L(activeLang, 'uploading') : L(activeLang, 'pickImage')}
                 </span>
-                <span className="text-xs text-gray-400">PNG, JPG, WEBP tối đa 8MB</span>
+                <span className="text-xs text-gray-400">PNG, JPG, WEBP ≤ 8MB</span>
               </label>
             </div>
           </div>
@@ -464,7 +610,7 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               disabled={isUploading}
               className="cursor-pointer px-5 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
-              Hủy
+              {L(activeLang, 'cancel')}
             </button>
             <button
               type="submit"
@@ -472,7 +618,7 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               className="cursor-pointer px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-blue-400 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >
               {isUploading && <Loader2 className="animate-spin" size={18} />}
-              {isEditing ? 'Cập nhật' : 'Thêm'}
+              {isEditing ? L(activeLang, 'update') : L(activeLang, 'add')}
             </button>
           </div>
         </form>

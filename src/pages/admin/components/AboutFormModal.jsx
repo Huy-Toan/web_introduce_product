@@ -1,9 +1,137 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, Upload, Loader2, Plus, Languages, Sparkles } from 'lucide-react';
 import EditorMd from './EditorMd';
 
 const ALL_LOCALES = ['vi', 'en', 'ja', 'ko', 'zh', 'fr', 'de'];
 
+/* ===== i18n labels ===== */
+const LABELS = {
+  vi: {
+    header: (isEditing) => (isEditing ? 'Chỉnh sửa Giới thiệu (đa ngôn ngữ)' : 'Thêm Giới thiệu mới (đa ngôn ngữ)'),
+    addLang: 'Thêm ngôn ngữ',
+    autoTranslate: 'Tự dịch từ VI',
+    title: (lc) => `Tiêu đề (${lc.toUpperCase()})`,
+    title_ph: 'Nhập tiêu đề phần Giới thiệu',
+    content: (lc) => `Nội dung (${lc.toUpperCase()})`,
+    cover: 'Ảnh minh họa',
+    pickImage: 'Chọn ảnh từ máy tính',
+    uploading: 'Đang upload...',
+    insertFromVI: 'Dịch từ VI',
+    insertContentFromVI: 'Dịch nội dung từ VI',
+    translating: 'Đang tự dịch sang các ngôn ngữ khác…',
+    cancel: 'Hủy',
+    add: 'Thêm',
+    update: 'Cập nhật',
+  },
+  en: {
+    header: (isEditing) => (isEditing ? 'Edit About (multi-language)' : 'Add About (multi-language)'),
+    addLang: 'Add language',
+    autoTranslate: 'Auto-translate from VI',
+    title: (lc) => `Title (${lc.toUpperCase()})`,
+    title_ph: 'Enter the About title',
+    content: (lc) => `Content (${lc.toUpperCase()})`,
+    cover: 'Cover image',
+    pickImage: 'Choose an image',
+    uploading: 'Uploading...',
+    insertFromVI: 'Translate from VI',
+    insertContentFromVI: 'Translate content from VI',
+    translating: 'Auto-translating to other languages…',
+    cancel: 'Cancel',
+    add: 'Add',
+    update: 'Update',
+  },
+  ja: {
+    header: (e) => (e ? '概要を編集（多言語）' : '概要を追加（多言語）'),
+    addLang: '言語を追加',
+    autoTranslate: 'VI から自動翻訳',
+    title: (lc) => `タイトル（${lc.toUpperCase()}）`,
+    title_ph: '概要のタイトルを入力',
+    content: (lc) => `本文（${lc.toUpperCase()}）`,
+    cover: '画像',
+    pickImage: '画像を選択',
+    uploading: 'アップロード中...',
+    insertFromVI: 'VI から翻訳',
+    insertContentFromVI: '本文を VI から翻訳',
+    translating: '他の言語に自動翻訳中…',
+    cancel: 'キャンセル',
+    add: '追加',
+    update: '更新',
+  },
+  ko: {
+    header: (e) => (e ? '소개 수정(다국어)' : '소개 추가(다국어)'),
+    addLang: '언어 추가',
+    autoTranslate: '베트남어에서 자동 번역',
+    title: (lc) => `제목 (${lc.toUpperCase()})`,
+    title_ph: '소개 제목을 입력',
+    content: (lc) => `콘텐츠 (${lc.toUpperCase()})`,
+    cover: '이미지',
+    pickImage: '이미지 선택',
+    uploading: '업로드 중...',
+    insertFromVI: 'VI에서 번역',
+    insertContentFromVI: '콘텐츠를 VI에서 번역',
+    translating: '다른 언어로 자동 번역 중…',
+    cancel: '취소',
+    add: '추가',
+    update: '업데이트',
+  },
+  zh: {
+    header: (e) => (e ? '编辑关于我们（多语言）' : '新增关于我们（多语言）'),
+    addLang: '添加语言',
+    autoTranslate: '从越南语自动翻译',
+    title: (lc) => `标题（${lc.toUpperCase()}）`,
+    title_ph: '输入关于我们的标题',
+    content: (lc) => `正文（${lc.toUpperCase()}）`, // <-- fixed extra brace
+    cover: '封面图',
+    pickImage: '选择图片',
+    uploading: '上传中...',
+    insertFromVI: '从 VI 翻译',
+    insertContentFromVI: '从 VI 翻译正文',
+    translating: '正在自动翻译到其他语言…',
+    cancel: '取消',
+    add: '新增',
+    update: '更新',
+  },
+  fr: {
+    header: (e) => (e ? 'Modifier À propos (multilingue)' : 'Ajouter À propos (multilingue)'),
+    addLang: 'Ajouter une langue',
+    autoTranslate: 'Traduire automatiquement depuis le VI',
+    title: (lc) => `Titre (${lc.toUpperCase()})`,
+    title_ph: 'Saisir le titre de la page À propos',
+    content: (lc) => `Contenu (${lc.toUpperCase()})`,
+    cover: 'Image',
+    pickImage: 'Choisir une image',
+    uploading: 'Téléversement...',
+    insertFromVI: 'Traduire depuis VI',
+    insertContentFromVI: 'Traduire le contenu depuis VI',
+    translating: 'Traduction automatique vers d’autres langues…',
+    cancel: 'Annuler',
+    add: 'Ajouter',
+    update: 'Mettre à jour',
+  },
+  de: {
+    header: (e) => (e ? 'Über uns bearbeiten (mehrsprachig)' : 'Über uns hinzufügen (mehrsprachig)'),
+    addLang: 'Sprache hinzufügen',
+    autoTranslate: 'Automatisch aus VI übersetzen',
+    title: (lc) => `Titel (${lc.toUpperCase()})`,
+    title_ph: 'Titel der „Über uns“-Seite eingeben',
+    content: (lc) => `Inhalt (${lc.toUpperCase()})`,
+    cover: 'Bild',
+    pickImage: 'Bild auswählen',
+    uploading: 'Wird hochgeladen...',
+    insertFromVI: 'Aus VI übersetzen',
+    insertContentFromVI: 'Inhalt aus VI übersetzen',
+    translating: 'Automatische Übersetzung in andere Sprachen…',
+    cancel: 'Abbrechen',
+    add: 'Hinzufügen',
+    update: 'Aktualisieren',
+  },
+};
+const L = (lc, key, ...args) =>
+  LABELS[lc] && LABELS[lc][key]
+    ? (typeof LABELS[lc][key] === 'function' ? LABELS[lc][key](...args) : LABELS[lc][key])
+    : (typeof LABELS.en[key] === 'function' ? LABELS.en[key](...args) : LABELS.en[key]);
+
+/* ===== translate helpers ===== */
 async function translateText(text, source, target) {
   try {
     const r = await fetch('/api/translate', {
@@ -19,7 +147,7 @@ async function translateText(text, source, target) {
   }
 }
 
-// Dịch markdown theo dòng để giữ prefix (#, -, >, 1. ...)
+// Dịch markdown theo dòng để giữ prefix (#, -, >, 1. ... )
 async function translateMarkdown(md, source, target) {
   const lines = md.split('\n');
   const out = [];
@@ -40,7 +168,8 @@ async function translateMarkdown(md, source, target) {
   return out.join('\n');
 }
 
-function LocaleTabs({ openLocales, activeTab, setActiveTab, addLocale, removeLocale }) {
+/* ===== Tabs ===== */
+function LocaleTabs({ openLocales, activeTab, setActiveTab, addLocale, removeLocale, addLabel }) {
   const canAdd = ALL_LOCALES.filter((lc) => !openLocales.includes(lc));
   return (
     <div className="flex items-center gap-2 flex-wrap">
@@ -69,7 +198,7 @@ function LocaleTabs({ openLocales, activeTab, setActiveTab, addLocale, removeLoc
         <div className="relative">
           <details className="dropdown">
             <summary className="px-3 py-1 rounded-full border cursor-pointer inline-flex items-center gap-1">
-              <Plus size={16} /> Thêm ngôn ngữ
+              <Plus size={16} /> {addLabel}
             </summary>
             <div className="absolute z-10 mt-2 w-44 rounded-lg border bg-white shadow">
               {canAdd.map((lc) => (
@@ -93,15 +222,14 @@ function LocaleTabs({ openLocales, activeTab, setActiveTab, addLocale, removeLoc
 const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id);
 
-  // Base (VI) – bảng about_us (JOIN + fallback)
+  // Base (VI)
   const [baseVI, setBaseVI] = useState({ title: '', content: '', image_url: '' });
 
-  // Translations – bảng about_us_translations (không fallback sang VI)
+  // Translations
   const [translations, setTranslations] = useState(
     /** @type {Record<string, { title: string, content: string }>} */({})
   );
 
-  // Theo dõi người dùng đã chạm vào trường của locale nào (để không ghi đè khi auto-dịch)
   const [touched, setTouched] = useState(
     /** @type {Record<string, { title?: boolean, content?: boolean }>} */({})
   );
@@ -109,32 +237,25 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const [activeTab, setActiveTab] = useState('vi');
   const [openLocales, setOpenLocales] = useState(['vi', 'en']);
 
-  // Ảnh cover
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
-
-  // Trạng thái
   const [isUploading, setIsUploading] = useState(false);
 
-  // Auto translate
   const [autoTranslate, setAutoTranslate] = useState(true);
   const debounceTimer = useRef(null);
   const lastSourceTitle = useRef('');
   const lastSourceContent = useRef('');
   const [isTranslating, setIsTranslating] = useState(false);
 
-  // Editor refs
   const editorVIRef = useRef(null);
-  const editorRefs = useRef({}); // per-locale editor (không bắt buộc, dùng khi muốn refresh)
+  const editorRefs = useRef({}); // per-locale
 
-  // Nạp dữ liệu khi mở modal
+  // Load data when open
   useEffect(() => {
     if (!isOpen) return;
 
-    // Trường hợp initialData có dạng { about: {...} } hoặc {...}
     const raw = initialData?.about ? initialData.about : (initialData || {});
     if (isEditing) {
-      // 1) Lấy base đã có trong initialData (đã JOIN theo locale=vi nếu bạn fetch vậy)
       setBaseVI({
         title: raw.title || '',
         content: raw.content || '',
@@ -142,27 +263,35 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       });
       setImagePreview(raw.image_url || '');
 
-      // 2) Sau đó gọi toàn bộ translations để đổ các tab khác
+      // Prevent auto-translate from firing on initial mount
+      lastSourceTitle.current = raw.title || '';
+      lastSourceContent.current = raw.content || '';
+
       (async () => {
         try {
           const r = await fetch(`/api/about/${raw.id || initialData.id}/translations`);
           if (!r.ok) return;
           const j = await r.json();
           const tr = j?.translations || {};
-
-          // Chuẩn hoá keys
           const norm = Object.fromEntries(
             Object.entries(tr).map(([lc, v]) => [
               lc.toLowerCase(),
               { title: v?.title || '', content: v?.content || '' },
             ])
           );
-
-          // Không lưu VI ở translations (VI là base)
           delete norm.vi;
           setTranslations(norm);
 
-          // Mở sẵn EN nếu có dữ liệu
+          // mark touched for locales that already have data (avoid overwrite)
+          const nextTouched = {};
+          for (const [lc, v] of Object.entries(norm)) {
+            nextTouched[lc] = {
+              title: !!(v?.title && v.title.trim()),
+              content: !!(v?.content && v.content.trim()),
+            };
+          }
+          setTouched(nextTouched);
+
           const defaults = ['vi', 'en'];
           const withData = Object.entries(norm)
             .filter(([, v]) => (v.title || v.content))
@@ -173,19 +302,21 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
         }
       })();
     } else {
-      // Thêm mới
       setBaseVI({ title: '', content: '', image_url: '' });
       setImagePreview('');
       setTranslations({});
       setOpenLocales(['vi', 'en']);
+      // reset last sources
+      lastSourceTitle.current = '';
+      lastSourceContent.current = '';
     }
 
     setActiveTab('vi');
-    setTouched({});
+    setTouched((prev) => (isEditing ? prev : {}));
     setTimeout(() => editorVIRef.current?.refresh?.(), 0);
   }, [isOpen, initialData, isEditing]);
 
-  // Toggle readOnly editor khi upload
+  // Toggle readOnly editor when uploading
   useEffect(() => {
     editorVIRef.current?.cm?.setOption('readOnly', isUploading ? 'nocursor' : false);
     Object.values(editorRefs.current || {}).forEach((ref) =>
@@ -193,7 +324,7 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     );
   }, [isUploading]);
 
-  // Auto-translate từ VI sang các tab đang mở (chỉ khi chưa "touched")
+  // Auto-translate VI -> open locales (only if not touched)
   useEffect(() => {
     if (!autoTranslate) return;
     const srcTitle = (baseVI.title || '').trim();
@@ -326,17 +457,15 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       let image_url = baseVI.image_url;
       if (imageFile) image_url = await uploadImage(imageFile);
 
-      // Base
       const payload = {
         title: baseVI.title,
         content: baseVI.content,
         image_url,
       };
 
-      // Translations (lọc những locale có dữ liệu)
       const cleanTranslations = {};
       for (const [lc, v] of Object.entries(translations)) {
-        const hasAny = (v?.title || v?.content);
+        const hasAny = v?.title || v?.content;
         if (!hasAny) continue;
         cleanTranslations[lc] = { title: v.title || '', content: v.content || '' };
       }
@@ -378,7 +507,7 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="text-xl font-semibold">
-            {isEditing ? 'Chỉnh sửa Giới thiệu (đa ngôn ngữ)' : 'Thêm Giới thiệu mới (đa ngôn ngữ)'}
+            {L(activeTab, 'header', isEditing)}
           </h3>
           <div className="flex items-center gap-3">
             <label className="inline-flex items-center gap-2 text-sm">
@@ -389,7 +518,7 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 disabled={isUploading}
               />
               <span className="inline-flex items-center gap-1">
-                <Sparkles size={16} /> Tự dịch từ VI
+                <Sparkles size={16} /> {L(activeTab, 'autoTranslate')}
               </span>
             </label>
             <button onClick={onClose} className="cursor-pointer text-gray-400 hover:text-gray-600" disabled={isUploading}>
@@ -406,18 +535,19 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             setActiveTab={setActiveTab}
             addLocale={addLocale}
             removeLocale={removeLocale}
+            addLabel={L(activeTab, 'addLang')}
           />
 
           {/* VI tab (base) */}
           {activeTab === 'vi' && (
             <div className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tiêu đề (VI) *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{L('vi', 'title', 'vi')} *</label>
                 <input
                   name="title"
                   value={baseVI.title}
                   onChange={handleBaseChange}
-                  placeholder="Nhập tiêu đề phần Giới thiệu"
+                  placeholder={L('vi', 'title_ph')}
                   required
                   disabled={isUploading}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
@@ -425,7 +555,7 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nội dung (VI) *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{L('vi', 'content', 'vi')} *</label>
                 <EditorMd
                   ref={editorVIRef}
                   value={baseVI.content}
@@ -435,14 +565,14 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 />
                 {isTranslating && (
                   <div className="mt-2 text-xs text-gray-500 inline-flex items-center gap-2">
-                    <Loader2 size={14} className="animate-spin" /> Đang tự dịch sang các ngôn ngữ khác…
+                    <Loader2 size={14} className="animate-spin" /> {L('vi', 'translating')}
                   </div>
                 )}
               </div>
 
               {/* Ảnh cover */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ảnh minh họa</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{L(activeTab, 'cover')}</label>
 
                 {imagePreview && (
                   <div className="mb-3 relative inline-block">
@@ -477,16 +607,16 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                       <Upload className="text-gray-400" size={28} />
                     )}
                     <span className="text-sm text-gray-600">
-                      {isUploading ? 'Đang upload...' : 'Chọn ảnh từ máy tính'}
+                      {isUploading ? L(activeTab, 'uploading') : L(activeTab, 'pickImage')}
                     </span>
-                    <span className="text-xs text-gray-400">PNG, JPG, GIF tối đa 5MB</span>
+                    <span className="text-xs text-gray-400">PNG, JPG, GIF ≤ 5MB</span>
                   </label>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Các tab locale khác */}
+          {/* Other locale tabs */}
           {openLocales
             .filter((lc) => lc !== 'vi')
             .map(
@@ -495,38 +625,38 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                   <div key={lc} className="space-y-6">
                     <div className="flex items-center justify-between">
                       <label className="block text-sm font-medium text-gray-700">
-                        Tiêu đề ({lc.toUpperCase()})
+                        {L(lc, 'title', lc)}
                       </label>
                       <button
                         type="button"
                         onClick={() => translateTitleFromVI(lc)}
                         disabled={isUploading || !baseVI.title}
                         className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
-                        title="Dịch tiêu đề từ VI"
+                        title={L(lc, 'insertFromVI')}
                       >
-                        <Languages size={14} /> Dịch từ VI
+                        <Languages size={14} /> {L(lc, 'insertFromVI')}
                       </button>
                     </div>
                     <input
                       value={translations[lc]?.title || ''}
                       onChange={(e) => handleTrChange(lc, 'title', e.target.value)}
-                      placeholder={`Title (${lc.toUpperCase()})`}
+                      placeholder={L(lc, 'title', lc)}
                       disabled={isUploading}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                     />
 
                     <div className="flex items-center justify-between">
                       <label className="block text-sm font-medium text-gray-700">
-                        Nội dung ({lc.toUpperCase()})
+                        {L(lc, 'content', lc)}
                       </label>
                       <button
                         type="button"
                         onClick={() => translateContentFromVI(lc)}
                         disabled={isUploading || !baseVI.content}
                         className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
-                        title="Dịch nội dung từ VI"
+                        title={L(lc, 'insertContentFromVI')}
                       >
-                        <Languages size={16} /> Dịch nội dung từ VI
+                        <Languages size={16} /> {L(lc, 'insertContentFromVI')}
                       </button>
                     </div>
                     <EditorMd
@@ -547,16 +677,15 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               disabled={isUploading}
               className="cursor-pointer px-5 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
-              Hủy
+              {L(activeTab, 'cancel')}
             </button>
             <button
               type="submit"
               disabled={isUploading}
               className="cursor-pointer px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
-              onClick={handleSubmit}
             >
               {isUploading && <Loader2 className="animate-spin" size={18} />}
-              {isEditing ? 'Cập nhật' : 'Thêm'}
+              {isEditing ? L(activeTab, 'update') : L(activeTab, 'add')}
             </button>
           </div>
         </form>
