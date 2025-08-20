@@ -49,8 +49,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     description: '',
     content: '',
     image_url: '',
-    parent_id: null,       // để chọn parent trong UI (không gửi lên)
-    subcategory_id: null,  // gửi lên API
+    subcategory_id: null,  // chỉ còn subcategory
   });
 
   // Translations -> products_translations (title, description, content)
@@ -75,42 +74,21 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const lastSourceTitle = useRef('');
   const lastSourceDesc = useRef('');
 
-  // Data cho dropdown
-  const [parents, setParents] = useState([]);           // [{id,name,slug}]
-  const [parentsLoading, setParentsLoading] = useState(false);
-  const [subcats, setSubcats] = useState([]);           // [{id,parent_id,name,slug}]
+  // Data dropdown: chỉ còn subcategories
+  const [subcats, setSubcats] = useState([]);       // [{id,name,slug,...}]
   const [subcatsLoading, setSubcatsLoading] = useState(false);
 
   // Editors
   const editorVIRef = useRef(null);
   const editorRefs = useRef({}); // per-locale
 
-  // ===== Fetch parents khi mở modal
+  // ===== Fetch subcategories khi mở modal
   useEffect(() => {
     if (!isOpen) return;
-    (async () => {
-      try {
-        setParentsLoading(true);
-        const r = await fetch('/api/parent_categories');
-        const j = await r.json();
-        setParents(j?.parents || []);
-      } catch {
-        setParents([]);
-      } finally {
-        setParentsLoading(false);
-      }
-    })();
-  }, [isOpen]);
-
-  // ===== Khi chọn parent → fetch subcategories theo parent
-  useEffect(() => {
-    if (!isOpen) return;
-    const pid = base.parent_id;
-    if (!pid) { setSubcats([]); setBase(prev => ({ ...prev, subcategory_id: null })); return; }
     (async () => {
       try {
         setSubcatsLoading(true);
-        const r = await fetch(`/api/sub_categories?parent_id=${pid}&locale=vi`);
+        const r = await fetch(`/api/sub_categories?locale=vi`);
         const j = await r.json();
         setSubcats(j?.subcategories || []);
       } catch {
@@ -119,19 +97,21 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
         setSubcatsLoading(false);
       }
     })();
-  }, [isOpen, base.parent_id]);
+  }, [isOpen]);
 
   // ===== Nạp initialData vào form
   useEffect(() => {
     if (!isOpen) return;
 
     const viDesc =
-      initialData.description
-      ?? initialData?.translations?.vi?.description
-      ?? '';
+      initialData.description ??
+      initialData?.translations?.vi?.description ??
+      '';
 
-    const parentFromData = typeof initialData.parent_id === 'number' ? initialData.parent_id : null;
-    const subFromData = typeof initialData.subcategory_id === 'number' ? initialData.subcategory_id : null;
+    const subFromData =
+      typeof initialData.subcategory_id === 'number'
+        ? initialData.subcategory_id
+        : null;
 
     setBase({
       title: initialData.title || '',
@@ -139,7 +119,6 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       description: viDesc,
       content: initialData.content || '',
       image_url: initialData.image_url || '',
-      parent_id: parentFromData,
       subcategory_id: subFromData,
     });
 
@@ -263,10 +242,6 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   }, [base.title, base.description, autoTranslate, openLocales, touched]);
 
   // ===== Derived
-  const selectedParent = useMemo(
-    () => parents.find(p => String(p.id) === String(base.parent_id)),
-    [parents, base.parent_id]
-  );
   const selectedSub = useMemo(
     () => subcats.find(s => String(s.id) === String(base.subcategory_id)),
     [subcats, base.subcategory_id]
@@ -275,10 +250,6 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   // ===== Handlers
   const handleBaseChange = (e) => {
     const { name, value } = e.target;
-    if (name === 'parent_id') {
-      setBase(prev => ({ ...prev, parent_id: value ? Number(value) : null, subcategory_id: null }));
-      return;
-    }
     if (name === 'subcategory_id') {
       setBase(prev => ({ ...prev, subcategory_id: value ? Number(value) : null }));
       return;
@@ -345,13 +316,12 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       let image_url = base.image_url;
       if (imageFile) image_url = await uploadImage(imageFile);
 
-      // Build base payload
       let payloadBase = {
         title: base.title,
         description: base.description,
         content: base.content,
         image_url,
-        subcategory_id: base.subcategory_id ?? null, // IMPORTANT: theo schema mới
+        subcategory_id: base.subcategory_id ?? null, // GIỮ THEO SCHEMA MỚI
       };
       if (isEditing) payloadBase.slug = slugify(base.slug || '');
 
@@ -361,7 +331,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
         payloadBase = rest;
       }
 
-      // Build translations payload theo schema mới
+      // Build translations payload
       const cleanTranslations = {};
       for (const [lc, v] of Object.entries(translations)) {
         const hasAny = (v?.title || v?.description || v?.content);
@@ -383,7 +353,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       onClose();
 
       // reset
-      setBase({ title: '', slug: '', description: '', content: '', image_url: '', parent_id: null, subcategory_id: null });
+      setBase({ title: '', slug: '', description: '', content: '', image_url: '', subcategory_id: null });
       setTranslations({});
       setTouched({});
       setOpenLocales(['vi', 'en']);
@@ -449,41 +419,33 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
           {activeTab === 'vi' && (
             <div className="space-y-6">
-              {/* Parent & Subcategory */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Danh mục cha *</label>
-                  <div className="relative">
-                    <select
-                      name="parent_id"
-                      value={base.parent_id ?? ''}
-                      onChange={handleBaseChange}
-                      disabled={isUploading || parentsLoading}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                    >
-                      <option value="">— Chọn danh mục cha —</option>
-                      {parents.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                    {parentsLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2"><Loader2 className="animate-spin text-gray-400" size={18} /></div>}
-                  </div>
+              {/* Subcategory only */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Danh mục con</label>
+                <div className="relative">
+                  <select
+                    name="subcategory_id"
+                    value={base.subcategory_id ?? ''}
+                    onChange={handleBaseChange}
+                    disabled={isUploading || subcatsLoading}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                  >
+                    <option value="">— Không chọn —</option>
+                    {subcats.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  {subcatsLoading && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="animate-spin text-gray-400" size={18} />
+                    </div>
+                  )}
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Danh mục con</label>
-                  <div className="relative">
-                    <select
-                      name="subcategory_id"
-                      value={base.subcategory_id ?? ''}
-                      onChange={handleBaseChange}
-                      disabled={isUploading || subcatsLoading || !base.parent_id}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                    >
-                      <option value="">{base.parent_id ? '— Chọn danh mục con —' : 'Hãy chọn danh mục cha trước'}</option>
-                      {subcats.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                    {subcatsLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2"><Loader2 className="animate-spin text-gray-400" size={18} /></div>}
-                  </div>
-                </div>
+                {selectedSub && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Đã chọn: <span className="font-medium">{selectedSub.name}</span> ({selectedSub.slug})
+                  </p>
+                )}
               </div>
 
               {/* Title & Slug (VI) */}
