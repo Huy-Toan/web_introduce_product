@@ -101,7 +101,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
     const loadTranslationsIfEditing = async () => {
       if (!isOpen || !initialData?.id) return;
       try {
-        const r = await fetch(`/api/subcategories/${initialData.id}/translations`);
+        const r = await fetch(`/api/sub_categories/${initialData.id}/translations`);
         if (!r.ok) return;
         const j = await r.json();
         if (j?.translations && typeof j.translations === 'object') {

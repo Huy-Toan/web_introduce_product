@@ -73,7 +73,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     const loadTranslationsIfEditing = async () => {
       if (!isOpen || !initialData?.id) return;
       try {
-        const r = await fetch(`/api/parents/${initialData.id}/translations`);
+        const r = await fetch(`/api/parent_categories/${initialData.id}/translations`);
         if (!r.ok) return; // không có route này cũng không sao
         const j = await r.json();
         if (j?.translations && typeof j.translations === 'object') {

@@ -33,6 +33,10 @@ binding = "AI"
 [vars]
 JWT_SECRET = "kOIu0O//qZ7JP++tc7GSBBUmvdw+Fcm7sx/D533H0JQ="
 JWT_EXPIRES_IN = "900" 
+BRAND_NAME = "ALLXONE"
+ADMIN_EMAIL = "doanvanngoc061220@gmail.com"   # nơi nhận contact
+FROM_EMAIL = "onboarding@resend.dev"          # tạm test; sau verify domain đổi thành no-reply@yourdomain.com
+EMAIL_PROVIDER = "resend"
 
 upload_source_maps = true
 
