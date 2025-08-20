@@ -48,7 +48,7 @@ const addCORS = (res) =>
         }),
     });
 
-app.options("/wa/*", (c) => addCORS(new Response(null, { status: 204 })));
+app.options("/wa/*", () => addCORS(new Response(null, { status: 204 })));
 
 /* ======================== 1) WhatsApp Webhook ======================== */
 // GET /webhook  → Meta verify
@@ -108,8 +108,9 @@ app.post("/webhook", async (c) => {
 /* ==================== 2) /wa/send – gửi Cloud API ==================== */
 app.post("/wa/send", async (c) => {
     const env = c.env;
-    const { to, body } = await c.req.json().catch(() => ({}));
+    const { to, body, template } = await c.req.json().catch(() => ({}));
     const dest = (to || "").replace(/\D/g, "");
+    const hasTemplate = !!template;
     const text = (body || "").toString();
 
     if (!env.PHONE_NUMBER_ID || !env.WHATSAPP_TOKEN) {
@@ -120,13 +121,25 @@ app.post("/wa/send", async (c) => {
             })
         );
     }
-    if (!dest || !text) {
+    if (!dest || (!text && !hasTemplate)) {
         return addCORS(
             new Response(JSON.stringify({ ok: false, error: "Missing to/body" }), {
                 status: 400,
                 headers: { "Content-Type": "application/json" },
             })
         );
+    }
+    let payload;
+    let dbType;
+    let dbBody;
+    if (hasTemplate) {
+        payload = { messaging_product: "whatsapp", to: dest, type: "template", template };
+        dbType = "template";
+        dbBody = `[template:${template?.name || ""}]`;
+    } else {
+        payload = { messaging_product: "whatsapp", to: dest, type: "text", text: { body: text } };
+        dbType = "text";
+        dbBody = text;
     }
 
     const res = await fetch(`${GRAPH}/${env.PHONE_NUMBER_ID}/messages`, {
@@ -135,12 +148,7 @@ app.post("/wa/send", async (c) => {
             Authorization: `Bearer ${env.WHATSAPP_TOKEN}`,
             "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-            messaging_product: "whatsapp",
-            to: dest,
-            type: "text",
-            text: { body: text },
-        }),
+        body: JSON.stringify(payload),
     });
 
     const data = await res.json().catch(() => ({}));
@@ -160,7 +168,7 @@ app.post("/wa/send", async (c) => {
                 .prepare(
                     "INSERT INTO messages(chat_id, direction, wa_from, wa_to, type, body, ts) VALUES (?,?,?,?,?,?,?)"
                 )
-                .bind(dest, "out", env.BUSINESS_WA_E164 || "", dest, "text", text, Date.now())
+                .bind(dest, "out", env.BUSINESS_WA_E164 || "", dest, dbType, dbBody, Date.now())
                 .run();
         }
     } catch (e) {

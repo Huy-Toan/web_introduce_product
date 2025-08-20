@@ -6476,7 +6476,7 @@ const addCORS = (res) => new Response(res.body, {
     "Access-Control-Allow-Headers": "Content-Type, Authorization"
   })
 });
-app.options("/wa/*", (c) => addCORS(new Response(null, { status: 204 })));
+app.options("/wa/*", () => addCORS(new Response(null, { status: 204 })));
 app.get("/webhook", (c) => {
   const url = new URL(c.req.url);
   const mode = url.searchParams.get("hub.mode");
@@ -6517,8 +6517,9 @@ app.post("/webhook", async (c) => {
 });
 app.post("/wa/send", async (c) => {
   const env2 = c.env;
-  const { to, body } = await c.req.json().catch(() => ({}));
+  const { to, body, template } = await c.req.json().catch(() => ({}));
   const dest = (to || "").replace(/\D/g, "");
+  const hasTemplate = !!template;
   const text = (body || "").toString();
   if (!env2.PHONE_NUMBER_ID || !env2.WHATSAPP_TOKEN) {
     return addCORS(
@@ -6528,7 +6529,7 @@ app.post("/wa/send", async (c) => {
       })
     );
   }
-  if (!dest || !text) {
+  if (!dest || !text && !hasTemplate) {
     return addCORS(
       new Response(JSON.stringify({ ok: false, error: "Missing to/body" }), {
         status: 400,
@@ -6536,18 +6537,25 @@ app.post("/wa/send", async (c) => {
       })
     );
   }
+  let payload;
+  let dbType;
+  let dbBody;
+  if (hasTemplate) {
+    payload = { messaging_product: "whatsapp", to: dest, type: "template", template };
+    dbType = "template";
+    dbBody = `[template:${template?.name || ""}]`;
+  } else {
+    payload = { messaging_product: "whatsapp", to: dest, type: "text", text: { body: text } };
+    dbType = "text";
+    dbBody = text;
+  }
   const res = await fetch(`${GRAPH}/${env2.PHONE_NUMBER_ID}/messages`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${env2.WHATSAPP_TOKEN}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to: dest,
-      type: "text",
-      text: { body: text }
-    })
+    body: JSON.stringify(payload)
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -6563,7 +6571,7 @@ app.post("/wa/send", async (c) => {
     if (env2.DB) {
       await env2.DB.prepare(
         "INSERT INTO messages(chat_id, direction, wa_from, wa_to, type, body, ts) VALUES (?,?,?,?,?,?,?)"
-      ).bind(dest, "out", env2.BUSINESS_WA_E164 || "", dest, "text", text, Date.now()).run();
+      ).bind(dest, "out", env2.BUSINESS_WA_E164 || "", dest, dbType, dbBody, Date.now()).run();
     }
   } catch (e) {
     console.error("D1 insert outgoing error:", e);
