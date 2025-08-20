@@ -6455,18 +6455,55 @@ const app = new Hono2();
 app.use("*", async (c, next) => {
   if (c.env.DB) {
     try {
-      const testQuery = await c.env.DB.prepare("SELECT 1").first();
-      c.env.DB_AVAILABLE = true;
-      console.log("D1 Database connected successfully");
-    } catch (error) {
-      console.error("D1 Database connection error:", error);
-      c.env.DB_AVAILABLE = false;
+      await c.env.DB.prepare("SELECT 1").first();
+      c.set("DB_AVAILABLE", true);
+    } catch (e) {
+      console.error("D1 Database connection error:", e);
+      c.set("DB_AVAILABLE", false);
     }
   } else {
     console.log("No D1 database binding available");
-    c.env.DB_AVAILABLE = false;
+    c.set("DB_AVAILABLE", false);
   }
   await next();
+});
+app.get("/webhook", (c) => {
+  const url = new URL(c.req.url);
+  const mode = url.searchParams.get("hub.mode");
+  const token = url.searchParams.get("hub.verify_token");
+  const challenge = url.searchParams.get("hub.challenge");
+  if (mode === "subscribe" && token === c.env.VERIFY_TOKEN && challenge) {
+    return new Response(challenge, {
+      status: 200,
+      headers: { "Content-Type": "text/plain", "Cache-Control": "no-store" }
+    });
+  }
+  return c.text("Forbidden", 403);
+});
+app.post("/webhook", async (c) => {
+  const env2 = c.env;
+  const payload = await c.req.json().catch(() => ({}));
+  try {
+    const entry = payload.entry?.[0];
+    const change = entry?.changes?.[0];
+    const value = change?.value;
+    const msg = value?.messages?.[0];
+    if (msg) {
+      const from = (msg.from || "").replace(/\D/g, "");
+      const to = env2.BUSINESS_WA_E164 || "";
+      const type = msg.type;
+      const body = type === "text" ? msg.text?.body || "" : `[${type}]`;
+      const ts = parseInt(msg.timestamp || Date.now() / 1e3, 10) * 1e3;
+      if (env2.DB) {
+        await env2.DB.prepare(
+          "INSERT INTO messages(chat_id, direction, wa_from, wa_to, type, body, ts) VALUES (?,?,?,?,?,?,?)"
+        ).bind(from, "in", from, to, type, body, ts).run();
+      }
+    }
+  } catch (e) {
+    console.error("Webhook error:", e);
+  }
+  return c.text("OK", 200);
 });
 app.route("/api/seo", seoApp);
 app.route("/api/auth", authRouter);
@@ -6483,19 +6520,15 @@ app.route("/api/cer-partners", cerPartnerRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
-app.get("/api/health", async (c) => {
+app.get("/api/health", (c) => {
   return c.json({
     status: "ok",
-    database: c.env.DB_AVAILABLE ? "connected" : "disconnected",
+    database: c.get("DB_AVAILABLE") ? "connected" : "disconnected",
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   });
 });
-app.all("*", async (c) => {
-  return c.env.ASSETS.fetch(c.req.raw);
-});
-const index = {
-  fetch: app.fetch
-};
+app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
+const index = { fetch: app.fetch };
 export {
   index as default
 };
