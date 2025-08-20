@@ -607,7 +607,7 @@ const {
   traceDeprecation,
   umask,
   uptime,
-  version,
+  version: version$1,
   versions,
   domain,
   initgroups,
@@ -716,7 +716,7 @@ const _process = {
   traceDeprecation,
   umask,
   uptime,
-  version,
+  version: version$1,
   versions,
   // @ts-expect-error old API
   domain,
@@ -2256,8 +2256,8 @@ uploadImageRouter.post("/", async (c) => {
     if (!c.env.PUBLIC_R2_URL) {
       return c.json({ error: "Thiếu PUBLIC_R2_URL trong cấu hình môi trường" }, 500);
     }
-    const baseUrl = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
-    const publicUrl = `${baseUrl}/${fileName}`;
+    const baseUrl2 = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
+    const publicUrl = `${baseUrl2}/${fileName}`;
     return c.json({
       success: true,
       url: publicUrl,
@@ -2298,8 +2298,8 @@ editorUploadRouter.post("/", async (c) => {
     await r2.put(fileName, await file.arrayBuffer(), {
       httpMetadata: { contentType: file.type }
     });
-    const baseUrl = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
-    const publicUrl = `${baseUrl}/${fileName}`;
+    const baseUrl2 = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
+    const publicUrl = `${baseUrl2}/${fileName}`;
     return c.json({
       success: 1,
       message: "OK",
@@ -5256,11 +5256,7 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
 
       s.id                                    AS subcategory_id,
       COALESCE(sct.name, s.name)              AS subcategory_name,
-      s.slug                                  AS subcategory_slug,
-
-      pc.id                                   AS parent_id,
-      COALESCE(pct.name, pc.name)             AS parent_name,
-      pc.slug                                 AS parent_slug
+      s.slug                                  AS subcategory_slug
     FROM products p
     LEFT JOIN products_translations pt
       ON pt.product_id = p.id AND pt.locale = ?
@@ -5268,24 +5264,20 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
       ON s.id = p.subcategory_id
     LEFT JOIN subcategories_translations sct
       ON sct.sub_id = s.id AND sct.locale = ?
-    LEFT JOIN parent_categories pc
-      ON pc.id = s.parent_id
-    LEFT JOIN parent_categories_translations pct
-      ON pct.parent_id = pc.id AND pct.locale = ?
     WHERE ${isNumericId ? "p.id = ?" : "p.slug = ?"}
     LIMIT 1
   `;
-  return db.prepare(sql).bind(locale, locale, locale, isNumericId ? Number(idOrSlug) : idOrSlug).first();
+  return db.prepare(sql).bind(locale, locale, isNumericId ? Number(idOrSlug) : idOrSlug).first();
 };
 const productsRouter = new Hono2();
 productsRouter.get("/", async (c) => {
-  const { parent_id, parent_slug, subcategory_id, sub_slug, limit, offset, q } = c.req.query();
+  const { subcategory_id, sub_slug, limit, offset, q } = c.req.query();
   try {
     if (!hasDB$3(c.env)) {
       return c.json({ products: [], source: "fallback", count: 0 });
     }
     const locale = getLocale$3(c);
-    const params = [locale, locale, locale];
+    const params = [locale, locale];
     const conds = [];
     if (subcategory_id) {
       conds.push("p.subcategory_id = ?");
@@ -5294,14 +5286,6 @@ productsRouter.get("/", async (c) => {
     if (sub_slug) {
       conds.push("s.slug = ?");
       params.push(String(sub_slug));
-    }
-    if (parent_id) {
-      conds.push("pc.id = ?");
-      params.push(Number(parent_id));
-    }
-    if (parent_slug) {
-      conds.push("pc.slug = ?");
-      params.push(String(parent_slug));
     }
     if (q && q.trim()) {
       const kw = `%${q.trim()}%`;
@@ -5335,11 +5319,7 @@ productsRouter.get("/", async (c) => {
 
         s.id                                    AS subcategory_id,
         COALESCE(sct.name, s.name)              AS subcategory_name,
-        s.slug                                  AS subcategory_slug,
-
-        pc.id                                   AS parent_id,
-        COALESCE(pct.name, pc.name)             AS parent_name,
-        pc.slug                                 AS parent_slug
+        s.slug                                  AS subcategory_slug
       FROM products p
       LEFT JOIN products_translations pt
         ON pt.product_id = p.id AND pt.locale = ?
@@ -5347,10 +5327,6 @@ productsRouter.get("/", async (c) => {
         ON s.id = p.subcategory_id
       LEFT JOIN subcategories_translations sct
         ON sct.sub_id = s.id AND sct.locale = ?
-      LEFT JOIN parent_categories pc
-        ON pc.id = s.parent_id
-      LEFT JOIN parent_categories_translations pct
-        ON pct.parent_id = pc.id AND pct.locale = ?
       ${where}
       ORDER BY p.created_at DESC
       ${limitSql}
@@ -5604,6 +5580,616 @@ productsRouter.delete("/:id", async (c) => {
     return c.json({ error: "Failed to delete product" }, 500);
   }
 });
+var __defProp = Object.defineProperty;
+var __defProps = Object.defineProperties;
+var __getOwnPropDescs = Object.getOwnPropertyDescriptors;
+var __getOwnPropSymbols = Object.getOwnPropertySymbols;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __propIsEnum = Object.prototype.propertyIsEnumerable;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+var __spreadValues = (a, b) => {
+  for (var prop in b || (b = {}))
+    if (__hasOwnProp.call(b, prop))
+      __defNormalProp(a, prop, b[prop]);
+  if (__getOwnPropSymbols)
+    for (var prop of __getOwnPropSymbols(b)) {
+      if (__propIsEnum.call(b, prop))
+        __defNormalProp(a, prop, b[prop]);
+    }
+  return a;
+};
+var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
+var __async = (__this, __arguments, generator) => {
+  return new Promise((resolve, reject) => {
+    var fulfilled = (value) => {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    var rejected = (value) => {
+      try {
+        step(generator.throw(value));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    var step = (x) => x.done ? resolve(x.value) : Promise.resolve(x.value).then(fulfilled, rejected);
+    step((generator = generator.apply(__this, __arguments)).next());
+  });
+};
+var version = "6.0.1";
+var ApiKeys = class {
+  constructor(resend) {
+    this.resend = resend;
+  }
+  create(_0) {
+    return __async(this, arguments, function* (payload, options = {}) {
+      const data = yield this.resend.post(
+        "/api-keys",
+        payload,
+        options
+      );
+      return data;
+    });
+  }
+  list() {
+    return __async(this, null, function* () {
+      const data = yield this.resend.get("/api-keys");
+      return data;
+    });
+  }
+  remove(id) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.delete(
+        `/api-keys/${id}`
+      );
+      return data;
+    });
+  }
+};
+var Audiences = class {
+  constructor(resend) {
+    this.resend = resend;
+  }
+  create(_0) {
+    return __async(this, arguments, function* (payload, options = {}) {
+      const data = yield this.resend.post(
+        "/audiences",
+        payload,
+        options
+      );
+      return data;
+    });
+  }
+  list() {
+    return __async(this, null, function* () {
+      const data = yield this.resend.get("/audiences");
+      return data;
+    });
+  }
+  get(id) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.get(
+        `/audiences/${id}`
+      );
+      return data;
+    });
+  }
+  remove(id) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.delete(
+        `/audiences/${id}`
+      );
+      return data;
+    });
+  }
+};
+function parseAttachments(attachments) {
+  return attachments == null ? void 0 : attachments.map((attachment) => ({
+    content: attachment.content,
+    filename: attachment.filename,
+    path: attachment.path,
+    content_type: attachment.contentType,
+    content_id: attachment.contentId
+  }));
+}
+function parseEmailToApiOptions(email) {
+  return {
+    attachments: parseAttachments(email.attachments),
+    bcc: email.bcc,
+    cc: email.cc,
+    from: email.from,
+    headers: email.headers,
+    html: email.html,
+    reply_to: email.replyTo,
+    scheduled_at: email.scheduledAt,
+    subject: email.subject,
+    tags: email.tags,
+    text: email.text,
+    to: email.to
+  };
+}
+var Batch = class {
+  constructor(resend) {
+    this.resend = resend;
+  }
+  send(_0) {
+    return __async(this, arguments, function* (payload, options = {}) {
+      return this.create(payload, options);
+    });
+  }
+  create(_0) {
+    return __async(this, arguments, function* (payload, options = {}) {
+      const emails = [];
+      for (const email of payload) {
+        if (email.react) {
+          if (!this.renderAsync) {
+            try {
+              const { renderAsync } = yield import("./assets/render_resend-19t8IPfy.js");
+              this.renderAsync = renderAsync;
+            } catch (error) {
+              throw new Error(
+                "Failed to render React component. Make sure to install `@react-email/render`"
+              );
+            }
+          }
+          email.html = yield this.renderAsync(email.react);
+          email.react = void 0;
+        }
+        emails.push(parseEmailToApiOptions(email));
+      }
+      const data = yield this.resend.post(
+        "/emails/batch",
+        emails,
+        options
+      );
+      return data;
+    });
+  }
+};
+var Broadcasts = class {
+  constructor(resend) {
+    this.resend = resend;
+  }
+  create(_0) {
+    return __async(this, arguments, function* (payload, options = {}) {
+      if (payload.react) {
+        if (!this.renderAsync) {
+          try {
+            const { renderAsync } = yield import("./assets/render_resend-19t8IPfy.js");
+            this.renderAsync = renderAsync;
+          } catch (error) {
+            throw new Error(
+              "Failed to render React component. Make sure to install `@react-email/render`"
+            );
+          }
+        }
+        payload.html = yield this.renderAsync(
+          payload.react
+        );
+      }
+      const data = yield this.resend.post(
+        "/broadcasts",
+        {
+          name: payload.name,
+          audience_id: payload.audienceId,
+          preview_text: payload.previewText,
+          from: payload.from,
+          html: payload.html,
+          reply_to: payload.replyTo,
+          subject: payload.subject,
+          text: payload.text
+        },
+        options
+      );
+      return data;
+    });
+  }
+  send(id, payload) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.post(
+        `/broadcasts/${id}/send`,
+        { scheduled_at: payload == null ? void 0 : payload.scheduledAt }
+      );
+      return data;
+    });
+  }
+  list() {
+    return __async(this, null, function* () {
+      const data = yield this.resend.get("/broadcasts");
+      return data;
+    });
+  }
+  get(id) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.get(
+        `/broadcasts/${id}`
+      );
+      return data;
+    });
+  }
+  remove(id) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.delete(
+        `/broadcasts/${id}`
+      );
+      return data;
+    });
+  }
+  update(id, payload) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.patch(
+        `/broadcasts/${id}`,
+        {
+          name: payload.name,
+          audience_id: payload.audienceId,
+          from: payload.from,
+          html: payload.html,
+          text: payload.text,
+          subject: payload.subject,
+          reply_to: payload.replyTo,
+          preview_text: payload.previewText
+        }
+      );
+      return data;
+    });
+  }
+};
+var Contacts = class {
+  constructor(resend) {
+    this.resend = resend;
+  }
+  create(_0) {
+    return __async(this, arguments, function* (payload, options = {}) {
+      const data = yield this.resend.post(
+        `/audiences/${payload.audienceId}/contacts`,
+        {
+          unsubscribed: payload.unsubscribed,
+          email: payload.email,
+          first_name: payload.firstName,
+          last_name: payload.lastName
+        },
+        options
+      );
+      return data;
+    });
+  }
+  list(options) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.get(
+        `/audiences/${options.audienceId}/contacts`
+      );
+      return data;
+    });
+  }
+  get(options) {
+    return __async(this, null, function* () {
+      if (!options.id && !options.email) {
+        return {
+          data: null,
+          error: {
+            message: "Missing `id` or `email` field.",
+            name: "missing_required_field"
+          }
+        };
+      }
+      const data = yield this.resend.get(
+        `/audiences/${options.audienceId}/contacts/${(options == null ? void 0 : options.email) ? options == null ? void 0 : options.email : options == null ? void 0 : options.id}`
+      );
+      return data;
+    });
+  }
+  update(payload) {
+    return __async(this, null, function* () {
+      if (!payload.id && !payload.email) {
+        return {
+          data: null,
+          error: {
+            message: "Missing `id` or `email` field.",
+            name: "missing_required_field"
+          }
+        };
+      }
+      const data = yield this.resend.patch(
+        `/audiences/${payload.audienceId}/contacts/${(payload == null ? void 0 : payload.email) ? payload == null ? void 0 : payload.email : payload == null ? void 0 : payload.id}`,
+        {
+          unsubscribed: payload.unsubscribed,
+          first_name: payload.firstName,
+          last_name: payload.lastName
+        }
+      );
+      return data;
+    });
+  }
+  remove(payload) {
+    return __async(this, null, function* () {
+      if (!payload.id && !payload.email) {
+        return {
+          data: null,
+          error: {
+            message: "Missing `id` or `email` field.",
+            name: "missing_required_field"
+          }
+        };
+      }
+      const data = yield this.resend.delete(
+        `/audiences/${payload.audienceId}/contacts/${(payload == null ? void 0 : payload.email) ? payload == null ? void 0 : payload.email : payload == null ? void 0 : payload.id}`
+      );
+      return data;
+    });
+  }
+};
+function parseDomainToApiOptions(domain2) {
+  return {
+    name: domain2.name,
+    region: domain2.region,
+    custom_return_path: domain2.customReturnPath
+  };
+}
+var Domains = class {
+  constructor(resend) {
+    this.resend = resend;
+  }
+  create(_0) {
+    return __async(this, arguments, function* (payload, options = {}) {
+      const data = yield this.resend.post(
+        "/domains",
+        parseDomainToApiOptions(payload),
+        options
+      );
+      return data;
+    });
+  }
+  list() {
+    return __async(this, null, function* () {
+      const data = yield this.resend.get("/domains");
+      return data;
+    });
+  }
+  get(id) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.get(
+        `/domains/${id}`
+      );
+      return data;
+    });
+  }
+  update(payload) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.patch(
+        `/domains/${payload.id}`,
+        {
+          click_tracking: payload.clickTracking,
+          open_tracking: payload.openTracking,
+          tls: payload.tls
+        }
+      );
+      return data;
+    });
+  }
+  remove(id) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.delete(
+        `/domains/${id}`
+      );
+      return data;
+    });
+  }
+  verify(id) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.post(
+        `/domains/${id}/verify`
+      );
+      return data;
+    });
+  }
+};
+var Emails = class {
+  constructor(resend) {
+    this.resend = resend;
+  }
+  send(_0) {
+    return __async(this, arguments, function* (payload, options = {}) {
+      return this.create(payload, options);
+    });
+  }
+  create(_0) {
+    return __async(this, arguments, function* (payload, options = {}) {
+      if (payload.react) {
+        if (!this.renderAsync) {
+          try {
+            const { renderAsync } = yield import("./assets/render_resend-19t8IPfy.js");
+            this.renderAsync = renderAsync;
+          } catch (error) {
+            throw new Error(
+              "Failed to render React component. Make sure to install `@react-email/render`"
+            );
+          }
+        }
+        payload.html = yield this.renderAsync(
+          payload.react
+        );
+      }
+      const data = yield this.resend.post(
+        "/emails",
+        parseEmailToApiOptions(payload),
+        options
+      );
+      return data;
+    });
+  }
+  get(id) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.get(
+        `/emails/${id}`
+      );
+      return data;
+    });
+  }
+  update(payload) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.patch(
+        `/emails/${payload.id}`,
+        {
+          scheduled_at: payload.scheduledAt
+        }
+      );
+      return data;
+    });
+  }
+  cancel(id) {
+    return __async(this, null, function* () {
+      const data = yield this.resend.post(
+        `/emails/${id}/cancel`
+      );
+      return data;
+    });
+  }
+};
+var defaultBaseUrl = "https://api.resend.com";
+var defaultUserAgent = `resend-node:${version}`;
+var baseUrl = typeof process !== "undefined" && process.env ? process.env.RESEND_BASE_URL || defaultBaseUrl : defaultBaseUrl;
+var userAgent = typeof process !== "undefined" && process.env ? process.env.RESEND_USER_AGENT || defaultUserAgent : defaultUserAgent;
+var Resend = class {
+  constructor(key) {
+    this.key = key;
+    this.apiKeys = new ApiKeys(this);
+    this.audiences = new Audiences(this);
+    this.batch = new Batch(this);
+    this.broadcasts = new Broadcasts(this);
+    this.contacts = new Contacts(this);
+    this.domains = new Domains(this);
+    this.emails = new Emails(this);
+    if (!key) {
+      if (typeof process !== "undefined" && process.env) {
+        this.key = process.env.RESEND_API_KEY;
+      }
+      if (!this.key) {
+        throw new Error(
+          'Missing API key. Pass it to the constructor `new Resend("re_123")`'
+        );
+      }
+    }
+    this.headers = new Headers({
+      Authorization: `Bearer ${this.key}`,
+      "User-Agent": userAgent,
+      "Content-Type": "application/json"
+    });
+  }
+  fetchRequest(_0) {
+    return __async(this, arguments, function* (path, options = {}) {
+      try {
+        const response = yield fetch(`${baseUrl}${path}`, options);
+        if (!response.ok) {
+          try {
+            const rawError = yield response.text();
+            return { data: null, error: JSON.parse(rawError) };
+          } catch (err) {
+            if (err instanceof SyntaxError) {
+              return {
+                data: null,
+                error: {
+                  name: "application_error",
+                  message: "Internal server error. We are unable to process your request right now, please try again later."
+                }
+              };
+            }
+            const error = {
+              message: response.statusText,
+              name: "application_error"
+            };
+            if (err instanceof Error) {
+              return { data: null, error: __spreadProps(__spreadValues({}, error), { message: err.message }) };
+            }
+            return { data: null, error };
+          }
+        }
+        const data = yield response.json();
+        return { data, error: null };
+      } catch (error) {
+        return {
+          data: null,
+          error: {
+            name: "application_error",
+            message: "Unable to fetch data. The request could not be resolved."
+          }
+        };
+      }
+    });
+  }
+  post(_0, _1) {
+    return __async(this, arguments, function* (path, entity, options = {}) {
+      const headers = new Headers(this.headers);
+      if (options.idempotencyKey) {
+        headers.set("Idempotency-Key", options.idempotencyKey);
+      }
+      const requestOptions = __spreadValues({
+        method: "POST",
+        headers,
+        body: JSON.stringify(entity)
+      }, options);
+      return this.fetchRequest(path, requestOptions);
+    });
+  }
+  get(_0) {
+    return __async(this, arguments, function* (path, options = {}) {
+      const requestOptions = __spreadValues({
+        method: "GET",
+        headers: this.headers
+      }, options);
+      return this.fetchRequest(path, requestOptions);
+    });
+  }
+  put(_0, _1) {
+    return __async(this, arguments, function* (path, entity, options = {}) {
+      const requestOptions = __spreadValues({
+        method: "PUT",
+        headers: this.headers,
+        body: JSON.stringify(entity)
+      }, options);
+      return this.fetchRequest(path, requestOptions);
+    });
+  }
+  patch(_0, _1) {
+    return __async(this, arguments, function* (path, entity, options = {}) {
+      const requestOptions = __spreadValues({
+        method: "PATCH",
+        headers: this.headers,
+        body: JSON.stringify(entity)
+      }, options);
+      return this.fetchRequest(path, requestOptions);
+    });
+  }
+  delete(path, query) {
+    return __async(this, null, function* () {
+      const requestOptions = {
+        method: "DELETE",
+        headers: this.headers,
+        body: JSON.stringify(query)
+      };
+      return this.fetchRequest(path, requestOptions);
+    });
+  }
+};
+async function sendEmailResend(c, { to, subject, html, text, replyTo }) {
+  const apiKey = c.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error("Missing RESEND_API_KEY");
+  const resend = new Resend(apiKey);
+  const from = c.env.FROM_EMAIL || "onboarding@resend.dev";
+  const payload = {
+    from,
+    to: Array.isArray(to) ? to : [to],
+    subject,
+    html,
+    ...text ? { text } : {},
+    ...replyTo ? { reply_to: Array.isArray(replyTo) ? replyTo : [replyTo] } : {}
+  };
+  const { data, error } = await resend.emails.send(payload);
+  if (error) throw new Error(error.message || "Resend failed");
+  return data;
+}
 const contactRouter = new Hono2();
 const bad$1 = (c, msg = "Bad Request", code = 400) => c.json({ ok: false, error: msg }, code);
 const ok$1 = (c, data = {}, code = 200) => c.json({ ok: true, ...data }, code);
@@ -5638,6 +6224,64 @@ contactRouter.post("/", async (c) => {
     const newItem = await c.env.DB.prepare(
       "SELECT * FROM contact_messages WHERE id = ?"
     ).bind(result.meta.last_row_id).first();
+    const brand = c.env.BRAND_NAME || "Website";
+    const admin = c.env.ADMIN_EMAIL || "admin@example.com";
+    const adminHtml = `
+      <div>
+        <h2>New contact message</h2>
+        <p><b>Name:</b> ${fullName}</p>
+        <p><b>Email:</b> ${email}</p>
+        ${phone ? `<p><b>Phone:</b> ${phone}</p>` : ""}
+        ${address ? `<p><b>Address:</b> ${address}</p>` : ""}
+        <p><b>Message:</b></p>
+        <pre style="white-space:pre-wrap;">${message2}</pre>
+        <hr/>
+        <p>Created at: ${newItem.created_at} — Status: ${newItem.status} — ID: ${newItem.id}</p>
+      </div>
+    `;
+    const adminText = `New contact from ${fullName}
+Email: ${email}
+Phone: ${phone}
+Address: ${address}
+
+Message:
+${message2}`;
+    const userHtml = `
+      <div>
+        <p>Chào ${fullName},</p>
+        <p>Cảm ơn bạn đã liên hệ ${brand}. Chúng tôi đã nhận được tin nhắn và sẽ phản hồi sớm nhất.</p>
+        <p><b>Nội dung bạn gửi:</b></p>
+        <blockquote style="margin:0;padding-left:12px;border-left:3px solid #ddd;">
+          ${message2.replace(/\n/g, "<br/>")}
+        </blockquote>
+        <p>Trân trọng,<br/>${brand}</p>
+      </div>
+    `;
+    const userText = `Chào ${fullName},
+Cảm ơn bạn đã liên hệ ${brand}. Chúng tôi sẽ phản hồi sớm nhất.
+
+Nội dung:
+${message2}`;
+    try {
+      await Promise.all([
+        sendEmailResend(c, {
+          to: admin,
+          subject: `[${brand}] New contact from ${fullName}`,
+          html: adminHtml,
+          text: adminText,
+          replyTo: email
+          // Admin bấm Reply là trả lời thẳng người gửi
+        }),
+        sendEmailResend(c, {
+          to: email,
+          subject: `Cảm ơn bạn đã liên hệ ${brand}`,
+          html: userHtml,
+          text: userText
+        })
+      ]);
+    } catch (mailErr) {
+      console.error("Email error:", mailErr);
+    }
     return ok$1(c, { item: newItem }, 201);
   } catch (e) {
     console.error(e);

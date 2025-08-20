@@ -1,8 +1,19 @@
 {
+  "__vite-optional-peer-dep:@react-email/render:resend": {
+    "file": "assets/render_resend-19t8IPfy.js",
+    "name": "render_resend",
+    "src": "__vite-optional-peer-dep:@react-email/render:resend",
+    "isDynamicEntry": true
+  },
   "api/index.js": {
     "file": "index.js",
     "name": "index",
     "src": "api/index.js",
-    "isEntry": true
+    "isEntry": true,
+    "dynamicImports": [
+      "__vite-optional-peer-dep:@react-email/render:resend",
+      "__vite-optional-peer-dep:@react-email/render:resend",
+      "__vite-optional-peer-dep:@react-email/render:resend"
+    ]
   }
 }
