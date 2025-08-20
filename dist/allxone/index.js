@@ -2263,11 +2263,11 @@ uploadImageRouter.post("/", async (c) => {
       url: publicUrl,
       fileName
     });
-  } catch (error2) {
-    console.error("Upload error:", error2);
+  } catch (error) {
+    console.error("Upload error:", error);
     return c.json({
       error: "Có lỗi xảy ra khi upload ảnh",
-      details: error2.message
+      details: error.message
     }, 500);
   }
 });
@@ -2307,11 +2307,14 @@ editorUploadRouter.post("/", async (c) => {
       fileName
       // giữ lại cho bạn dùng khi cần
     });
-  } catch (error2) {
-    console.error("Upload error:", error2);
-    return c.json({ success: 0, message: error2.message }, 500);
+  } catch (error) {
+    console.error("Upload error:", error);
+    return c.json({ success: 0, message: error.message }, 500);
   }
 });
+const DEFAULT_LOCALE$7 = "vi";
+const getLocale$7 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$7).toLowerCase();
+const hasDB$7 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const aboutRouter = new Hono2();
 const fallbackAbout = [
   {
@@ -2321,170 +2324,534 @@ const fallbackAbout = [
     image_url: "/images/about/library.jpg"
   }
 ];
+async function getMergedAboutById(db, id, locale) {
+  const sql = `
+    SELECT
+      a.id,
+      COALESCE(at.title,   a.title)   AS title,
+      COALESCE(at.content, a.content) AS content,
+      a.image_url,
+      a.created_at
+    FROM about_us a
+    LEFT JOIN about_us_translations at
+      ON at.about_id = a.id AND at.locale = ?
+    WHERE a.id = ?
+    LIMIT 1
+  `;
+  return db.prepare(sql).bind(locale, id).first();
+}
 aboutRouter.get("/", async (c) => {
   try {
-    if (c.env.DB_AVAILABLE) {
-      const result = await c.env.DB.prepare("SELECT * FROM about_us").all();
-      return c.json({ about: result.results, source: "database" });
-    } else {
+    if (!hasDB$7(c.env)) {
       return c.json({ about: fallbackAbout, source: "fallback" });
     }
-  } catch (error2) {
+    const locale = getLocale$7(c);
+    const sql = `
+      SELECT
+        a.id,
+        COALESCE(at.title,   a.title)   AS title,
+        COALESCE(at.content, a.content) AS content,
+        a.image_url,
+        a.created_at
+      FROM about_us a
+      LEFT JOIN about_us_translations at
+        ON at.about_id = a.id AND at.locale = ?
+      ORDER BY a.id ASC
+    `;
+    const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
+    return c.json({ about: results, source: "database", locale });
+  } catch (e) {
+    console.error("Error fetching about list:", e);
     return c.json({ error: "Failed to fetch about us" }, 500);
   }
 });
 aboutRouter.get("/:id", async (c) => {
-  const id = parseInt(c.req.param("id"));
+  const id = Number(c.req.param("id"));
   try {
-    const item = await c.env.DB.prepare("SELECT * FROM about_us WHERE id = ?").bind(id).first();
+    if (!hasDB$7(c.env)) return c.json({ error: "Database not available" }, 503);
+    const locale = getLocale$7(c);
+    const item = await getMergedAboutById(c.env.DB, id, locale);
     if (!item) return c.json({ error: "Not found" }, 404);
-    return c.json({ about: item });
+    return c.json({ about: item, source: "database", locale });
   } catch (e) {
+    console.error("Error fetching about detail:", e);
     return c.json({ error: "Failed to fetch about" }, 500);
   }
 });
 aboutRouter.post("/", async (c) => {
   try {
-    const { title: title2, content, image_url } = await c.req.json();
-    const result = await c.env.DB.prepare(`
+    if (!hasDB$7(c.env)) return c.json({ error: "Database not available" }, 503);
+    const body = await c.req.json();
+    const { title: title2, content, image_url, translations } = body || {};
+    if (!title2 || !content) {
+      return c.json({ error: "Missing required fields: title, content" }, 400);
+    }
+    const sql = `
       INSERT INTO about_us (title, content, image_url)
       VALUES (?, ?, ?)
-    `).bind(title2, content, image_url || null).run();
-    const newItem = await c.env.DB.prepare("SELECT * FROM about_us WHERE id = ?").bind(result.meta.last_row_id).first();
-    return c.json({ about: newItem }, 201);
+    `;
+    const res = await c.env.DB.prepare(sql).bind(title2, content, image_url || null).run();
+    if (!res.success) throw new Error("Insert failed");
+    const newId = res.meta?.last_row_id;
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO about_us_translations(about_id, locale, title, content)
+        VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(about_id, locale) DO UPDATE SET
+          title=excluded.title,
+          content=excluded.content,
+          updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(newId, String(lc).toLowerCase(), tr?.title ?? "", tr?.content ?? "").run();
+      }
+    }
+    const locale = getLocale$7(c);
+    const item = await getMergedAboutById(c.env.DB, newId, locale);
+    return c.json({ about: item, source: "database", locale }, 201);
   } catch (e) {
+    console.error("Error creating about:", e);
     return c.json({ error: "Failed to create about" }, 500);
   }
 });
 aboutRouter.put("/:id", async (c) => {
-  const id = parseInt(c.req.param("id"));
-  const { title: title2, content, image_url } = await c.req.json();
+  const id = Number(c.req.param("id"));
   try {
-    await c.env.DB.prepare(`
-      UPDATE about_us SET title = ?, content = ?, image_url = ? WHERE id = ?
-    `).bind(title2, content, image_url, id).run();
-    const updated = await c.env.DB.prepare("SELECT * FROM about_us WHERE id = ?").bind(id).first();
-    return c.json({ about: updated });
+    if (!hasDB$7(c.env)) return c.json({ error: "Database not available" }, 503);
+    const body = await c.req.json();
+    const { title: title2, content, image_url, translations } = body || {};
+    const sets = [];
+    const params = [];
+    if (title2 !== void 0) {
+      sets.push("title = ?");
+      params.push(title2);
+    }
+    if (content !== void 0) {
+      sets.push("content = ?");
+      params.push(content);
+    }
+    if (image_url !== void 0) {
+      sets.push("image_url = ?");
+      params.push(image_url);
+    }
+    if (sets.length) {
+      const sql = `UPDATE about_us SET ${sets.join(", ")} WHERE id = ?`;
+      params.push(id);
+      const res = await c.env.DB.prepare(sql).bind(...params).run();
+      if ((res.meta?.changes || 0) === 0) return c.json({ error: "Not found" }, 404);
+    }
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO about_us_translations(about_id, locale, title, content)
+        VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(about_id, locale) DO UPDATE SET
+          title=excluded.title,
+          content=excluded.content,
+          updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.title ?? "", tr?.content ?? "").run();
+      }
+    }
+    const locale = getLocale$7(c);
+    const item = await getMergedAboutById(c.env.DB, id, locale);
+    return c.json({ about: item, source: "database", locale });
   } catch (e) {
+    console.error("Error updating about:", e);
     return c.json({ error: "Failed to update about" }, 500);
   }
 });
-aboutRouter.delete("/:id", async (c) => {
-  const id = parseInt(c.req.param("id"));
+aboutRouter.put("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
   try {
+    if (!hasDB$7(c.env)) return c.json({ error: "Database not available" }, 503);
+    const body = await c.req.json();
+    const translations = body?.translations;
+    if (!translations || typeof translations !== "object") {
+      return c.json({ error: "Missing translations" }, 400);
+    }
+    const upsertT = `
+      INSERT INTO about_us_translations(about_id, locale, title, content)
+      VALUES (?1, ?2, ?3, ?4)
+      ON CONFLICT(about_id, locale) DO UPDATE SET
+        title=excluded.title,
+        content=excluded.content,
+        updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+    `;
+    for (const [lc, tr] of Object.entries(translations)) {
+      await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.title ?? "", tr?.content ?? "").run();
+    }
+    return c.json({ ok: true });
+  } catch (e) {
+    console.error("Error upserting about translations:", e);
+    return c.json({ error: "Failed to upsert translations" }, 500);
+  }
+});
+aboutRouter.delete("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$7(c.env)) return c.json({ error: "Database not available" }, 503);
+    const existing = await c.env.DB.prepare("SELECT id FROM about_us WHERE id = ?").bind(id).first();
+    if (!existing) return c.json({ error: "Not found" }, 404);
     await c.env.DB.prepare("DELETE FROM about_us WHERE id = ?").bind(id).run();
     return c.json({ success: true });
   } catch (e) {
+    console.error("Error deleting about:", e);
     return c.json({ error: "Failed to delete about" }, 500);
   }
 });
-const newsRouter = new Hono2();
-const fallbackNews = [
-  {
-    id: 1,
-    title: "Website Launch",
-    slug: "website-launch",
-    content: "We are excited to announce the launch of our new website!",
-    meta_description: "Announcement of our new website",
-    keywords: "launch,website",
-    image_url: "/images/news/launch.jpg",
-    published_at: "2025-08-01"
-  }
-];
-newsRouter.get("/", async (c) => {
+aboutRouter.get("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
   try {
-    if (c.env.DB_AVAILABLE) {
-      const result = await c.env.DB.prepare("SELECT * FROM news ORDER BY published_at DESC").all();
-      return c.json({ news: result.results, source: "database" });
-    } else {
-      return c.json({ news: fallbackNews, source: "fallback" });
+    const sql = `
+      SELECT locale, title, content
+      FROM about_us_translations
+      WHERE about_id = ?
+      ORDER BY locale ASC
+    `;
+    const { results = [] } = await c.env.DB.prepare(sql).bind(id).all();
+    const translations = {};
+    for (const r of results) {
+      translations[r.locale] = { title: r.title || "", content: r.content || "" };
     }
-  } catch (error2) {
-    console.error(error2);
-    return c.json({ error: "Failed to fetch news" }, 500);
+    return c.json({ translations });
+  } catch (e) {
+    console.error(e);
+    return c.json({ error: "Failed to fetch translations" }, 500);
   }
 });
-newsRouter.get("/:slug", async (c) => {
-  const id = c.req.param("slug");
+const DEFAULT_LOCALE$6 = "vi";
+const getLocale$6 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$6).toLowerCase();
+const hasDB$6 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
+const slugify$4 = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+async function resolveNewsIdBySlug(db, slug, locale) {
+  const sql = `
+    SELECT n.id
+    FROM news_translations nt
+    JOIN news n ON n.id = nt.news_id
+    WHERE nt.locale = ? AND nt.slug = ?
+    UNION
+    SELECT n2.id
+    FROM news n2
+    WHERE n2.slug = ?
+    LIMIT 1
+  `;
+  const row = await db.prepare(sql).bind(locale, slug, slug).first();
+  return row?.id || null;
+}
+async function getMergedNewsById(db, id, locale) {
+  const sql = `
+    SELECT
+      n.id,
+      COALESCE(nt.title, n.title)                 AS title,
+      COALESCE(nt.slug, n.slug)                   AS slug,
+      COALESCE(nt.content, n.content)             AS content,
+      COALESCE(nt.meta_description, n.meta_description) AS meta_description,
+      COALESCE(nt.keywords, n.keywords)           AS keywords,
+      n.image_url,
+      n.published_at,
+      n.created_at,
+      n.updated_at
+    FROM news n
+    LEFT JOIN news_translations nt
+      ON nt.news_id = n.id AND nt.locale = ?
+    WHERE n.id = ?
+    LIMIT 1
+  `;
+  return db.prepare(sql).bind(locale, id).first();
+}
+async function getAllTranslations(db, newsId) {
+  const trRes = await db.prepare(
+    `SELECT locale, title, slug, content, meta_description, keywords FROM news_translations WHERE news_id = ?`
+  ).bind(newsId).all();
+  const translationsObj = {};
+  for (const r of trRes.results || []) {
+    translationsObj[r.locale] = {
+      title: r.title || "",
+      slug: r.slug || "",
+      content: r.content || "",
+      meta_description: r.meta_description ?? null,
+      keywords: r.keywords ?? null
+    };
+  }
+  return translationsObj;
+}
+const newsRouter = new Hono2();
+newsRouter.get("/", async (c) => {
   try {
-    const news = await c.env.DB.prepare("SELECT * FROM news WHERE slug = ?").bind(id).first();
-    if (!news) return c.json({ error: "News not found" }, 404);
-    return c.json({ news });
-  } catch (e) {
-    console.error(error);
+    if (!hasDB$6(c.env)) return c.json({ error: "No database" }, 500);
+    const locale = getLocale$6(c);
+    const sql = `
+      SELECT
+        n.id,
+        COALESCE(nt.title, n.title)                 AS title,
+        COALESCE(nt.slug, n.slug)                   AS slug,
+        COALESCE(nt.content, n.content)             AS content,
+        COALESCE(nt.meta_description, n.meta_description) AS meta_description,
+        COALESCE(nt.keywords, n.keywords)           AS keywords,
+        n.image_url,
+        n.published_at,
+        n.created_at,
+        n.updated_at
+      FROM news n
+      LEFT JOIN news_translations nt
+        ON nt.news_id = n.id AND nt.locale = ?
+      ORDER BY COALESCE(n.published_at, n.created_at) DESC
+    `;
+    const params = [locale];
+    const { results = [] } = await c.env.DB.prepare(sql).bind(...params).all();
+    return c.json({
+      news: results,
+      count: results.length,
+      source: "database",
+      locale,
+      debug: { sql, params }
+    });
+  } catch (err) {
+    console.error("Error fetching news:", err);
+    return c.json({ error: "Failed to fetch news", source: "error_fallback" }, 500);
+  }
+});
+newsRouter.get("/:idOrSlug", async (c) => {
+  const idOrSlug = c.req.param("idOrSlug");
+  try {
+    if (!hasDB$6(c.env)) return c.json({ error: "No database" }, 500);
+    const locale = getLocale$6(c);
+    let newsId = null;
+    if (/^\d+$/.test(idOrSlug)) {
+      newsId = Number(idOrSlug);
+    } else {
+      newsId = await resolveNewsIdBySlug(c.env.DB, idOrSlug, locale);
+    }
+    if (!newsId) return c.json({ error: "Not found" }, 404);
+    const item = await getMergedNewsById(c.env.DB, newsId, locale);
+    if (!item) return c.json({ error: "Not found" }, 404);
+    const translations = await getAllTranslations(c.env.DB, newsId);
+    return c.json({ news: { ...item, translations }, source: "database", locale });
+  } catch (err) {
+    console.error("Error fetching news by id/slug:", err);
     return c.json({ error: "Failed to fetch news" }, 500);
   }
 });
 newsRouter.post("/", async (c) => {
   try {
+    if (!hasDB$6(c.env)) return c.json({ error: "No database" }, 500);
+    const body = await c.req.json();
+    const {
+      title: title2,
+      slug: rawSlug,
+      content,
+      image_url,
+      meta_description,
+      keywords,
+      published_at,
+      translations
+    } = body || {};
+    if (!title2 || !content) return c.json({ error: "Missing title/content" }, 400);
+    const baseSlug = rawSlug?.trim() || slugify$4(title2);
+    const sql = `
+      INSERT INTO news (title, slug, content, meta_description, keywords, image_url, published_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `;
+    const runRes = await c.env.DB.prepare(sql).bind(
+      title2,
+      baseSlug,
+      content,
+      meta_description || null,
+      keywords || null,
+      image_url || null,
+      published_at ?? null
+    ).run();
+    if (!runRes.success) return c.json({ error: "Insert failed" }, 500);
+    const newId = runRes.meta?.last_row_id;
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO news_translations(news_id, locale, title, slug, content, meta_description, keywords)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        ON CONFLICT(news_id, locale) DO UPDATE SET
+          title=excluded.title,
+          slug=excluded.slug,
+          content=excluded.content,
+          meta_description=excluded.meta_description,
+          keywords=excluded.keywords,
+          updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(
+          newId,
+          lc,
+          tr.title || null,
+          tr.slug || null,
+          tr.content || null,
+          tr.meta_description || null,
+          tr.keywords || null
+        ).run();
+      }
+    }
+    const locale = getLocale$6(c);
+    const item = await getMergedNewsById(c.env.DB, newId, locale);
+    const translationsObj = await getAllTranslations(c.env.DB, newId);
+    return c.json({ news: { ...item, translations: translationsObj }, source: "database", locale }, 201);
+  } catch (err) {
+    console.error("Error adding news:", err);
+    const msg = String(err?.message || "").toLowerCase().includes("unique") ? "Slug already exists" : "Failed to add news";
+    return c.json({ error: msg }, 500);
+  }
+});
+newsRouter.put("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$6(c.env)) return c.json({ error: "No database" }, 500);
+    const body = await c.req.json();
     const {
       title: title2,
       slug,
       content,
-      meta,
-      keywords,
       image_url,
-      published_at
-    } = await c.req.json();
-    const result = await c.env.DB.prepare(`
-       INSERT INTO news (title, slug, content, meta_description, keywords, image_url, published_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      title2,
-      slug,
-      content,
-      meta || null,
-      keywords || null,
-      image_url || null,
-      published_at || null
-    ).run();
-    const newItem = await c.env.DB.prepare("SELECT * FROM news WHERE id = ?").bind(result.meta.last_row_id).first();
-    return c.json({ news: newItem }, 201);
-  } catch (e) {
-    console.error(e);
-    return c.json({ error: "Failed to create news" }, 500);
-  }
-});
-newsRouter.put("/:id", async (c) => {
-  const id = parseInt(c.req.param("id"));
-  const {
-    title: title2,
-    slug,
-    content,
-    meta,
-    keywords,
-    image_url,
-    published_at
-  } = await c.req.json();
-  try {
-    await c.env.DB.prepare(`
-      UPDATE news
-      SET title = ?, slug = ?, content = ?, meta_description = ?, keywords = ?, image_url = ?, published_at = ?
-      WHERE id = ?
-    `).bind(
-      title2,
-      slug,
-      content,
-      meta || null,
-      keywords || null,
-      image_url || null,
-      published_at || null,
-      id
-    ).run();
-    const updated = await c.env.DB.prepare("SELECT * FROM news WHERE id = ?").bind(id).first();
-    return c.json({ news: updated });
-  } catch (e) {
-    console.error(e);
+      meta_description,
+      keywords,
+      published_at,
+      translations
+    } = body || {};
+    const sets = [];
+    const params = [];
+    if (title2 !== void 0) {
+      sets.push("title = ?");
+      params.push(title2);
+    }
+    if (slug !== void 0) {
+      sets.push("slug = ?");
+      params.push(slug);
+    }
+    if (content !== void 0) {
+      sets.push("content = ?");
+      params.push(content);
+    }
+    if (meta_description !== void 0) {
+      sets.push("meta_description = ?");
+      params.push(meta_description);
+    }
+    if (keywords !== void 0) {
+      sets.push("keywords = ?");
+      params.push(keywords);
+    }
+    if (image_url !== void 0) {
+      sets.push("image_url = ?");
+      params.push(image_url);
+    }
+    if (published_at !== void 0) {
+      sets.push("published_at = ?");
+      params.push(published_at);
+    }
+    if (sets.length > 0) {
+      const sql = `UPDATE news SET ${sets.join(", ")}, updated_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id = ?`;
+      params.push(id);
+      await c.env.DB.prepare(sql).bind(...params).run();
+    }
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO news_translations(news_id, locale, title, slug, content, meta_description, keywords)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        ON CONFLICT(news_id, locale) DO UPDATE SET
+          title=excluded.title,
+          slug=excluded.slug,
+          content=excluded.content,
+          meta_description=excluded.meta_description,
+          keywords=excluded.keywords,
+          updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(
+          id,
+          lc,
+          tr.title || null,
+          tr.slug || null,
+          tr.content || null,
+          tr.meta_description || null,
+          tr.keywords || null
+        ).run();
+      }
+    }
+    const locale = getLocale$6(c);
+    const item = await getMergedNewsById(c.env.DB, id, locale);
+    const translationsObj = await getAllTranslations(c.env.DB, id);
+    return c.json({ news: { ...item, translations: translationsObj }, source: "database", locale });
+  } catch (err) {
+    console.error("Error updating news:", err);
     return c.json({ error: "Failed to update news" }, 500);
   }
 });
-newsRouter.delete("/:id", async (c) => {
-  const id = parseInt(c.req.param("id"));
+newsRouter.put("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
   try {
-    await c.env.DB.prepare("DELETE FROM news WHERE id = ?").bind(id).run();
-    return c.json({ success: true });
-  } catch (e) {
-    console.error(e);
+    if (!hasDB$6(c.env)) return c.json({ error: "No database" }, 500);
+    const body = await c.req.json();
+    const { translations } = body || {};
+    if (!translations || typeof translations !== "object") return c.json({ error: "Missing translations" }, 400);
+    const upsertT = `
+      INSERT INTO news_translations(news_id, locale, title, slug, content, meta_description, keywords)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+      ON CONFLICT(news_id, locale) DO UPDATE SET
+        title=excluded.title,
+        slug=excluded.slug,
+        content=excluded.content,
+        meta_description=excluded.meta_description,
+        keywords=excluded.keywords,
+        updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+    `;
+    for (const [lc, tr] of Object.entries(translations)) {
+      await c.env.DB.prepare(upsertT).bind(
+        id,
+        lc,
+        tr.title || null,
+        tr.slug || null,
+        tr.content || null,
+        tr.meta_description || null,
+        tr.keywords || null
+      ).run();
+    }
+    const translationsObj = await getAllTranslations(c.env.DB, id);
+    return c.json({ translations: translationsObj, news_id: id });
+  } catch (err) {
+    console.error("Error updating translations:", err);
+    return c.json({ error: "Failed to update translations" }, 500);
+  }
+});
+newsRouter.get("/:id/translation", async (c) => {
+  const id = c.req.param("id");
+  const locale = (c.req.query("locale") || "vi").toLowerCase();
+  try {
+    const row = await c.env.DB.prepare(
+      `SELECT 
+        n.id,
+        nt.locale,
+        nt.title,
+        nt.slug,
+        nt.content,
+        nt.meta_description,
+        nt.keywords,
+        nt.updated_at
+       FROM news n
+       JOIN news_translations nt ON nt.news_id = n.id
+       WHERE n.id = ? AND nt.locale = ?`
+    ).bind(id, locale).first();
+    if (!row) {
+      return c.json({ error: "Translation not found" }, 404);
+    }
+    return c.json(row);
+  } catch (err) {
+    console.error(err);
+    return c.json({ error: "Internal server error" }, 500);
+  }
+});
+newsRouter.delete("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$6(c.env)) return c.json({ error: "No database" }, 500);
+    await c.env.DB.prepare(`DELETE FROM news WHERE id = ?`).bind(id).run();
+    return c.json({ success: true, id });
+  } catch (err) {
+    console.error("Error deleting news:", err);
     return c.json({ error: "Failed to delete news" }, 500);
   }
 });
@@ -2493,7 +2860,7 @@ function cleanText(text) {
   return text.replace(/^\s*[-*•]\s*/gm, "").replace(/^\s*\d+\.\s*/gm, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 const seoApp = new Hono2();
-const slugify$2 = (str = "") => (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+const slugify$3 = (str = "") => (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
 const safeJSONParse = (raw) => {
   try {
     return { ok: true, data: JSON.parse(raw) };
@@ -2594,7 +2961,7 @@ Yêu cầu:
         title: title2 || keyword,
         meta,
         keywords: keywordsArr.join(", "),
-        slug: slugify$2(title2 || keyword),
+        slug: slugify$3(title2 || keyword),
         content: contentMarkdown,
         outline
       },
@@ -2683,7 +3050,7 @@ ${truncated}
         title: title2,
         meta,
         keywords: keywordsArr.join(", "),
-        slug: slugify$2(title2),
+        slug: slugify$3(title2),
         focus_keyword,
         score,
         tips,
@@ -2715,85 +3082,222 @@ seoApp.get("/test", (c) => {
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   });
 });
-const hasDB$4 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
-const slugify$1 = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
-const categoriesRouter = new Hono2();
-categoriesRouter.get("/", async (c) => {
+const DEFAULT_LOCALE$5 = "vi";
+const getLocale$5 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$5).toLowerCase();
+const hasDB$5 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
+const slugify$2 = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+const parentsRouter = new Hono2();
+parentsRouter.get("/", async (c) => {
+  const { limit, offset, q, with_counts, with_subs } = c.req.query();
   try {
-    if (!hasDB$4(c.env)) {
-      return c.json({ categories: [], source: "fallback", count: 0 });
+    if (!hasDB$5(c.env)) {
+      return c.json({ parents: [], source: "fallback", count: 0 });
     }
-    const sql = `
-      SELECT id, name, slug, description, image_url, created_at
-      FROM categories
-      ORDER BY created_at DESC
+    const locale = getLocale$5(c);
+    const hasLimit = Number.isFinite(Number(limit));
+    const hasOffset = Number.isFinite(Number(offset));
+    const limitSql = hasLimit ? " LIMIT ?" : "";
+    const offsetSql = hasOffset ? " OFFSET ?" : "";
+    const where = [];
+    const params = [locale];
+    if (q && q.trim()) {
+      where.push(`(
+        (pct.name IS NOT NULL AND pct.name LIKE ?)
+        OR (pct.description IS NOT NULL AND pct.description LIKE ?)
+        OR (pct.name IS NULL AND pc.name LIKE ?)
+        OR (pct.description IS NULL AND pc.description LIKE ?)
+      )`);
+      const kw = `%${q.trim()}%`;
+      params.push(kw, kw, kw, kw);
+    }
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const baseSql = `
+      SELECT
+        pc.id,
+        COALESCE(pct.name, pc.name)          AS name,
+        pc.slug,
+        COALESCE(pct.description, pc.description) AS description,
+        pc.image_url,
+        pc.created_at
+      FROM parent_categories pc
+      LEFT JOIN parent_categories_translations pct
+        ON pct.parent_id = pc.id AND pct.locale = ?
+      ${whereSql}
+      ORDER BY pc.created_at DESC
+      ${limitSql}
+      ${offsetSql}
     `;
-    const result = await c.env.DB.prepare(sql).all();
-    const categories = result?.results ?? [];
-    return c.json({ categories, count: categories.length, source: "database" });
+    if (hasLimit) params.push(Number(limit));
+    if (hasOffset) params.push(Number(offset));
+    const result = await c.env.DB.prepare(baseSql).bind(...params).all();
+    let parents = result?.results ?? [];
+    if (String(with_counts) === "1") {
+      const ids = parents.map((p) => p.id);
+      if (ids.length) {
+        const placeholders = ids.map(() => "?").join(",");
+        const countsSql = `
+          WITH subs AS (
+            SELECT parent_id, COUNT(*) AS sub_count
+            FROM subcategories
+            WHERE parent_id IN (${placeholders})
+            GROUP BY parent_id
+          ),
+          prods AS (
+            SELECT sc.parent_id, COUNT(p.id) AS product_count
+            FROM subcategories sc
+            LEFT JOIN products p ON p.subcategory_id = sc.id
+            WHERE sc.parent_id IN (${placeholders})
+            GROUP BY sc.parent_id
+          )
+          SELECT
+            pc.id AS parent_id,
+            COALESCE(s.sub_count, 0) AS sub_count,
+            COALESCE(pr.product_count, 0) AS product_count
+          FROM parent_categories pc
+          LEFT JOIN subs s  ON s.parent_id  = pc.id
+          LEFT JOIN prods pr ON pr.parent_id = pc.id
+          WHERE pc.id IN (${placeholders})
+        `;
+        const countsRes = await c.env.DB.prepare(countsSql).bind(...ids, ...ids, ...ids).all();
+        const counts = (countsRes?.results ?? []).reduce((acc, r) => {
+          acc[r.parent_id] = { sub_count: r.sub_count, product_count: r.product_count };
+          return acc;
+        }, {});
+        parents = parents.map((p) => ({
+          ...p,
+          ...counts[p.id] || { sub_count: 0, product_count: 0 }
+        }));
+      }
+    }
+    if (String(with_subs) === "1" && parents.length) {
+      const ids = parents.map((p) => p.id);
+      const placeholders = ids.map(() => "?").join(",");
+      const subsSql = `
+        SELECT
+          sc.id,
+          sc.parent_id,
+          COALESCE(sct.name, sc.name) AS name,
+          sc.slug,
+          COALESCE(sct.description, sc.description) AS description,
+          sc.image_url,
+          sc.created_at
+        FROM subcategories sc
+        LEFT JOIN subcategories_translations sct
+          ON sct.sub_id = sc.id AND sct.locale = ?
+        WHERE sc.parent_id IN (${placeholders})
+        ORDER BY sc.created_at DESC
+      `;
+      const subsRes = await c.env.DB.prepare(subsSql).bind(locale, ...ids).all();
+      const subs = subsRes?.results ?? [];
+      const grouped = subs.reduce((acc, s) => {
+        (acc[s.parent_id] ||= []).push(s);
+        return acc;
+      }, {});
+      parents = parents.map((p) => ({ ...p, subcategories: grouped[p.id] || [] }));
+    }
+    return c.json({
+      parents,
+      count: parents.length,
+      source: "database",
+      locale
+    });
   } catch (err) {
-    console.error("Error fetching categories:", err);
-    return c.json({ error: "Failed to fetch categories" }, 500);
+    console.error("Error fetching parent categories:", err);
+    return c.json({ error: "Failed to fetch parent categories" }, 500);
   }
 });
-categoriesRouter.get("/:idOrSlug", async (c) => {
+parentsRouter.get("/:idOrSlug", async (c) => {
   const idOrSlug = c.req.param("idOrSlug");
+  const { with_subs } = c.req.query();
   try {
-    if (!hasDB$4(c.env)) {
-      return c.json({ error: "Database not available" }, 503);
-    }
+    if (!hasDB$5(c.env)) return c.json({ error: "Database not available" }, 503);
+    const locale = getLocale$5(c);
     const isNumeric = /^\d+$/.test(idOrSlug);
     const sql = `
-      SELECT id, name, slug, description, image_url, created_at
-      FROM categories
-      WHERE ${isNumeric ? "id = ?" : "slug = ?"}
+      SELECT
+        pc.id,
+        COALESCE(pct.name, pc.name)          AS name,
+        pc.slug,
+        COALESCE(pct.description, pc.description) AS description,
+        pc.image_url,
+        pc.created_at
+      FROM parent_categories pc
+      LEFT JOIN parent_categories_translations pct
+        ON pct.parent_id = pc.id AND pct.locale = ?
+      WHERE ${isNumeric ? "pc.id = ?" : "pc.slug = ?"}
       LIMIT 1
     `;
-    const cat = await c.env.DB.prepare(sql).bind(isNumeric ? Number(idOrSlug) : idOrSlug).first();
-    if (!cat) return c.json({ error: "Category not found" }, 404);
-    return c.json({ category: cat, source: "database" });
+    const parent = await c.env.DB.prepare(sql).bind(locale, isNumeric ? Number(idOrSlug) : idOrSlug).first();
+    if (!parent) return c.json({ error: "Parent category not found" }, 404);
+    if (String(with_subs) === "1") {
+      const subsSql = `
+        SELECT
+          sc.id,
+          sc.parent_id,
+          COALESCE(sct.name, sc.name) AS name,
+          sc.slug,
+          COALESCE(sct.description, sc.description) AS description,
+          sc.image_url,
+          sc.created_at
+        FROM subcategories sc
+        LEFT JOIN subcategories_translations sct
+          ON sct.sub_id = sc.id AND sct.locale = ?
+        WHERE sc.parent_id = ?
+        ORDER BY sc.created_at DESC
+      `;
+      const subs = await c.env.DB.prepare(subsSql).bind(locale, parent.id).all();
+      parent.subcategories = subs?.results ?? [];
+    }
+    return c.json({ parent, source: "database", locale });
   } catch (err) {
-    console.error("Error fetching category:", err);
-    return c.json({ error: "Failed to fetch category" }, 500);
+    console.error("Error fetching parent category:", err);
+    return c.json({ error: "Failed to fetch parent category" }, 500);
   }
 });
-categoriesRouter.post("/", async (c) => {
+parentsRouter.post("/", async (c) => {
   try {
-    if (!hasDB$4(c.env)) {
-      return c.json({ error: "Database not available" }, 503);
-    }
+    if (!hasDB$5(c.env)) return c.json({ error: "Database not available" }, 503);
     const body = await c.req.json();
-    const { name, slug: rawSlug, description, image_url } = body || {};
-    if (!name?.trim()) {
-      return c.json({ error: "Missing required field: name" }, 400);
-    }
-    const slug = rawSlug?.trim() || slugify$1(name);
-    const sql = `
-      INSERT INTO categories (name, slug, description, image_url)
+    const { name, slug: rawSlug, description, image_url, translations } = body || {};
+    if (!name?.trim()) return c.json({ error: "Missing required field: name" }, 400);
+    const slug = (rawSlug?.trim() || slugify$2(name)).toLowerCase();
+    const insSql = `
+      INSERT INTO parent_categories (name, slug, description, image_url)
       VALUES (?, ?, ?, ?)
     `;
-    const res = await c.env.DB.prepare(sql).bind(name.trim(), slug, description || null, image_url || null).run();
+    const res = await c.env.DB.prepare(insSql).bind(name.trim(), slug, description || null, image_url || null).run();
     if (!res.success) throw new Error("Insert failed");
     const newId = res.meta?.last_row_id;
-    const cat = await c.env.DB.prepare(
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO parent_categories_translations(parent_id, locale, name, description)
+        VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(parent_id, locale) DO UPDATE SET
+          name=COALESCE(excluded.name, name),
+          description=COALESCE(excluded.description, description),
+          updated_at=CURRENT_TIMESTAMP
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(newId, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null).run();
+      }
+    }
+    const parent = await c.env.DB.prepare(
       `SELECT id, name, slug, description, image_url, created_at
-         FROM categories WHERE id = ?`
+         FROM parent_categories WHERE id = ?`
     ).bind(newId).first();
-    return c.json({ category: cat, source: "database" }, 201);
+    return c.json({ parent, source: "database" }, 201);
   } catch (err) {
-    console.error("Error creating category:", err);
-    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug already exists" : "Failed to create category";
+    console.error("Error creating parent category:", err);
+    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug or Name already exists" : "Failed to create parent category";
     return c.json({ error: msg }, 500);
   }
 });
-categoriesRouter.put("/:id", async (c) => {
+parentsRouter.put("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
-    if (!hasDB$4(c.env)) {
-      return c.json({ error: "Database not available" }, 503);
-    }
+    if (!hasDB$5(c.env)) return c.json({ error: "Database not available" }, 503);
     const body = await c.req.json();
-    const { name, slug, description, image_url } = body || {};
+    const { name, slug, description, image_url, translations } = body || {};
     const sets = [];
     const params = [];
     if (name !== void 0) {
@@ -2812,61 +3316,558 @@ categoriesRouter.put("/:id", async (c) => {
       sets.push("image_url = ?");
       params.push(image_url);
     }
-    if (!sets.length) return c.json({ error: "No fields to update" }, 400);
-    const sql = `UPDATE categories SET ${sets.join(", ")} WHERE id = ?`;
-    params.push(id);
-    const res = await c.env.DB.prepare(sql).bind(...params).run();
-    if ((res.meta?.changes || 0) === 0) {
-      return c.json({ error: "Category not found" }, 404);
+    if (sets.length) {
+      const sql = `UPDATE parent_categories SET ${sets.join(", ")} WHERE id = ?`;
+      params.push(id);
+      const res = await c.env.DB.prepare(sql).bind(...params).run();
+      if ((res.meta?.changes || 0) === 0) return c.json({ error: "Parent category not found" }, 404);
     }
-    const cat = await c.env.DB.prepare(
-      `SELECT id, name, slug, description, image_url, created_at
-         FROM categories WHERE id = ?`
-    ).bind(id).first();
-    return c.json({ category: cat, source: "database" });
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO parent_categories_translations(parent_id, locale, name, description)
+        VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(parent_id, locale) DO UPDATE SET
+          name=COALESCE(excluded.name, name),
+          description=COALESCE(excluded.description, description),
+          updated_at=CURRENT_TIMESTAMP
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null).run();
+      }
+    }
+    const locale = getLocale$5(c);
+    const parent = await c.env.DB.prepare(
+      `SELECT
+           pc.id,
+           COALESCE(pct.name, pc.name)          AS name,
+           pc.slug,
+           COALESCE(pct.description, pc.description) AS description,
+           pc.image_url,
+           pc.created_at
+         FROM parent_categories pc
+         LEFT JOIN parent_categories_translations pct
+           ON pct.parent_id = pc.id AND pct.locale = ?
+         WHERE pc.id = ?`
+    ).bind(locale, id).first();
+    return c.json({ parent, source: "database", locale });
   } catch (err) {
-    console.error("Error updating category:", err);
-    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug already exists" : "Failed to update category";
+    console.error("Error updating parent category:", err);
+    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug or Name already exists" : "Failed to update parent category";
     return c.json({ error: msg }, 500);
   }
 });
-categoriesRouter.delete("/:id", async (c) => {
+parentsRouter.put("/:id/translations", async (c) => {
   const id = Number(c.req.param("id"));
   try {
-    if (!hasDB$4(c.env)) {
-      return c.json({ error: "Database not available" }, 503);
+    if (!hasDB$5(c.env)) return c.json({ error: "Database not available" }, 503);
+    const body = await c.req.json();
+    const translations = body?.translations;
+    if (!translations || typeof translations !== "object") {
+      return c.json({ error: "Missing translations" }, 400);
     }
-    const existing = await c.env.DB.prepare("SELECT id FROM categories WHERE id = ?").bind(id).first();
-    if (!existing) return c.json({ error: "Category not found" }, 404);
-    const res = await c.env.DB.prepare("DELETE FROM categories WHERE id = ?").bind(id).run();
-    if ((res.meta?.changes || 0) > 0) {
-      return c.json({ success: true, message: "Category deleted successfully" });
+    const upsertT = `
+      INSERT INTO parent_categories_translations(parent_id, locale, name, description)
+      VALUES (?1, ?2, ?3, ?4)
+      ON CONFLICT(parent_id, locale) DO UPDATE SET
+        name=COALESCE(excluded.name, name),
+        description=COALESCE(excluded.description, description),
+        updated_at=CURRENT_TIMESTAMP
+    `;
+    for (const [lc, tr] of Object.entries(translations)) {
+      await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null).run();
     }
-    return c.json({ error: "Category not found" }, 404);
+    return c.json({ ok: true });
   } catch (err) {
-    console.error("Error deleting category:", err);
-    return c.json({ error: "Failed to delete category" }, 500);
+    console.error("Error upserting parent translations:", err);
+    const msg = "Failed to upsert translations";
+    return c.json({ error: msg }, 500);
   }
 });
-categoriesRouter.get("/:slug/products", async (c) => {
+parentsRouter.get("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$5(c.env)) return c.json({ error: "Database not available" }, 503);
+    const sql = `
+      SELECT locale, name, description
+      FROM parent_categories_translations
+      WHERE parent_id = ?
+      ORDER BY locale ASC
+    `;
+    const { results = [] } = await c.env.DB.prepare(sql).bind(id).all();
+    const translations = {};
+    for (const row of results) {
+      translations[row.locale] = {
+        name: row.name || "",
+        description: row.description || ""
+      };
+    }
+    return c.json({ translations });
+  } catch (err) {
+    console.error("Error fetching parent translations:", err);
+    return c.json({ error: "Failed to fetch translations" }, 500);
+  }
+});
+parentsRouter.delete("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$5(c.env)) return c.json({ error: "Database not available" }, 503);
+    const existing = await c.env.DB.prepare("SELECT id FROM parent_categories WHERE id = ?").bind(id).first();
+    if (!existing) return c.json({ error: "Parent category not found" }, 404);
+    const res = await c.env.DB.prepare("DELETE FROM parent_categories WHERE id = ?").bind(id).run();
+    if ((res.meta?.changes || 0) > 0) {
+      return c.json({ success: true, message: "Parent category deleted successfully" });
+    }
+    return c.json({ error: "Parent category not found" }, 404);
+  } catch (err) {
+    console.error("Error deleting parent category:", err);
+    return c.json({ error: "Failed to delete parent category" }, 500);
+  }
+});
+parentsRouter.get("/:slug/products", async (c) => {
   const slug = c.req.param("slug");
   try {
-    if (!hasDB$4(c.env)) {
+    if (!hasDB$5(c.env)) {
       return c.json({ products: [], source: "fallback", count: 0 });
     }
     const sql = `
-      SELECT p.*, c.name AS category_name, c.slug AS category_slug
+      SELECT
+        p.*,
+        s.id   AS subcategory_id,
+        s.name AS subcategory_name,
+        s.slug AS subcategory_slug,
+        pc.id  AS parent_id,
+        pc.name AS parent_name,
+        pc.slug AS parent_slug
       FROM products p
-      JOIN categories c ON c.id = p.category_id
-      WHERE c.slug = ?
+      JOIN subcategories s      ON s.id = p.subcategory_id
+      JOIN parent_categories pc ON pc.id = s.parent_id
+      WHERE pc.slug = ?
       ORDER BY p.created_at DESC
     `;
     const res = await c.env.DB.prepare(sql).bind(slug).all();
     const products = res?.results ?? [];
     return c.json({ products, count: products.length, source: "database" });
   } catch (err) {
-    console.error("Error fetching products by category:", err);
-    return c.json({ error: "Failed to fetch products by category" }, 500);
+    console.error("Error fetching products by parent category:", err);
+    return c.json({ error: "Failed to fetch products by parent category" }, 500);
+  }
+});
+parentsRouter.get("/:idOrSlug/subcategories", async (c) => {
+  const idOrSlug = c.req.param("idOrSlug");
+  try {
+    if (!hasDB$5(c.env)) return c.json({ error: "Database not available" }, 503);
+    const locale = getLocale$5(c);
+    const isNumeric = /^\d+$/.test(idOrSlug);
+    const findSql = `
+      SELECT id FROM parent_categories
+      WHERE ${isNumeric ? "id = ?" : "slug = ?"}
+      LIMIT 1
+    `;
+    const row = await c.env.DB.prepare(findSql).bind(isNumeric ? Number(idOrSlug) : idOrSlug).first();
+    if (!row?.id) return c.json({ subcategories: [], count: 0, locale });
+    const subsSql = `
+      SELECT
+        sc.id,
+        sc.parent_id,
+        COALESCE(sct.name, sc.name) AS name,
+        sc.slug,
+        COALESCE(sct.description, sc.description) AS description,
+        sc.image_url,
+        sc.created_at
+      FROM subcategories sc
+      LEFT JOIN subcategories_translations sct
+        ON sct.sub_id = sc.id AND sct.locale = ?
+      WHERE sc.parent_id = ?
+      ORDER BY sc.created_at DESC
+    `;
+    const res = await c.env.DB.prepare(subsSql).bind(locale, row.id).all();
+    const subcategories = res?.results ?? [];
+    return c.json({ subcategories, count: subcategories.length, source: "database", locale });
+  } catch (err) {
+    console.error("Error fetching subcategories of parent:", err);
+    return c.json({ error: "Failed to fetch subcategories" }, 500);
+  }
+});
+const DEFAULT_LOCALE$4 = "vi";
+const getLocale$4 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$4).toLowerCase();
+const hasDB$4 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
+const slugify$1 = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+const subCategoriesRouter = new Hono2();
+subCategoriesRouter.get("/", async (c) => {
+  const { parent_id, parent_slug, limit, offset, q, with_counts } = c.req.query();
+  try {
+    if (!hasDB$4(c.env)) {
+      return c.json({ subcategories: [], source: "fallback", count: 0 });
+    }
+    const locale = getLocale$4(c);
+    const conds = [];
+    const params = [locale, locale];
+    if (parent_id) {
+      conds.push("sc.parent_id = ?");
+      params.push(Number(parent_id));
+    }
+    if (parent_slug) {
+      conds.push("pc.slug = ?");
+      params.push(String(parent_slug));
+    }
+    if (q && q.trim()) {
+      const kw = `%${q.trim()}%`;
+      conds.push(`(
+        (sct.name IS NOT NULL AND sct.name LIKE ?)
+        OR (sct.description IS NOT NULL AND sct.description LIKE ?)
+        OR (sct.name IS NULL AND sc.name LIKE ?)
+        OR (sct.description IS NULL AND sc.description LIKE ?)
+      )`);
+      params.push(kw, kw, kw, kw);
+    }
+    const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+    const hasLimit = Number.isFinite(Number(limit));
+    const hasOffset = Number.isFinite(Number(offset));
+    const limitSql = hasLimit ? " LIMIT ?" : "";
+    const offsetSql = hasOffset ? " OFFSET ?" : "";
+    if (hasLimit) params.push(Number(limit));
+    if (hasOffset) params.push(Number(offset));
+    const sql = `
+      SELECT
+        sc.id,
+        sc.parent_id,
+        COALESCE(sct.name, sc.name) AS name,
+        sc.slug,
+        COALESCE(sct.description, sc.description) AS description,
+        sc.image_url,
+        sc.created_at,
+        COALESCE(pct.name, pc.name) AS parent_name,
+        pc.slug AS parent_slug
+      FROM subcategories sc
+      LEFT JOIN subcategories_translations sct
+        ON sct.sub_id = sc.id AND sct.locale = ?
+      JOIN parent_categories pc ON pc.id = sc.parent_id
+      LEFT JOIN parent_categories_translations pct
+        ON pct.parent_id = pc.id AND pct.locale = ?
+      ${where}
+      ORDER BY sc.created_at DESC
+      ${limitSql}
+      ${offsetSql}
+    `;
+    const result = await c.env.DB.prepare(sql).bind(...params).all();
+    let subcategories = result?.results ?? [];
+    if (String(with_counts) === "1" && subcategories.length) {
+      const ids = subcategories.map((s) => s.id);
+      const placeholders = ids.map(() => "?").join(",");
+      const cntSql = `
+        SELECT sc.id AS sub_id, COUNT(p.id) AS product_count
+        FROM subcategories sc
+        LEFT JOIN products p ON p.subcategory_id = sc.id
+        WHERE sc.id IN (${placeholders})
+        GROUP BY sc.id
+      `;
+      const cntRes = await c.env.DB.prepare(cntSql).bind(...ids).all();
+      const counts = (cntRes?.results ?? []).reduce((acc, r) => {
+        acc[r.sub_id] = r.product_count || 0;
+        return acc;
+      }, {});
+      subcategories = subcategories.map((s) => ({ ...s, product_count: counts[s.id] || 0 }));
+    }
+    return c.json({
+      subcategories,
+      count: subcategories.length,
+      source: "database",
+      locale
+    });
+  } catch (err) {
+    console.error("Error fetching subcategories:", err);
+    return c.json({ error: "Failed to fetch subcategories" }, 500);
+  }
+});
+subCategoriesRouter.get("/:idOrSlug", async (c) => {
+  const idOrSlug = c.req.param("idOrSlug");
+  const { with_counts } = c.req.query();
+  try {
+    if (!hasDB$4(c.env)) return c.json({ error: "Database not available" }, 503);
+    const locale = getLocale$4(c);
+    const isNumeric = /^\d+$/.test(idOrSlug);
+    const sql = `
+      SELECT
+        sc.id,
+        sc.parent_id,
+        COALESCE(sct.name, sc.name) AS name,
+        sc.slug,
+        COALESCE(sct.description, sc.description) AS description,
+        sc.image_url,
+        sc.created_at,
+        COALESCE(pct.name, pc.name) AS parent_name,
+        pc.slug AS parent_slug
+      FROM subcategories sc
+      LEFT JOIN subcategories_translations sct
+        ON sct.sub_id = sc.id AND sct.locale = ?
+      JOIN parent_categories pc ON pc.id = sc.parent_id
+      LEFT JOIN parent_categories_translations pct
+        ON pct.parent_id = pc.id AND pct.locale = ?
+      WHERE ${isNumeric ? "sc.id = ?" : "sc.slug = ?"}
+      LIMIT 1
+    `;
+    const subcat = await c.env.DB.prepare(sql).bind(locale, locale, isNumeric ? Number(idOrSlug) : idOrSlug).first();
+    if (!subcat) return c.json({ error: "Subcategory not found" }, 404);
+    if (String(with_counts) === "1") {
+      const cnt = await c.env.DB.prepare(`SELECT COUNT(*) AS product_count FROM products WHERE subcategory_id = ?`).bind(subcat.id).first();
+      subcat.product_count = Number(cnt?.product_count || 0);
+    }
+    return c.json({ subcategory: subcat, source: "database", locale });
+  } catch (err) {
+    console.error("Error fetching subcategory:", err);
+    return c.json({ error: "Failed to fetch subcategory" }, 500);
+  }
+});
+subCategoriesRouter.post("/", async (c) => {
+  try {
+    if (!hasDB$4(c.env)) return c.json({ error: "Database not available" }, 503);
+    const body = await c.req.json();
+    const { parent_id, name, slug: rawSlug, description, image_url, translations } = body || {};
+    if (!parent_id) return c.json({ error: "Missing required field: parent_id" }, 400);
+    if (!name?.trim()) return c.json({ error: "Missing required field: name" }, 400);
+    const parent = await c.env.DB.prepare("SELECT id FROM parent_categories WHERE id = ?").bind(Number(parent_id)).first();
+    if (!parent) return c.json({ error: "parent_id not found" }, 400);
+    const slug = (rawSlug?.trim() || slugify$1(name)).toLowerCase();
+    const sql = `
+      INSERT INTO subcategories (parent_id, name, slug, description, image_url)
+      VALUES (?, ?, ?, ?, ?)
+    `;
+    const res = await c.env.DB.prepare(sql).bind(
+      Number(parent_id),
+      name.trim(),
+      slug,
+      description || null,
+      image_url || null
+    ).run();
+    if (!res.success) throw new Error("Insert failed");
+    const newId = res.meta?.last_row_id;
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO subcategories_translations(sub_id, locale, name, description)
+        VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(sub_id, locale) DO UPDATE SET
+          name=COALESCE(excluded.name, name),
+          description=COALESCE(excluded.description, description),
+          updated_at=CURRENT_TIMESTAMP
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(newId, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null).run();
+      }
+    }
+    const locale = getLocale$4(c);
+    const subcat = await c.env.DB.prepare(
+      `SELECT
+           sc.id,
+           sc.parent_id,
+           COALESCE(sct.name, sc.name) AS name,
+           sc.slug,
+           COALESCE(sct.description, sc.description) AS description,
+           sc.image_url,
+           sc.created_at,
+           COALESCE(pct.name, pc.name) AS parent_name,
+           pc.slug AS parent_slug
+         FROM subcategories sc
+         LEFT JOIN subcategories_translations sct
+           ON sct.sub_id = sc.id AND sct.locale = ?
+         JOIN parent_categories pc ON pc.id = sc.parent_id
+         LEFT JOIN parent_categories_translations pct
+           ON pct.parent_id = pc.id AND pct.locale = ?
+         WHERE sc.id = ?`
+    ).bind(locale, locale, newId).first();
+    return c.json({ subcategory: subcat, source: "database", locale }, 201);
+  } catch (err) {
+    console.error("Error creating subcategory:", err);
+    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Name or Slug already exists in this parent" : "Failed to create subcategory";
+    return c.json({ error: msg }, 500);
+  }
+});
+subCategoriesRouter.put("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$4(c.env)) return c.json({ error: "Database not available" }, 503);
+    const body = await c.req.json();
+    const { parent_id, name, slug, description, image_url, translations } = body || {};
+    if (parent_id !== void 0 && parent_id !== null) {
+      const parent = await c.env.DB.prepare("SELECT id FROM parent_categories WHERE id = ?").bind(Number(parent_id)).first();
+      if (!parent) return c.json({ error: "parent_id not found" }, 400);
+    }
+    const sets = [];
+    const params = [];
+    if (parent_id !== void 0) {
+      sets.push("parent_id = ?");
+      params.push(parent_id === null ? null : Number(parent_id));
+    }
+    if (name !== void 0) {
+      sets.push("name = ?");
+      params.push(name);
+    }
+    if (slug !== void 0) {
+      sets.push("slug = ?");
+      params.push(slug);
+    }
+    if (description !== void 0) {
+      sets.push("description = ?");
+      params.push(description);
+    }
+    if (image_url !== void 0) {
+      sets.push("image_url = ?");
+      params.push(image_url);
+    }
+    if (sets.length) {
+      const sql = `UPDATE subcategories SET ${sets.join(", ")} WHERE id = ?`;
+      params.push(id);
+      const res = await c.env.DB.prepare(sql).bind(...params).run();
+      if ((res.meta?.changes || 0) === 0) return c.json({ error: "Subcategory not found" }, 404);
+    }
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO subcategories_translations(sub_id, locale, name, description)
+        VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(sub_id, locale) DO UPDATE SET
+          name=COALESCE(excluded.name, name),
+          description=COALESCE(excluded.description, description),
+          updated_at=CURRENT_TIMESTAMP
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null).run();
+      }
+    }
+    const locale = getLocale$4(c);
+    const subcat = await c.env.DB.prepare(
+      `SELECT
+           sc.id,
+           sc.parent_id,
+           COALESCE(sct.name, sc.name) AS name,
+           sc.slug,
+           COALESCE(sct.description, sc.description) AS description,
+           sc.image_url,
+           sc.created_at,
+           COALESCE(pct.name, pc.name) AS parent_name,
+           pc.slug AS parent_slug
+         FROM subcategories sc
+         LEFT JOIN subcategories_translations sct
+           ON sct.sub_id = sc.id AND sct.locale = ?
+         JOIN parent_categories pc ON pc.id = sc.parent_id
+         LEFT JOIN parent_categories_translations pct
+           ON pct.parent_id = pc.id AND pct.locale = ?
+         WHERE sc.id = ?`
+    ).bind(locale, locale, id).first();
+    return c.json({ subcategory: subcat, source: "database", locale });
+  } catch (err) {
+    console.error("Error updating subcategory:", err);
+    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Name or Slug already exists in this parent" : "Failed to update subcategory";
+    return c.json({ error: msg }, 500);
+  }
+});
+subCategoriesRouter.put("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$4(c.env)) return c.json({ error: "Database not available" }, 503);
+    const body = await c.req.json();
+    const translations = body?.translations;
+    if (!translations || typeof translations !== "object") {
+      return c.json({ error: "Missing translations" }, 400);
+    }
+    const upsertT = `
+      INSERT INTO subcategories_translations(sub_id, locale, name, description)
+      VALUES (?1, ?2, ?3, ?4)
+      ON CONFLICT(sub_id, locale) DO UPDATE SET
+        name=COALESCE(excluded.name, name),
+        description=COALESCE(excluded.description, description),
+        updated_at=CURRENT_TIMESTAMP
+    `;
+    for (const [lc, tr] of Object.entries(translations)) {
+      await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null).run();
+    }
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("Error upserting subcategory translations:", err);
+    return c.json({ error: "Failed to upsert translations" }, 500);
+  }
+});
+subCategoriesRouter.get("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$4(c.env)) return c.json({ error: "Database not available" }, 503);
+    const sql = `
+      SELECT locale, name, description
+      FROM subcategories_translations
+      WHERE sub_id = ?
+      ORDER BY locale ASC
+    `;
+    const { results = [] } = await c.env.DB.prepare(sql).bind(id).all();
+    const translations = {};
+    for (const row of results) {
+      translations[row.locale] = {
+        name: row.name || "",
+        description: row.description || ""
+      };
+    }
+    return c.json({ translations });
+  } catch (err) {
+    console.error("Error fetching subcategory translations:", err);
+    return c.json({ error: "Failed to fetch translations" }, 500);
+  }
+});
+subCategoriesRouter.delete("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$4(c.env)) return c.json({ error: "Database not available" }, 503);
+    const existing = await c.env.DB.prepare("SELECT id FROM subcategories WHERE id = ?").bind(id).first();
+    if (!existing) return c.json({ error: "Subcategory not found" }, 404);
+    const res = await c.env.DB.prepare("DELETE FROM subcategories WHERE id = ?").bind(id).run();
+    if ((res.meta?.changes || 0) > 0) {
+      return c.json({ success: true, message: "Subcategory deleted successfully" });
+    }
+    return c.json({ error: "Subcategory not found" }, 404);
+  } catch (err) {
+    console.error("Error deleting subcategory:", err);
+    return c.json({ error: "Failed to delete subcategory" }, 500);
+  }
+});
+subCategoriesRouter.get("/:slug/products", async (c) => {
+  const slug = c.req.param("slug");
+  try {
+    if (!hasDB$4(c.env)) {
+      return c.json({ products: [], source: "fallback", count: 0 });
+    }
+    const locale = getLocale$4(c);
+    const sql = `
+      SELECT
+        p.id,
+        COALESCE(pt.title, p.title)               AS title,
+        p.slug                                    AS product_slug,
+        COALESCE(pt.description, p.description)   AS description,
+        COALESCE(pt.content, p.content)           AS content,
+        p.image_url,
+        p.created_at,
+        p.updated_at,
+        s.id      AS subcategory_id,
+        COALESCE(sct.name, s.name) AS subcategory_name,
+        s.slug    AS subcategory_slug,
+        pc.id     AS parent_id,
+        COALESCE(pct.name, pc.name) AS parent_name,
+        pc.slug   AS parent_slug
+      FROM products p
+      LEFT JOIN products_translations pt
+        ON pt.product_id = p.id AND pt.locale = ?
+      JOIN subcategories s
+        ON s.id = p.subcategory_id
+      LEFT JOIN subcategories_translations sct
+        ON sct.sub_id = s.id AND sct.locale = ?
+      JOIN parent_categories pc
+        ON pc.id = s.parent_id
+      LEFT JOIN parent_categories_translations pct
+        ON pct.parent_id = pc.id AND pct.locale = ?
+      WHERE s.slug = ?
+      ORDER BY p.created_at DESC
+    `;
+    const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, slug).all();
+    const products = res?.results ?? [];
+    return c.json({ products, count: products.length, source: "database", locale });
+  } catch (err) {
+    console.error("Error fetching products by subcategory:", err);
+    return c.json({ error: "Failed to fetch products by subcategory" }, 500);
   }
 });
 const encoder = new TextEncoder();
@@ -4236,73 +5237,147 @@ authRouter.post("/logout", auth, async (c) => {
     return c.json({ error: "Logout failed" }, 500);
   }
 });
+const DEFAULT_LOCALE$3 = "vi";
+const getLocale$3 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$3).toLowerCase();
 const hasDB$3 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
-const findProductByIdOrSlug = async (db, idOrSlug) => {
+const slugify = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
   const isNumericId = /^\d+$/.test(idOrSlug);
   const sql = `
-    SELECT p.*, c.name AS category_name, c.slug AS category_slug
+    SELECT
+      p.id,
+      COALESCE(pt.title, p.title)             AS title,
+      p.slug                                  AS slug,
+      COALESCE(pt.description, p.description) AS description,
+      COALESCE(pt.content, p.content)         AS content,
+      p.image_url,
+      p.created_at,
+      p.updated_at,
+
+      s.id                                    AS subcategory_id,
+      COALESCE(sct.name, s.name)              AS subcategory_name,
+      s.slug                                  AS subcategory_slug,
+
+      pc.id                                   AS parent_id,
+      COALESCE(pct.name, pc.name)             AS parent_name,
+      pc.slug                                 AS parent_slug
     FROM products p
-    LEFT JOIN categories c ON c.id = p.category_id
+    LEFT JOIN products_translations pt
+      ON pt.product_id = p.id AND pt.locale = ?
+    LEFT JOIN subcategories s
+      ON s.id = p.subcategory_id
+    LEFT JOIN subcategories_translations sct
+      ON sct.sub_id = s.id AND sct.locale = ?
+    LEFT JOIN parent_categories pc
+      ON pc.id = s.parent_id
+    LEFT JOIN parent_categories_translations pct
+      ON pct.parent_id = pc.id AND pct.locale = ?
     WHERE ${isNumericId ? "p.id = ?" : "p.slug = ?"}
     LIMIT 1
   `;
-  return db.prepare(sql).bind(isNumericId ? Number(idOrSlug) : idOrSlug).first();
+  return db.prepare(sql).bind(locale, locale, locale, isNumericId ? Number(idOrSlug) : idOrSlug).first();
 };
-const slugify = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
 const productsRouter = new Hono2();
 productsRouter.get("/", async (c) => {
-  const { category_id, category_slug } = c.req.query();
+  const { parent_id, parent_slug, subcategory_id, sub_slug, limit, offset, q } = c.req.query();
   try {
     if (!hasDB$3(c.env)) {
-      const products2 = [];
-      return c.json({ products: products2, source: "fallback", count: products2.length });
+      return c.json({ products: [], source: "fallback", count: 0 });
     }
+    const locale = getLocale$3(c);
+    const params = [locale, locale, locale];
     const conds = [];
-    const params = [];
-    let joinCat = "";
-    if (category_id) {
-      conds.push("p.category_id = ?");
-      params.push(Number(category_id));
+    if (subcategory_id) {
+      conds.push("p.subcategory_id = ?");
+      params.push(Number(subcategory_id));
     }
-    if (category_slug) {
-      joinCat = "LEFT JOIN categories c ON c.id = p.category_id";
-      conds.push("c.slug = ?");
-      params.push(category_slug);
+    if (sub_slug) {
+      conds.push("s.slug = ?");
+      params.push(String(sub_slug));
+    }
+    if (parent_id) {
+      conds.push("pc.id = ?");
+      params.push(Number(parent_id));
+    }
+    if (parent_slug) {
+      conds.push("pc.slug = ?");
+      params.push(String(parent_slug));
+    }
+    if (q && q.trim()) {
+      const kw = `%${q.trim()}%`;
+      conds.push(`(
+        (pt.title IS NOT NULL AND pt.title LIKE ?)
+        OR (pt.description IS NOT NULL AND pt.description LIKE ?)
+        OR (pt.content IS NOT NULL AND pt.content LIKE ?)
+        OR (pt.title IS NULL AND p.title LIKE ?)
+        OR (pt.description IS NULL AND p.description LIKE ?)
+        OR (pt.content IS NULL AND p.content LIKE ?)
+      )`);
+      params.push(kw, kw, kw, kw, kw, kw);
     }
     const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+    const hasLimit = Number.isFinite(Number(limit));
+    const hasOffset = Number.isFinite(Number(offset));
+    const limitSql = hasLimit ? " LIMIT ?" : "";
+    const offsetSql = hasOffset ? " OFFSET ?" : "";
+    if (hasLimit) params.push(Number(limit));
+    if (hasOffset) params.push(Number(offset));
     const sql = `
-      SELECT p.*, c.name AS category_name, c.slug AS category_slug
+      SELECT
+        p.id,
+        COALESCE(pt.title, p.title)             AS title,
+        p.slug                                  AS slug,
+        COALESCE(pt.description, p.description) AS description,
+        COALESCE(pt.content, p.content)         AS content,
+        p.image_url,
+        p.created_at,
+        p.updated_at,
+
+        s.id                                    AS subcategory_id,
+        COALESCE(sct.name, s.name)              AS subcategory_name,
+        s.slug                                  AS subcategory_slug,
+
+        pc.id                                   AS parent_id,
+        COALESCE(pct.name, pc.name)             AS parent_name,
+        pc.slug                                 AS parent_slug
       FROM products p
-      LEFT JOIN categories c ON c.id = p.category_id
+      LEFT JOIN products_translations pt
+        ON pt.product_id = p.id AND pt.locale = ?
+      LEFT JOIN subcategories s
+        ON s.id = p.subcategory_id
+      LEFT JOIN subcategories_translations sct
+        ON sct.sub_id = s.id AND sct.locale = ?
+      LEFT JOIN parent_categories pc
+        ON pc.id = s.parent_id
+      LEFT JOIN parent_categories_translations pct
+        ON pct.parent_id = pc.id AND pct.locale = ?
       ${where}
       ORDER BY p.created_at DESC
+      ${limitSql}
+      ${offsetSql}
     `;
-    const stmt = c.env.DB.prepare(sql).bind(...params);
-    const result = await stmt.all();
+    const result = await c.env.DB.prepare(sql).bind(...params).all();
     const products = result?.results ?? [];
     return c.json({
       products,
       count: products.length,
       source: "database",
-      debug: { sql, params }
+      locale
+      // debug: { sql, params }
     });
   } catch (err) {
     console.error("Error fetching products:", err);
-    return c.json(
-      { error: "Failed to fetch products", source: "error_fallback" },
-      500
-    );
+    return c.json({ error: "Failed to fetch products" }, 500);
   }
 });
 productsRouter.get("/:idOrSlug", async (c) => {
   const idOrSlug = c.req.param("idOrSlug");
   try {
-    if (!hasDB$3(c.env)) {
-      return c.json({ error: "Database not available" }, 503);
-    }
-    const product = await findProductByIdOrSlug(c.env.DB, idOrSlug);
+    if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
+    const locale = getLocale$3(c);
+    const product = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
     if (!product) return c.json({ error: "Product not found" }, 404);
-    return c.json({ product, source: "database" });
+    return c.json({ product, source: "database", locale });
   } catch (err) {
     console.error("Error fetching product:", err);
     return c.json({ error: "Failed to fetch product" }, 500);
@@ -4310,9 +5385,7 @@ productsRouter.get("/:idOrSlug", async (c) => {
 });
 productsRouter.post("/", async (c) => {
   try {
-    if (!hasDB$3(c.env)) {
-      return c.json({ error: "Database not available" }, 503);
-    }
+    if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
     const body = await c.req.json();
     const {
       title: title2,
@@ -4320,50 +5393,64 @@ productsRouter.post("/", async (c) => {
       description,
       content,
       image_url,
-      category_id
+      subcategory_id,
+      translations
     } = body || {};
-    console.log("Adding product:", body);
-    if (!title2 || !content) {
-      return c.json(
-        { error: "Missing required fields: title, content" },
-        400
-      );
+    if (!title2?.trim() || !content?.trim()) {
+      return c.json({ error: "Missing required fields: title, content" }, 400);
     }
-    const slug = rawSlug?.trim() || slugify(title2);
-    console.log("Generated slug:", slug);
+    const slug = (rawSlug?.trim() || slugify(title2)).toLowerCase();
+    if (subcategory_id !== void 0 && subcategory_id !== null) {
+      const sub = await c.env.DB.prepare("SELECT id FROM subcategories WHERE id = ?").bind(Number(subcategory_id)).first();
+      if (!sub) return c.json({ error: "subcategory_id not found" }, 400);
+    }
     const sql = `
-      INSERT INTO products (title, slug, description, content, image_url, category_id)
+      INSERT INTO products (title, slug, description, content, image_url, subcategory_id)
       VALUES (?, ?, ?, ?, ?, ?)
     `;
     const runRes = await c.env.DB.prepare(sql).bind(
-      title2,
+      title2.trim(),
       slug,
       description || null,
       content,
       image_url || null,
-      typeof category_id === "number" ? category_id : null
+      subcategory_id == null ? null : Number(subcategory_id)
     ).run();
+    if (!runRes.success) throw new Error("Insert failed");
     const newId = runRes.meta?.last_row_id;
-    const product = await c.env.DB.prepare(
-      `SELECT p.*, c.name AS category_name, c.slug AS category_slug
-         FROM products p
-         LEFT JOIN categories c ON c.id = p.category_id
-         WHERE p.id = ?`
-    ).bind(newId).first();
-    return c.json({ product, source: "database" }, 201);
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO products_translations(product_id, locale, title, description, content)
+        VALUES (?1, ?2, ?3, ?4, ?5)
+        ON CONFLICT(product_id, locale) DO UPDATE SET
+          title       = COALESCE(excluded.title, title),
+          description = COALESCE(excluded.description, description),
+          content     = COALESCE(excluded.content, content),
+          updated_at  = CURRENT_TIMESTAMP
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(
+          newId,
+          String(lc).toLowerCase(),
+          tr?.title ?? null,
+          tr?.description ?? null,
+          tr?.content ?? null
+        ).run();
+      }
+    }
+    const locale = getLocale$3(c);
+    const product = await findProductByIdOrSlug(c.env.DB, String(newId), locale);
+    return c.json({ product, source: "database", locale }, 201);
   } catch (err) {
     console.error("Error adding product:", err);
     const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug already exists" : "Failed to add product";
-    console.error("Error details:", err);
     return c.json({ error: msg }, 500);
   }
 });
 productsRouter.put("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
-    if (!hasDB$3(c.env)) {
-      return c.json({ error: "Database not available" }, 503);
-    }
+    if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
     const body = await c.req.json();
     const {
       title: title2,
@@ -4371,8 +5458,13 @@ productsRouter.put("/:id", async (c) => {
       description,
       content,
       image_url,
-      category_id
+      subcategory_id,
+      translations
     } = body || {};
+    if (subcategory_id !== void 0 && subcategory_id !== null) {
+      const sub = await c.env.DB.prepare("SELECT id FROM subcategories WHERE id = ?").bind(Number(subcategory_id)).first();
+      if (!sub) return c.json({ error: "subcategory_id not found" }, 400);
+    }
     const sets = [];
     const params = [];
     if (title2 !== void 0) {
@@ -4395,44 +5487,111 @@ productsRouter.put("/:id", async (c) => {
       sets.push("image_url = ?");
       params.push(image_url);
     }
-    if (category_id !== void 0) {
-      sets.push("category_id = ?");
-      params.push(
-        category_id === null ? null : typeof category_id === "number" ? category_id : null
-      );
+    if (subcategory_id !== void 0) {
+      sets.push("subcategory_id = ?");
+      params.push(subcategory_id == null ? null : Number(subcategory_id));
     }
-    if (!sets.length) {
-      return c.json({ error: "No fields to update" }, 400);
+    if (sets.length) {
+      const sql = `
+        UPDATE products
+        SET ${sets.join(", ")}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `;
+      params.push(id);
+      const res = await c.env.DB.prepare(sql).bind(...params).run();
+      if ((res.meta?.changes || 0) === 0) return c.json({ error: "Product not found" }, 404);
     }
-    const sql = `
-      UPDATE products
-      SET ${sets.join(", ")}
-      WHERE id = ?
-    `;
-    params.push(id);
-    const res = await c.env.DB.prepare(sql).bind(...params).run();
-    if ((res.meta?.changes || 0) === 0) {
-      return c.json({ error: "Product not found" }, 404);
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO products_translations(product_id, locale, title, description, content)
+        VALUES (?1, ?2, ?3, ?4, ?5)
+        ON CONFLICT(product_id, locale) DO UPDATE SET
+          title       = COALESCE(excluded.title, title),
+          description = COALESCE(excluded.description, description),
+          content     = COALESCE(excluded.content, content),
+          updated_at  = CURRENT_TIMESTAMP
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(
+          id,
+          String(lc).toLowerCase(),
+          tr?.title ?? null,
+          tr?.description ?? null,
+          tr?.content ?? null
+        ).run();
+      }
     }
-    const product = await c.env.DB.prepare(
-      `SELECT p.*, c.name AS category_name, c.slug AS category_slug
-         FROM products p
-         LEFT JOIN categories c ON c.id = p.category_id
-         WHERE p.id = ?`
-    ).bind(id).first();
-    return c.json({ product, source: "database" });
+    const locale = getLocale$3(c);
+    const product = await findProductByIdOrSlug(c.env.DB, String(id), locale);
+    return c.json({ product, source: "database", locale });
   } catch (err) {
     console.error("Error updating product:", err);
     const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug already exists" : "Failed to update product";
     return c.json({ error: msg }, 500);
   }
 });
+productsRouter.put("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
+    const body = await c.req.json();
+    const translations = body?.translations;
+    if (!translations || typeof translations !== "object") {
+      return c.json({ error: "Missing translations" }, 400);
+    }
+    const upsertT = `
+      INSERT INTO products_translations(product_id, locale, title, description, content)
+      VALUES (?1, ?2, ?3, ?4, ?5)
+      ON CONFLICT(product_id, locale) DO UPDATE SET
+        title       = COALESCE(excluded.title, title),
+        description = COALESCE(excluded.description, description),
+        content     = COALESCE(excluded.content, content),
+        updated_at  = CURRENT_TIMESTAMP
+    `;
+    for (const [lc, tr] of Object.entries(translations)) {
+      await c.env.DB.prepare(upsertT).bind(
+        id,
+        String(lc).toLowerCase(),
+        tr?.title ?? null,
+        tr?.description ?? null,
+        tr?.content ?? null
+      ).run();
+    }
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("Error upserting product translations:", err);
+    return c.json({ error: "Failed to upsert translations" }, 500);
+  }
+});
+productsRouter.get("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
+    const sql = `
+      SELECT locale, title, description, content
+      FROM products_translations
+      WHERE product_id = ?
+      ORDER BY locale ASC
+    `;
+    const { results = [] } = await c.env.DB.prepare(sql).bind(id).all();
+    const translations = {};
+    for (const row of results) {
+      translations[row.locale] = {
+        title: row.title || "",
+        description: row.description || "",
+        content: row.content || ""
+      };
+    }
+    return c.json({ translations });
+  } catch (err) {
+    console.error("Error fetching product translations:", err);
+    return c.json({ error: "Failed to fetch translations" }, 500);
+  }
+});
 productsRouter.delete("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
-    if (!hasDB$3(c.env)) {
-      return c.json({ error: "Database not available" }, 503);
-    }
+    if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
     const existing = await c.env.DB.prepare("SELECT id FROM products WHERE id = ?").bind(id).first();
     if (!existing) return c.json({ error: "Product not found" }, 404);
     const res = await c.env.DB.prepare("DELETE FROM products WHERE id = ?").bind(id).run();
@@ -4617,21 +5776,52 @@ userRouter.delete("/:id", async (c) => {
     return bad(c, "Failed to delete user", 500);
   }
 });
+const DEFAULT_LOCALE$2 = "vi";
+const getLocale$2 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$2).toLowerCase();
 const hasDB$2 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const bannerRouter = new Hono2();
+async function getMergedBannerById(db, id, locale) {
+  const sql = `
+    SELECT
+      b.id,
+      COALESCE(bt.content, b.content) AS content,
+      b.image_url,
+      b.created_at,
+      b.updated_at
+    FROM banners b
+    LEFT JOIN banners_translations bt
+      ON bt.banner_id = b.id AND bt.locale = ?
+    WHERE b.id = ?
+    LIMIT 1
+  `;
+  return db.prepare(sql).bind(locale, id).first();
+}
 bannerRouter.get("/", async (c) => {
   try {
     if (!hasDB$2(c.env)) {
       return c.json({ ok: true, items: [], count: 0, source: "fallback" });
     }
+    const locale = getLocale$2(c);
     const sql = `
-      SELECT id, content, image_url, created_at, updated_at
-      FROM banners
-      ORDER BY created_at DESC
+      SELECT
+        b.id,
+        COALESCE(bt.content, b.content) AS content,
+        b.image_url,
+        b.created_at,
+        b.updated_at
+      FROM banners b
+      LEFT JOIN banners_translations bt
+        ON bt.banner_id = b.id AND bt.locale = ?
+      ORDER BY b.created_at DESC
     `;
-    const result = await c.env.DB.prepare(sql).all();
-    const items = result?.results ?? [];
-    return c.json({ ok: true, items, count: items.length, source: "database" });
+    const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
+    return c.json({
+      ok: true,
+      items: results,
+      count: results.length,
+      source: "database",
+      locale
+    });
   } catch (err) {
     console.error("Error fetching banners:", err);
     return c.json({ ok: false, error: "Failed to fetch banners" }, 500);
@@ -4642,23 +5832,40 @@ bannerRouter.get("/:id", async (c) => {
   if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
   try {
     if (!hasDB$2(c.env)) return c.json({ ok: false, error: "No database" }, 503);
-    const item = await c.env.DB.prepare("SELECT id, content, image_url, created_at, updated_at FROM banners WHERE id = ?").bind(id).first();
+    const locale = getLocale$2(c);
+    const item = await getMergedBannerById(c.env.DB, id, locale);
     if (!item) return c.json({ ok: false, error: "Not found" }, 404);
-    return c.json({ ok: true, item });
-  } catch (e) {
+    return c.json({ ok: true, item, source: "database", locale });
+  } catch {
     return c.json({ ok: false, error: "Failed to fetch banner" }, 500);
   }
 });
 bannerRouter.post("/", async (c) => {
   try {
     if (!hasDB$2(c.env)) return c.json({ ok: false, error: "No database" }, 503);
-    const { content, image_url } = await c.req.json();
+    const body = await c.req.json();
+    const { content, image_url, translations } = body || {};
     if (!content || typeof content !== "string") {
       return c.json({ ok: false, error: "content is required" }, 400);
     }
-    const result = await c.env.DB.prepare("INSERT INTO banners (content, image_url) VALUES (?, ?)").bind(content, image_url || null).run();
-    const item = await c.env.DB.prepare("SELECT id, content, image_url, created_at, updated_at FROM banners WHERE id = ?").bind(result.meta.last_row_id).first();
-    return c.json({ ok: true, item }, 201);
+    const ins = await c.env.DB.prepare(`INSERT INTO banners (content, image_url) VALUES (?, ?)`).bind(content, image_url || null).run();
+    if (!ins.success) throw new Error("Insert failed");
+    const newId = ins.meta?.last_row_id;
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO banners_translations(banner_id, locale, content)
+        VALUES (?1, ?2, ?3)
+        ON CONFLICT(banner_id, locale) DO UPDATE SET
+          content=excluded.content,
+          updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(newId, String(lc).toLowerCase(), tr?.content ?? "").run();
+      }
+    }
+    const locale = getLocale$2(c);
+    const item = await getMergedBannerById(c.env.DB, newId, locale);
+    return c.json({ ok: true, item, source: "database", locale }, 201);
   } catch (e) {
     console.error(e);
     return c.json({ ok: false, error: "Failed to create banner" }, 500);
@@ -4669,12 +5876,89 @@ bannerRouter.put("/:id", async (c) => {
   if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
   try {
     if (!hasDB$2(c.env)) return c.json({ ok: false, error: "No database" }, 503);
-    const { content, image_url } = await c.req.json();
-    await c.env.DB.prepare("UPDATE banners SET content = ?, image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?").bind(content ?? null, image_url ?? null, id).run();
-    const item = await c.env.DB.prepare("SELECT id, content, image_url, created_at, updated_at FROM banners WHERE id = ?").bind(id).first();
-    return c.json({ ok: true, item });
+    const body = await c.req.json();
+    const { content, image_url, translations } = body || {};
+    const sets = [];
+    const params = [];
+    if (content !== void 0) {
+      sets.push("content = ?");
+      params.push(content);
+    }
+    if (image_url !== void 0) {
+      sets.push("image_url = ?");
+      params.push(image_url);
+    }
+    if (sets.length) {
+      const sql = `UPDATE banners SET ${sets.join(", ")}, updated_at=strftime('%Y-%m-%d %H:%M:%f','now') WHERE id = ?`;
+      params.push(id);
+      const res = await c.env.DB.prepare(sql).bind(...params).run();
+      if ((res.meta?.changes || 0) === 0) return c.json({ ok: false, error: "Not found" }, 404);
+    }
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO banners_translations(banner_id, locale, content)
+        VALUES (?1, ?2, ?3)
+        ON CONFLICT(banner_id, locale) DO UPDATE SET
+          content=excluded.content,
+          updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.content ?? "").run();
+      }
+    }
+    const locale = getLocale$2(c);
+    const item = await getMergedBannerById(c.env.DB, id, locale);
+    return c.json({ ok: true, item, source: "database", locale });
   } catch (e) {
+    console.error(e);
     return c.json({ ok: false, error: "Failed to update banner" }, 500);
+  }
+});
+bannerRouter.put("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
+  try {
+    if (!hasDB$2(c.env)) return c.json({ ok: false, error: "No database" }, 503);
+    const { translations } = await c.req.json() || {};
+    if (!translations || typeof translations !== "object") {
+      return c.json({ ok: false, error: "Missing translations" }, 400);
+    }
+    const upsertT = `
+      INSERT INTO banners_translations(banner_id, locale, content)
+      VALUES (?1, ?2, ?3)
+      ON CONFLICT(banner_id, locale) DO UPDATE SET
+        content=excluded.content,
+        updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+    `;
+    for (const [lc, tr] of Object.entries(translations)) {
+      await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.content ?? "").run();
+    }
+    return c.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return c.json({ ok: false, error: "Failed to upsert translations" }, 500);
+  }
+});
+bannerRouter.get("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
+  try {
+    if (!hasDB$2(c.env)) return c.json({ ok: false, error: "No database" }, 503);
+    const sql = `
+      SELECT locale, content
+      FROM banners_translations
+      WHERE banner_id = ?
+      ORDER BY locale ASC
+    `;
+    const { results = [] } = await c.env.DB.prepare(sql).bind(id).all();
+    const translations = {};
+    for (const r of results) {
+      translations[r.locale] = { content: r.content || "" };
+    }
+    return c.json({ ok: true, translations });
+  } catch (e) {
+    console.error(e);
+    return c.json({ ok: false, error: "Failed to fetch translations" }, 500);
   }
 });
 bannerRouter.delete("/:id", async (c) => {
@@ -4685,24 +5969,56 @@ bannerRouter.delete("/:id", async (c) => {
     await c.env.DB.prepare("DELETE FROM banners WHERE id = ?").bind(id).run();
     return c.json({ ok: true });
   } catch (e) {
+    console.error(e);
     return c.json({ ok: false, error: "Failed to delete banner" }, 500);
   }
 });
+const DEFAULT_LOCALE$1 = "vi";
+const getLocale$1 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$1).toLowerCase();
 const hasDB$1 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const fieldRouter = new Hono2();
+async function getMergedFieldById(db, id, locale) {
+  const sql = `
+    SELECT
+      f.id,
+      COALESCE(ft.name,    f.name)    AS name,
+      COALESCE(ft.content, f.content) AS content,
+      f.image_url,
+      f.created_at
+    FROM fields f
+    LEFT JOIN fields_translations ft
+      ON ft.field_id = f.id AND ft.locale = ?
+    WHERE f.id = ?
+    LIMIT 1
+  `;
+  return db.prepare(sql).bind(locale, id).first();
+}
 fieldRouter.get("/", async (c) => {
   try {
     if (!hasDB$1(c.env)) {
       return c.json({ ok: true, items: [], count: 0, source: "fallback" });
     }
+    const locale = getLocale$1(c);
     const sql = `
-      SELECT id, name, content, image_url, created_at
-      FROM fields
-      ORDER BY created_at DESC
+      SELECT
+        f.id,
+        COALESCE(ft.name,    f.name)    AS name,
+        COALESCE(ft.content, f.content) AS content,
+        f.image_url,
+        f.created_at
+      FROM fields f
+      LEFT JOIN fields_translations ft
+        ON ft.field_id = f.id AND ft.locale = ?
+      ORDER BY f.created_at DESC
     `;
-    const result = await c.env.DB.prepare(sql).all();
-    const items = result?.results ?? [];
-    return c.json({ ok: true, items, count: items.length, source: "database" });
+    const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
+    return c.json({
+      ok: true,
+      items: results,
+      count: results.length,
+      source: "database",
+      locale
+    });
   } catch (err) {
     console.error("Error fetching fields:", err);
     return c.json({ ok: false, error: "Failed to fetch fields" }, 500);
@@ -4713,23 +6029,42 @@ fieldRouter.get("/:id", async (c) => {
   if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
   try {
     if (!hasDB$1(c.env)) return c.json({ ok: false, error: "No database" }, 503);
-    const item = await c.env.DB.prepare("SELECT id, name, content, image_url, created_at FROM fields WHERE id = ?").bind(id).first();
+    const locale = getLocale$1(c);
+    const item = await getMergedFieldById(c.env.DB, id, locale);
     if (!item) return c.json({ ok: false, error: "Not found" }, 404);
-    return c.json({ ok: true, item });
+    return c.json({ ok: true, item, source: "database", locale });
   } catch (e) {
+    console.error(e);
     return c.json({ ok: false, error: "Failed to fetch field" }, 500);
   }
 });
 fieldRouter.post("/", async (c) => {
   try {
     if (!hasDB$1(c.env)) return c.json({ ok: false, error: "No database" }, 503);
-    const { name, content, image_url } = await c.req.json();
+    const body = await c.req.json();
+    const { name, content, image_url, translations } = body || {};
     if (!name || typeof name !== "string") {
       return c.json({ ok: false, error: "name is required" }, 400);
     }
-    const result = await c.env.DB.prepare("INSERT INTO fields (name, content, image_url) VALUES (?, ?, ?)").bind(name, content ?? null, image_url ?? null).run();
-    const item = await c.env.DB.prepare("SELECT id, name, content, image_url, created_at FROM fields WHERE id = ?").bind(result.meta.last_row_id).first();
-    return c.json({ ok: true, item }, 201);
+    const ins = await c.env.DB.prepare("INSERT INTO fields (name, content, image_url) VALUES (?, ?, ?)").bind(name, content ?? null, image_url ?? null).run();
+    if (!ins.success) throw new Error("Insert failed");
+    const newId = ins.meta?.last_row_id;
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO fields_translations(field_id, locale, name, content)
+        VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(field_id, locale) DO UPDATE SET
+          name=excluded.name,
+          content=excluded.content,
+          updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(newId, String(lc).toLowerCase(), tr?.name ?? "", tr?.content ?? "").run();
+      }
+    }
+    const locale = getLocale$1(c);
+    const item = await getMergedFieldById(c.env.DB, newId, locale);
+    return c.json({ ok: true, item, source: "database", locale }, 201);
   } catch (e) {
     console.error(e);
     return c.json({ ok: false, error: "Failed to create field" }, 500);
@@ -4740,15 +6075,99 @@ fieldRouter.put("/:id", async (c) => {
   if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
   try {
     if (!hasDB$1(c.env)) return c.json({ ok: false, error: "No database" }, 503);
-    const { name, content, image_url } = await c.req.json();
+    const body = await c.req.json();
+    const { name, content, image_url, translations } = body || {};
     if (name !== void 0 && typeof name !== "string") {
       return c.json({ ok: false, error: "name must be string" }, 400);
     }
-    await c.env.DB.prepare("UPDATE fields SET name = COALESCE(?, name), content = COALESCE(?, content), image_url = COALESCE(?, image_url) WHERE id = ?").bind(name ?? null, content ?? null, image_url ?? null, id).run();
-    const item = await c.env.DB.prepare("SELECT id, name, content, image_url, created_at FROM fields WHERE id = ?").bind(id).first();
-    return c.json({ ok: true, item });
+    const sets = [];
+    const params = [];
+    if (name !== void 0) {
+      sets.push("name = ?");
+      params.push(name);
+    }
+    if (content !== void 0) {
+      sets.push("content = ?");
+      params.push(content);
+    }
+    if (image_url !== void 0) {
+      sets.push("image_url = ?");
+      params.push(image_url);
+    }
+    if (sets.length) {
+      const sql = `UPDATE fields SET ${sets.join(", ")} WHERE id = ?`;
+      params.push(id);
+      const res = await c.env.DB.prepare(sql).bind(...params).run();
+      if ((res.meta?.changes || 0) === 0) return c.json({ ok: false, error: "Not found" }, 404);
+    }
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO fields_translations(field_id, locale, name, content)
+        VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(field_id, locale) DO UPDATE SET
+          name=excluded.name,
+          content=excluded.content,
+          updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.name ?? "", tr?.content ?? "").run();
+      }
+    }
+    const locale = getLocale$1(c);
+    const item = await getMergedFieldById(c.env.DB, id, locale);
+    return c.json({ ok: true, item, source: "database", locale });
   } catch (e) {
+    console.error(e);
     return c.json({ ok: false, error: "Failed to update field" }, 500);
+  }
+});
+fieldRouter.put("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
+  try {
+    if (!hasDB$1(c.env)) return c.json({ ok: false, error: "No database" }, 503);
+    const body = await c.req.json();
+    const translations = body?.translations;
+    if (!translations || typeof translations !== "object") {
+      return c.json({ ok: false, error: "Missing translations" }, 400);
+    }
+    const upsertT = `
+      INSERT INTO fields_translations(field_id, locale, name, content)
+      VALUES (?1, ?2, ?3, ?4)
+      ON CONFLICT(field_id, locale) DO UPDATE SET
+        name=excluded.name,
+        content=excluded.content,
+        updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+    `;
+    for (const [lc, tr] of Object.entries(translations)) {
+      await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.name ?? "", tr?.content ?? "").run();
+    }
+    return c.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return c.json({ ok: false, error: "Failed to upsert translations" }, 500);
+  }
+});
+fieldRouter.get("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
+  try {
+    if (!hasDB$1(c.env)) return c.json({ ok: false, error: "No database" }, 503);
+    const sql = `
+      SELECT locale, name, content
+      FROM fields_translations
+      WHERE field_id = ?
+      ORDER BY locale ASC
+    `;
+    const { results = [] } = await c.env.DB.prepare(sql).bind(id).all();
+    const translations = {};
+    for (const r of results) {
+      translations[r.locale] = { name: r.name || "", content: r.content || "" };
+    }
+    return c.json({ ok: true, translations });
+  } catch (e) {
+    console.error(e);
+    return c.json({ ok: false, error: "Failed to fetch translations" }, 500);
   }
 });
 fieldRouter.delete("/:id", async (c) => {
@@ -4759,25 +6178,53 @@ fieldRouter.delete("/:id", async (c) => {
     await c.env.DB.prepare("DELETE FROM fields WHERE id = ?").bind(id).run();
     return c.json({ ok: true });
   } catch (e) {
+    console.error(e);
     return c.json({ ok: false, error: "Failed to delete field" }, 500);
   }
 });
+const DEFAULT_LOCALE = "vi";
+const getLocale = (c) => (c.req.query("locale") || DEFAULT_LOCALE).toLowerCase();
 const hasDB = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const normalizeType = (t) => (t || "").toString().trim().toLowerCase();
 const cerPartnerRouter = new Hono2();
+async function getMergedById(db, id, locale) {
+  const sql = `
+    SELECT
+      c.id,
+      COALESCE(ct.name,    c.name)    AS name,
+      c.type,
+      COALESCE(ct.content, c.content) AS content,
+      c.image_url,
+      c.created_at
+    FROM certifications_partners c
+    LEFT JOIN certifications_partners_translations ct
+      ON ct.cp_id = c.id AND ct.locale = ?
+    WHERE c.id = ?
+    LIMIT 1
+  `;
+  return db.prepare(sql).bind(locale, id).first();
+}
 cerPartnerRouter.get("/", async (c) => {
   try {
     if (!hasDB(c.env)) {
       return c.json({ ok: true, items: [], count: 0, source: "fallback" });
     }
+    const locale = getLocale(c);
     const sql = `
-      SELECT id, name, type, content, image_url, created_at
-      FROM certifications_partners
-      ORDER BY created_at DESC
+      SELECT
+        c.id,
+        COALESCE(ct.name,    c.name)    AS name,
+        c.type,
+        COALESCE(ct.content, c.content) AS content,
+        c.image_url,
+        c.created_at
+      FROM certifications_partners c
+      LEFT JOIN certifications_partners_translations ct
+        ON ct.cp_id = c.id AND ct.locale = ?
+      ORDER BY c.created_at DESC
     `;
-    const result = await c.env.DB.prepare(sql).all();
-    const items = result?.results ?? [];
-    return c.json({ ok: true, items, count: items.length, source: "database" });
+    const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
+    return c.json({ ok: true, items: results, count: results.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching certifications_partners:", err);
     return c.json({ ok: false, error: "Failed to fetch items" }, 500);
@@ -4789,16 +6236,25 @@ cerPartnerRouter.get("/type/:type", async (c) => {
       return c.json({ ok: true, items: [], count: 0, source: "fallback" });
     }
     const t = normalizeType(c.req.param("type"));
+    const locale = getLocale(c);
     const sql = `
-      SELECT id, name, type, content, image_url, created_at
-      FROM certifications_partners
-      WHERE type = ?
-      ORDER BY created_at DESC
+      SELECT
+        c.id,
+        COALESCE(ct.name,    c.name)    AS name,
+        c.type,
+        COALESCE(ct.content, c.content) AS content,
+        c.image_url,
+        c.created_at
+      FROM certifications_partners c
+      LEFT JOIN certifications_partners_translations ct
+        ON ct.cp_id = c.id AND ct.locale = ?
+      WHERE c.type = ?
+      ORDER BY c.created_at DESC
     `;
-    const result = await c.env.DB.prepare(sql).bind(t).all();
-    const items = result?.results ?? [];
-    return c.json({ ok: true, items, count: items.length, type: t });
+    const { results = [] } = await c.env.DB.prepare(sql).bind(locale, t).all();
+    return c.json({ ok: true, items: results, count: results.length, type: t, locale });
   } catch (e) {
+    console.error(e);
     return c.json({ ok: false, error: "Failed to fetch by type" }, 500);
   }
 });
@@ -4807,24 +6263,44 @@ cerPartnerRouter.get("/:id", async (c) => {
   if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
   try {
     if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);
-    const item = await c.env.DB.prepare("SELECT id, name, type, content, image_url, created_at FROM certifications_partners WHERE id = ?").bind(id).first();
+    const locale = getLocale(c);
+    const item = await getMergedById(c.env.DB, id, locale);
     if (!item) return c.json({ ok: false, error: "Not found" }, 404);
-    return c.json({ ok: true, item });
+    return c.json({ ok: true, item, source: "database", locale });
   } catch (e) {
+    console.error(e);
     return c.json({ ok: false, error: "Failed to fetch item" }, 500);
   }
 });
 cerPartnerRouter.post("/", async (c) => {
   try {
     if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);
-    const { name, type, content, image_url } = await c.req.json();
+    const body = await c.req.json();
+    const { name, type, content, image_url, translations } = body || {};
     const t = normalizeType(type);
     if (!name || typeof name !== "string") return c.json({ ok: false, error: "name is required" }, 400);
     if (!t) return c.json({ ok: false, error: "type is required" }, 400);
-    if (!content || typeof content !== "string") return c.json({ ok: false, error: "content is required" }, 400);
-    const result = await c.env.DB.prepare("INSERT INTO certifications_partners (name, type, content, image_url) VALUES (?, ?, ?, ?)").bind(name, t, content, image_url ?? null).run();
-    const item = await c.env.DB.prepare("SELECT id, name, type, content, image_url, created_at FROM certifications_partners WHERE id = ?").bind(result.meta.last_row_id).first();
-    return c.json({ ok: true, item }, 201);
+    if (!content || typeof content !== "string")
+      return c.json({ ok: false, error: "content is required" }, 400);
+    const ins = await c.env.DB.prepare("INSERT INTO certifications_partners (name, type, content, image_url) VALUES (?, ?, ?, ?)").bind(name, t, content, image_url ?? null).run();
+    if (!ins.success) throw new Error("Insert failed");
+    const newId = ins.meta?.last_row_id;
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO certifications_partners_translations(cp_id, locale, name, content)
+        VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(cp_id, locale) DO UPDATE SET
+          name=excluded.name,
+          content=excluded.content,
+          updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(newId, String(lc).toLowerCase(), tr?.name ?? "", tr?.content ?? "").run();
+      }
+    }
+    const locale = getLocale(c);
+    const item = await getMergedById(c.env.DB, newId, locale);
+    return c.json({ ok: true, item, locale }, 201);
   } catch (e) {
     console.error(e);
     return c.json({ ok: false, error: "Failed to create item" }, 500);
@@ -4836,26 +6312,107 @@ cerPartnerRouter.put("/:id", async (c) => {
   try {
     if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);
     const body = await c.req.json();
-    const name = body.hasOwnProperty("name") ? body.name : void 0;
-    const type = body.hasOwnProperty("type") ? normalizeType(body.type) : void 0;
-    const content = body.hasOwnProperty("content") ? body.content : void 0;
-    const image_url = body.hasOwnProperty("image_url") ? body.image_url : void 0;
+    const name = Object.prototype.hasOwnProperty.call(body, "name") ? body.name : void 0;
+    const type = Object.prototype.hasOwnProperty.call(body, "type") ? normalizeType(body.type) : void 0;
+    const content = Object.prototype.hasOwnProperty.call(body, "content") ? body.content : void 0;
+    const image_url = Object.prototype.hasOwnProperty.call(body, "image_url") ? body.image_url : void 0;
+    const translations = body?.translations;
     if (name !== void 0 && typeof name !== "string") return c.json({ ok: false, error: "name must be string" }, 400);
     if (type !== void 0 && !type) return c.json({ ok: false, error: "type cannot be empty" }, 400);
-    if (content !== void 0 && typeof content !== "string") return c.json({ ok: false, error: "content must be string" }, 400);
-    await c.env.DB.prepare(`
-        UPDATE certifications_partners
-        SET
-          name = COALESCE(?, name),
-          type = COALESCE(?, type),
-          content = COALESCE(?, content),
-          image_url = COALESCE(?, image_url)
-        WHERE id = ?
-      `).bind(name ?? null, type ?? null, content ?? null, image_url ?? null, id).run();
-    const item = await c.env.DB.prepare("SELECT id, name, type, content, image_url, created_at FROM certifications_partners WHERE id = ?").bind(id).first();
-    return c.json({ ok: true, item });
+    if (content !== void 0 && typeof content !== "string")
+      return c.json({ ok: false, error: "content must be string" }, 400);
+    const sets = [];
+    const params = [];
+    if (name !== void 0) {
+      sets.push("name = ?");
+      params.push(name);
+    }
+    if (type !== void 0) {
+      sets.push("type = ?");
+      params.push(type);
+    }
+    if (content !== void 0) {
+      sets.push("content = ?");
+      params.push(content);
+    }
+    if (image_url !== void 0) {
+      sets.push("image_url = ?");
+      params.push(image_url);
+    }
+    if (sets.length) {
+      const sql = `UPDATE certifications_partners SET ${sets.join(", ")} WHERE id = ?`;
+      params.push(id);
+      const res = await c.env.DB.prepare(sql).bind(...params).run();
+      if ((res.meta?.changes || 0) === 0) return c.json({ ok: false, error: "Not found" }, 404);
+    }
+    if (translations && typeof translations === "object") {
+      const upsertT = `
+        INSERT INTO certifications_partners_translations(cp_id, locale, name, content)
+        VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT(cp_id, locale) DO UPDATE SET
+          name=excluded.name,
+          content=excluded.content,
+          updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+      `;
+      for (const [lc, tr] of Object.entries(translations)) {
+        await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.name ?? "", tr?.content ?? "").run();
+      }
+    }
+    const locale = getLocale(c);
+    const item = await getMergedById(c.env.DB, id, locale);
+    return c.json({ ok: true, item, locale });
   } catch (e) {
+    console.error(e);
     return c.json({ ok: false, error: "Failed to update item" }, 500);
+  }
+});
+cerPartnerRouter.put("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
+  try {
+    if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);
+    const body = await c.req.json();
+    const translations = body?.translations;
+    if (!translations || typeof translations !== "object") {
+      return c.json({ ok: false, error: "Missing translations" }, 400);
+    }
+    const upsertT = `
+      INSERT INTO certifications_partners_translations(cp_id, locale, name, content)
+      VALUES (?1, ?2, ?3, ?4)
+      ON CONFLICT(cp_id, locale) DO UPDATE SET
+        name=excluded.name,
+        content=excluded.content,
+        updated_at=strftime('%Y-%m-%d %H:%M:%f','now')
+    `;
+    for (const [lc, tr] of Object.entries(translations)) {
+      await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.name ?? "", tr?.content ?? "").run();
+    }
+    return c.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return c.json({ ok: false, error: "Failed to upsert translations" }, 500);
+  }
+});
+cerPartnerRouter.get("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isFinite(id)) return c.json({ ok: false, error: "Invalid id" }, 400);
+  try {
+    if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);
+    const sql = `
+      SELECT locale, name, content
+      FROM certifications_partners_translations
+      WHERE cp_id = ?
+      ORDER BY locale ASC
+    `;
+    const { results = [] } = await c.env.DB.prepare(sql).bind(id).all();
+    const translations = {};
+    for (const r of results) {
+      translations[r.locale] = { name: r.name || "", content: r.content || "" };
+    }
+    return c.json({ ok: true, translations });
+  } catch (e) {
+    console.error(e);
+    return c.json({ ok: false, error: "Failed to fetch translations" }, 500);
   }
 });
 cerPartnerRouter.delete("/:id", async (c) => {
@@ -4866,7 +6423,32 @@ cerPartnerRouter.delete("/:id", async (c) => {
     await c.env.DB.prepare("DELETE FROM certifications_partners WHERE id = ?").bind(id).run();
     return c.json({ ok: true });
   } catch (e) {
+    console.error(e);
     return c.json({ ok: false, error: "Failed to delete item" }, 500);
+  }
+});
+const translateRouter = new Hono2();
+translateRouter.post("/", async (c) => {
+  try {
+    if (!c.env?.AI) {
+      return c.json({ error: "AI binding not available" }, 500);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const { text, source = "vi", target = "en" } = body || {};
+    if (!text || !target) {
+      return c.json({ error: 'Missing "text" or "target"' }, 400);
+    }
+    const model = "@cf/meta/m2m100-1.2b";
+    const out = await c.env.AI.run(model, {
+      text,
+      source_lang: source,
+      target_lang: target
+    });
+    const translated = out?.translated_text || out?.translation || out?.text || "";
+    return c.json({ ok: true, translated });
+  } catch (e) {
+    console.error("translate error:", e);
+    return c.json({ error: "Translate failed" }, 500);
   }
 });
 const app = new Hono2();
@@ -4876,8 +6458,8 @@ app.use("*", async (c, next) => {
       const testQuery = await c.env.DB.prepare("SELECT 1").first();
       c.env.DB_AVAILABLE = true;
       console.log("D1 Database connected successfully");
-    } catch (error2) {
-      console.error("D1 Database connection error:", error2);
+    } catch (error) {
+      console.error("D1 Database connection error:", error);
       c.env.DB_AVAILABLE = false;
     }
   } else {
@@ -4895,10 +6477,12 @@ app.route("/api/news", newsRouter);
 app.route("/api/fields", fieldRouter);
 app.route("/api/contacts", contactRouter);
 app.route("/api/products", productsRouter);
-app.route("/api/categories", categoriesRouter);
+app.route("/api/parent_categories", parentsRouter);
+app.route("/api/sub_categories", subCategoriesRouter);
 app.route("/api/cer-partners", cerPartnerRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
+app.route("/api/translate", translateRouter);
 app.get("/api/health", async (c) => {
   return c.json({
     status: "ok",

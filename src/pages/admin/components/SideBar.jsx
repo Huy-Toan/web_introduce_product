@@ -1,4 +1,4 @@
-import { Home, Package, Users, Newspaper, Info, Tags, Mail, Image, Briefcase,Award } from 'lucide-react';
+import { Home, Package, Users, Newspaper, Info, Tags, Mail, Image, Briefcase, Award, MessageCircle } from 'lucide-react';
 
 const navItems = [
   { id: 'dashboard', label: 'Tổng quan', icon: Home },
@@ -11,7 +11,8 @@ const navItems = [
   { id: 'fields', label: 'Lĩnh vực', icon: Briefcase },
   { id: 'cer_partner', label: 'Chứng nhận & Đối tác', icon: Award },
   { id: 'users', label: 'Người dùng', icon: Users },
-  { id: 'contacts', label: 'Liên hệ', icon: Mail }
+    { id: 'contacts', label: 'Liên hệ', icon: Mail },
+    { id: 'chat', label: 'Chat', icon: MessageCircle }
 ];
 
 const SidebarNav = ({ activeTab, setActiveTab }) => (
