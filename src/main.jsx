@@ -15,7 +15,7 @@ import ProductDetailPage from "./pages/ProductDetail";
 import News from "./pages/News";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import ScrollToTop from "./components/ScrollTop";
-import WhatsappCTA from "./components/WhatsappCTA";
+import GlobalWhatsApp from "./components/GlobalWhatsApp";;
 import News_Detail from "./pages/NewsDetail";
 import RequireAuth from "./pages/admin/components/RequireAuth";
 
@@ -24,7 +24,7 @@ createRoot(document.getElementById("root")).render(
         {/* <TProvider> */}
         <BrowserRouter>
             <ScrollToTop />
-            <WhatsappCTA />
+            <GlobalWhatsApp />
             <Routes>
                 <Route path="/*" element={<HomePage />} />
                 <Route path="/product/product-detail/:idOrSlug" element={<ProductDetailPage />} />

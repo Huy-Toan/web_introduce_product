@@ -1,44 +1,38 @@
-// src/components/WhatsappCTA.tsx
 import { useMemo, useState, lazy, Suspense } from "react";
+import { useWhatsAppLink } from "../hooks/useWhatsAppLink";
 
 const QRCodeCanvas = lazy(() =>
     import("qrcode.react").then(m => ({ default: m.QRCodeCanvas }))
 );
 
-function WhatsappCTA() {
-    const phone   = (import.meta.env.VITE_WA_PHONE || "").trim(); // ví dụ: 84123456789
-    const prefill = import.meta.env.VITE_WA_BASEMSG || "Xin chào, tôi cần tư vấn/báo giá...";
-    const utm     = import.meta.env.VITE_WA_UTM || "";            // ví dụ: ?utm_source=website...
-
-    const url = useMemo(() =>
-            `https://wa.me/${phone}?text=${encodeURIComponent(prefill)}`,
-        [phone, prefill]
-    );
-
+export default function WhatsappCTA({ msg, position = "br" }) {
+    const { build, isPhoneOk } = useWhatsAppLink();
+    const url = useMemo(() => build(msg), [build, msg]);
     const [showQR, setShowQR] = useState(false);
 
-    // Nếu chưa cấu hình phone, không render nút (tránh link hỏng)
-    if (!/^\d{8,15}$/.test(phone)) return null;
+    if (!isPhoneOk()) return null;
+
+    const posClass = {
+        br: "fixed right-5 bottom-24",
+        bl: "fixed left-5 bottom-24",
+        tr: "fixed right-5 top-5",
+        tl: "fixed left-5 top-5",
+    }[position];
 
     return (
-        <div className="fixed bottom-24 right-8 z-50">
+        <div className={`${posClass} z-[9999]`}>
             <a
                 href={url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-4 py-3 rounded-2xl shadow bg-green-600 text-white font-semibold hover:opacity-90"
                 onClick={() => {
-                    // GA/Zaraz
                     window.dataLayer = window.dataLayer || [];
-                    window.dataLayer.push({
-                        event: "wa_click",
-                        page: window.location.pathname,
-                    });
+                    window.dataLayer.push({ event: "wa_click", page: window.location.pathname, where: "cta_fab" });
                 }}
             >
                 Chat WhatsApp
             </a>
-
 
             <button
                 onClick={() => setShowQR(v => !v)}
@@ -58,5 +52,3 @@ function WhatsappCTA() {
         </div>
     );
 }
-
-export default WhatsappCTA;
