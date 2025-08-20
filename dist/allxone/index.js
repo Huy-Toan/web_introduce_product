@@ -6451,22 +6451,32 @@ translateRouter.post("/", async (c) => {
     return c.json({ error: "Translate failed" }, 500);
   }
 });
+const GRAPH = "https://graph.facebook.com/v20.0";
 const app = new Hono2();
 app.use("*", async (c, next) => {
-  if (c.env.DB) {
-    try {
+  try {
+    if (c.env.DB) {
       await c.env.DB.prepare("SELECT 1").first();
-      c.set("DB_AVAILABLE", true);
-    } catch (e) {
-      console.error("D1 Database connection error:", e);
-      c.set("DB_AVAILABLE", false);
+      c.env.DB_AVAILABLE = true;
+    } else {
+      c.env.DB_AVAILABLE = false;
     }
-  } else {
-    console.log("No D1 database binding available");
-    c.set("DB_AVAILABLE", false);
+  } catch (e) {
+    console.error("D1 connection error:", e);
+    c.env.DB_AVAILABLE = false;
   }
   await next();
 });
+const addCORS = (res) => new Response(res.body, {
+  ...res,
+  headers: new Headers({
+    ...Object.fromEntries(res.headers || []),
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization"
+  })
+});
+app.options("/wa/*", (c) => addCORS(new Response(null, { status: 204 })));
 app.get("/webhook", (c) => {
   const url = new URL(c.req.url);
   const mode = url.searchParams.get("hub.mode");
@@ -6490,7 +6500,7 @@ app.post("/webhook", async (c) => {
     const msg = value?.messages?.[0];
     if (msg) {
       const from = (msg.from || "").replace(/\D/g, "");
-      const to = env2.BUSINESS_WA_E164 || "";
+      const to = value?.metadata?.display_phone_number?.replace(/\D/g, "") || env2.BUSINESS_WA_E164 || "";
       const type = msg.type;
       const body = type === "text" ? msg.text?.body || "" : `[${type}]`;
       const ts = parseInt(msg.timestamp || Date.now() / 1e3, 10) * 1e3;
@@ -6501,9 +6511,98 @@ app.post("/webhook", async (c) => {
       }
     }
   } catch (e) {
-    console.error("Webhook error:", e);
+    console.error("Webhook inbound error:", e);
   }
   return c.text("OK", 200);
+});
+app.post("/wa/send", async (c) => {
+  const env2 = c.env;
+  const { to, body } = await c.req.json().catch(() => ({}));
+  const dest = (to || "").replace(/\D/g, "");
+  const text = (body || "").toString();
+  if (!env2.PHONE_NUMBER_ID || !env2.WHATSAPP_TOKEN) {
+    return addCORS(
+      new Response(JSON.stringify({ ok: false, error: "Missing PHONE_NUMBER_ID or WHATSAPP_TOKEN" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+  }
+  if (!dest || !text) {
+    return addCORS(
+      new Response(JSON.stringify({ ok: false, error: "Missing to/body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+  }
+  const res = await fetch(`${GRAPH}/${env2.PHONE_NUMBER_ID}/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env2.WHATSAPP_TOKEN}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      to: dest,
+      type: "text",
+      text: { body: text }
+    })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    console.error("Cloud API error:", data);
+    return addCORS(
+      new Response(JSON.stringify({ ok: false, error: data?.error || data }), {
+        status: res.status,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+  }
+  try {
+    if (env2.DB) {
+      await env2.DB.prepare(
+        "INSERT INTO messages(chat_id, direction, wa_from, wa_to, type, body, ts) VALUES (?,?,?,?,?,?,?)"
+      ).bind(dest, "out", env2.BUSINESS_WA_E164 || "", dest, "text", text, Date.now()).run();
+    }
+  } catch (e) {
+    console.error("D1 insert outgoing error:", e);
+  }
+  return addCORS(
+    new Response(JSON.stringify({ ok: true, data }), {
+      headers: { "Content-Type": "application/json" }
+    })
+  );
+});
+app.get("/wa/history", async (c) => {
+  const env2 = c.env;
+  const { searchParams } = new URL(c.req.url);
+  const chat = (searchParams.get("chat") || "").replace(/\D/g, "");
+  const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
+  if (!chat) {
+    return addCORS(
+      new Response(JSON.stringify({ ok: false, error: "Missing chat" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+  }
+  let rows = [];
+  try {
+    if (env2.DB) {
+      const rs = await env2.DB.prepare(
+        "SELECT id, chat_id, direction, wa_from, wa_to, type, body, ts FROM messages WHERE chat_id = ? ORDER BY ts DESC LIMIT ?"
+      ).bind(chat, limit).all();
+      rows = (rs?.results || []).reverse();
+    }
+  } catch (e) {
+    console.error("D1 history error:", e);
+  }
+  return addCORS(
+    new Response(JSON.stringify({ ok: true, messages: rows }), {
+      headers: { "Content-Type": "application/json" }
+    })
+  );
 });
 app.route("/api/seo", seoApp);
 app.route("/api/auth", authRouter);
@@ -6520,13 +6619,14 @@ app.route("/api/cer-partners", cerPartnerRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
-app.get("/api/health", (c) => {
-  return c.json({
+app.get(
+  "/api/health",
+  (c) => c.json({
     status: "ok",
-    database: c.get("DB_AVAILABLE") ? "connected" : "disconnected",
+    database: c.env.DB_AVAILABLE ? "connected" : "disconnected",
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
-  });
-});
+  })
+);
 app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 const index = { fetch: app.fetch };
 export {

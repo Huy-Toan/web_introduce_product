@@ -1,5 +1,6 @@
 // api/index.js
 import { Hono } from "hono";
+
 import uploadImageRouter from "./routes/upload-image";
 import editorUploadRouter from "./routes/editor-upload";
 import aboutRouter from "./routes/about";
@@ -16,27 +17,41 @@ import fieldRouter from "./routes/field";
 import cerPartnerRouter from "./routes/cer-partner";
 import translateRouter from "./routes/translate";
 
+const GRAPH = "https://graph.facebook.com/v20.0";
 const app = new Hono();
 
-/** ===================== D1 check middleware ===================== */
+/* ================ 0) Middleware kiểm tra D1 & CORS ================ */
 app.use("*", async (c, next) => {
-    if (c.env.DB) {
-        try {
+    try {
+        if (c.env.DB) {
             await c.env.DB.prepare("SELECT 1").first();
-            c.set("DB_AVAILABLE", true);
-        } catch (e) {
-            console.error("D1 Database connection error:", e);
-            c.set("DB_AVAILABLE", false);
+            c.env.DB_AVAILABLE = true;
+        } else {
+            c.env.DB_AVAILABLE = false;
         }
-    } else {
-        console.log("No D1 database binding available");
-        c.set("DB_AVAILABLE", false);
+    } catch (e) {
+        console.error("D1 connection error:", e);
+        c.env.DB_AVAILABLE = false;
     }
     await next();
 });
 
-/** ===================== WHATSAPP WEBHOOK ===================== */
-/* GET /webhook  → Meta verify */
+// (Tuỳ chọn) CORS cho /wa/* nếu gọi từ origin khác (dev)
+const addCORS = (res) =>
+    new Response(res.body, {
+        ...res,
+        headers: new Headers({
+            ...Object.fromEntries(res.headers || []),
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        }),
+    });
+
+app.options("/wa/*", (c) => addCORS(new Response(null, { status: 204 })));
+
+/* ======================== 1) WhatsApp Webhook ======================== */
+// GET /webhook  → Meta verify
 app.get("/webhook", (c) => {
     const url = new URL(c.req.url);
     const mode = url.searchParams.get("hub.mode");
@@ -52,7 +67,7 @@ app.get("/webhook", (c) => {
     return c.text("Forbidden", 403);
 });
 
-/* POST /webhook → nhận inbound, lưu D1 (tối giản) */
+// POST /webhook → inbound
 app.post("/webhook", async (c) => {
     const env = c.env;
     const payload = await c.req.json().catch(() => ({}));
@@ -64,26 +79,140 @@ app.post("/webhook", async (c) => {
         const msg = value?.messages?.[0];
 
         if (msg) {
-            const from = (msg.from || "").replace(/\D/g, ""); // số khách E.164
-            const to = env.BUSINESS_WA_E164 || "";
+            const from = (msg.from || "").replace(/\D/g, "");
+            // Thử lấy từ metadata, nếu không có dùng env
+            const to =
+                value?.metadata?.display_phone_number?.replace(/\D/g, "") ||
+                env.BUSINESS_WA_E164 ||
+                "";
             const type = msg.type;
-            const body = type === "text" ? (msg.text?.body || "") : `[${type}]`;
-            const ts = parseInt(msg.timestamp || (Date.now() / 1000), 10) * 1000;
+            const body = type === "text" ? msg.text?.body || "" : `[${type}]`;
+            const ts = parseInt(msg.timestamp || Date.now() / 1000, 10) * 1000;
 
             if (env.DB) {
-                await env.DB.prepare(
-                    "INSERT INTO messages(chat_id, direction, wa_from, wa_to, type, body, ts) VALUES (?,?,?,?,?,?,?)"
-                ).bind(from, "in", from, to, type, body, ts).run();
+                await env.DB
+                    .prepare(
+                        "INSERT INTO messages(chat_id, direction, wa_from, wa_to, type, body, ts) VALUES (?,?,?,?,?,?,?)"
+                    )
+                    .bind(from, "in", from, to, type, body, ts)
+                    .run();
             }
         }
     } catch (e) {
-        console.error("Webhook error:", e);
+        console.error("Webhook inbound error:", e);
     }
 
     return c.text("OK", 200);
 });
 
-/** ===================== Your existing APIs ===================== */
+/* ==================== 2) /wa/send – gửi Cloud API ==================== */
+app.post("/wa/send", async (c) => {
+    const env = c.env;
+    const { to, body } = await c.req.json().catch(() => ({}));
+    const dest = (to || "").replace(/\D/g, "");
+    const text = (body || "").toString();
+
+    if (!env.PHONE_NUMBER_ID || !env.WHATSAPP_TOKEN) {
+        return addCORS(
+            new Response(JSON.stringify({ ok: false, error: "Missing PHONE_NUMBER_ID or WHATSAPP_TOKEN" }), {
+                status: 500,
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+    }
+    if (!dest || !text) {
+        return addCORS(
+            new Response(JSON.stringify({ ok: false, error: "Missing to/body" }), {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+    }
+
+    const res = await fetch(`${GRAPH}/${env.PHONE_NUMBER_ID}/messages`, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${env.WHATSAPP_TOKEN}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            messaging_product: "whatsapp",
+            to: dest,
+            type: "text",
+            text: { body: text },
+        }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        console.error("Cloud API error:", data);
+        return addCORS(
+            new Response(JSON.stringify({ ok: false, error: data?.error || data }), {
+                status: res.status,
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+    }
+
+    try {
+        if (env.DB) {
+            await env.DB
+                .prepare(
+                    "INSERT INTO messages(chat_id, direction, wa_from, wa_to, type, body, ts) VALUES (?,?,?,?,?,?,?)"
+                )
+                .bind(dest, "out", env.BUSINESS_WA_E164 || "", dest, "text", text, Date.now())
+                .run();
+        }
+    } catch (e) {
+        console.error("D1 insert outgoing error:", e);
+    }
+
+    return addCORS(
+        new Response(JSON.stringify({ ok: true, data }), {
+            headers: { "Content-Type": "application/json" },
+        })
+    );
+});
+
+/* ================== 3) /wa/history – đọc lịch sử D1 ================== */
+app.get("/wa/history", async (c) => {
+    const env = c.env;
+    const { searchParams } = new URL(c.req.url);
+    const chat = (searchParams.get("chat") || "").replace(/\D/g, "");
+    const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
+
+    if (!chat) {
+        return addCORS(
+            new Response(JSON.stringify({ ok: false, error: "Missing chat" }), {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+    }
+
+    let rows = [];
+    try {
+        if (env.DB) {
+            const rs = await env.DB
+                .prepare(
+                    "SELECT id, chat_id, direction, wa_from, wa_to, type, body, ts FROM messages WHERE chat_id = ? ORDER BY ts DESC LIMIT ?"
+                )
+                .bind(chat, limit)
+                .all();
+            rows = (rs?.results || []).reverse();
+        }
+    } catch (e) {
+        console.error("D1 history error:", e);
+    }
+
+    return addCORS(
+        new Response(JSON.stringify({ ok: true, messages: rows }), {
+            headers: { "Content-Type": "application/json" },
+        })
+    );
+});
+
+/* ========================= 4) Routers hiện có ========================= */
 app.route("/api/seo", seoApp);
 app.route("/api/auth", authRouter);
 app.route("/api/users", userRouter);
@@ -100,16 +229,16 @@ app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
 
-/** ===================== Health check ===================== */
-app.get("/api/health", (c) => {
-    return c.json({
+/* ====================== 5) Health check ====================== */
+app.get("/api/health", (c) =>
+    c.json({
         status: "ok",
-        database: c.get("DB_AVAILABLE") ? "connected" : "disconnected",
+        database: c.env.DB_AVAILABLE ? "connected" : "disconnected",
         timestamp: new Date().toISOString(),
-    });
-});
+    })
+);
 
-/** ===================== SPA fallback (GIỮ CUỐI CÙNG) ===================== */
+/* ====================== 6) SPA fallback (cuối cùng) ====================== */
 app.all("*", (c) => c.env.ASSETS.fetch(c.req.raw));
 
 export default { fetch: app.fetch };
