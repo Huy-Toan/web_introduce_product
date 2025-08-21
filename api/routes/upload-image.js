@@ -1,7 +1,7 @@
 // api/upload-image.js
 import { Hono } from 'hono';
 
-// UUID v4
+// UUID v4 (không bắt buộc dùng nếu bạn thích tên SEO thuần)
 function uuidv4() {
   return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
     (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
@@ -12,13 +12,22 @@ function uuidv4() {
 function toSlug(s = '', maxLen = 80) {
   return String(s)
     .toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // bỏ dấu
-    .replace(/[^a-z0-9\s-_.]/g, '')                  // bỏ ký tự lạ
-    .replace(/\s+/g, '-')                            // space -> -
-    .replace(/-+/g, '-')                             // gộp --
-    .replace(/^[-.]+|[-.]+$/g, '')                   // bỏ -/. ở đầu/cuối
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s-_.]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-.]+|[-.]+$/g, '')
     .slice(0, maxLen)
-    .replace(/[-.]+$/g, '');                         // tránh kết thúc bằng - hoặc .
+    .replace(/[-.]+$/g, '');
+}
+
+function sanitizePrefix(input = '') {
+  return String(input || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9/_-]+/g, '')
+    .replace(/\.\.+/g, '')
+    .replace(/\/{2,}/g, '/')
+    .replace(/^\/+|\/+$/g, '');
 }
 
 const EXT_BY_MIME = {
@@ -48,6 +57,8 @@ uploadImageRouter.post('/', async (c) => {
     }
 
     const urlObj = new URL(c.req.url);
+
+    // 1) Lấy tên SEO mong muốn: form seoName -> query seoName -> tên file (không đuôi) -> 'image'
     const rawSeoName =
       formData.get('seoName') ||
       urlObj.searchParams.get('seoName') ||
@@ -55,33 +66,66 @@ uploadImageRouter.post('/', async (c) => {
 
     const baseSlug = toSlug(rawSeoName) || 'image';
 
+    // (Tuỳ chọn) prefix "thư mục" từ form/query/env (ví dụ: products, banners/2025/08)
+    const rawFolder =
+      formData.get('folder') ||
+      urlObj.searchParams.get('folder') ||
+      c.env.R2_PREFIX || ''; // nếu muốn cố định prefix qua env
+    const prefix = sanitizePrefix(rawFolder);
+
+    // 2) Extension an toàn
     const extFromName = (file.name && file.name.includes('.')) ? file.name.split('.').pop() : '';
     const ext = (extFromName || EXT_BY_MIME[file.type] || 'jpg').toLowerCase();
 
+    // 3) Tên file SEO + tránh trùng
     const addId = String(c.env.ADD_RANDOM_ID || '').toLowerCase() === 'true';
     const shortId = Math.random().toString(36).slice(2, 8);
-    const fileName = addId ? `${baseSlug}-${shortId}.${ext}` : `${baseSlug}.${ext}`;
 
+    // Tạo key ứng viên
+    const buildKey = (slug, withId) => {
+      const name = withId ? `${slug}-${shortId}.${ext}` : `${slug}.${ext}`;
+      return prefix ? `${prefix}/${name}` : name;
+    };
+
+    let key = buildKey(baseSlug, addId);
+
+    // Nếu KHÔNG bật ADD_RANDOM_ID, kiểm tra trùng và tự thêm suffix khi cần
+    if (!addId) {
+      // thử tối đa 3 lần để thêm suffix khi đã tồn tại
+      let tries = 0;
+      while (tries < 3) {
+        const head = await c.env.IMAGES.head(key);
+        if (!head) break; // chưa tồn tại -> dùng key này
+        const suffix = Math.random().toString(36).slice(2, 6);
+        key = buildKey(`${baseSlug}-${suffix}`, false);
+        tries++;
+      }
+    }
+
+    // 4) Upload lên R2
     const r2 = c.env.IMAGES;
-    await r2.put(fileName, await file.arrayBuffer(), {
+    await r2.put(key, await file.arrayBuffer(), {
       httpMetadata: {
         contentType: file.type,
         cacheControl: 'public, max-age=31536000, immutable',
-        contentDisposition: `inline; filename="${fileName}"`,
+        contentDisposition: `inline; filename="${key.split('/').pop()}"`,
       },
     });
 
+    // 5) Public URL
     if (!c.env.PUBLIC_R2_URL) {
       return c.json({ error: 'Thiếu PUBLIC_R2_URL trong cấu hình môi trường' }, 500);
     }
     const baseUrl = c.env.PUBLIC_R2_URL.replace(/\/+$/, '');
-    const publicUrl = `${baseUrl}/${fileName}`;
+    const publicUrl = `${baseUrl}/${key}`;
 
     return c.json({
       success: true,
       url: publicUrl,
-      fileName,        
+      key,               // ví dụ: products/xuat-nhap-khau.jpg
+      fileName: key.split('/').pop(),
       alt: baseSlug,
+      prefix,            // để bạn biết đang lưu vào "thư mục" nào (nếu có)
     });
   } catch (error) {
     console.error('Upload error:', error);
