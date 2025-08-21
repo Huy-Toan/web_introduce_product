@@ -2,6 +2,7 @@
 
 import { useLocation } from "react-router-dom";
 import WhatsappCTA from "./WhatsappCTA";
+import UserChatBox from "./UserChatBox";
 
 export default function GlobalWhatsApp() {
     const { pathname } = useLocation();
@@ -22,5 +23,5 @@ export default function GlobalWhatsApp() {
         msg = "Tôi quan tâm dịch vụ XNK, cho tôi biết quy trình và chi phí.";
     }
 
-    return <WhatsappCTA msg={msg} />;
+    return <UserChatBox msg={msg} />;
 }
