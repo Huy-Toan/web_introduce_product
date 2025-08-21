@@ -17,6 +17,21 @@ export default function ProductDetailPage() {
   const [relLoading, setRelLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // gọi sub_categories để lấy parent_* (có fallback tên endpoint)
+  const fetchParentBySub = async (subSlug, signal) => {
+    let res = await fetch(`/api/sub_categories/${encodeURIComponent(subSlug)}`, { signal });
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const sub = data.subcategory || data; // tuỳ BE
+    return {
+      parent_slug: sub.parent_slug || sub.parent?.slug || null,
+      parent_name: sub.parent_name || sub.parent?.name || null,
+    };
+  };
+
+
+
   const scrollRelated = (dir = 1) => {
     const el = trackRef.current;
     if (!el) return;
@@ -24,7 +39,7 @@ export default function ProductDetailPage() {
   };
 
   const items = [
-    { label: "Sản phẩm", to: "/product" },
+    { label: "Product", to: "/product" },
     ...(product?.parent_name && product?.parent_slug
       ? [{ label: product.parent_name, to: `/product/${encodeURIComponent(product.parent_slug)}` }]
       : []),
@@ -64,6 +79,14 @@ export default function ProductDetailPage() {
         const p = data?.product || null;
         setProduct(p);
 
+        if (!p?.parent_slug && p?.subcategory_slug) {
+          const parent = await fetchParentBySub(p.subcategory_slug, ac.signal);
+          if (parent?.parent_slug) {
+            setProduct(prev => ({ ...prev, ...parent }));
+          }
+        }
+
+        console.log("Loaded product:", p);
         // 2) Related theo sub -> parent
         setRelLoading(true);
         let relatedList = [];
@@ -123,6 +146,7 @@ export default function ProductDetailPage() {
   const handleCategoryClick = () => {
     const subSlug = product?.subcategory_slug ?? product?.subcategory?.slug ?? null;
     const parentSlug = product?.parent_slug ?? product?.parent?.slug ?? null;
+    console.log("Navigate to category:", parentSlug, subSlug);
 
     navigate(`/product/${encodeURIComponent(parentSlug)}/${encodeURIComponent(subSlug)}`);
 
@@ -215,7 +239,6 @@ export default function ProductDetailPage() {
           </section>
         </div>
 
-        {/* Related */}
 {/* Related */}
       <section className="mt-10">
         <div className="flex items-center justify-between mb-4">

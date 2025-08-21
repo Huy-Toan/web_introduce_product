@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import TopNavigation from "../components/Navigation";
 import Footer from "../components/Footer";
 import ContactHeader from "../components/ContactHeader";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 function ContactPage() {
   const [form, setForm] = useState({
@@ -15,6 +16,13 @@ function ContactPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+
+  const items = useMemo(
+    () => [
+      { label: "Contact", to: "/contact" },
+    ],
+    []
+  );
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -85,8 +93,9 @@ function ContactPage() {
   };
 
   return (
-    <div className="min-h-screen mt-8 flex flex-col">
+    <div className="min-h-screen flex flex-col">
       <TopNavigation />
+      <Breadcrumbs items={items} className="mt-16" />
       <ContactHeader />
 
       <main className="flex-1 bg-white">

@@ -1,12 +1,20 @@
 import TopNavigation from "../components/Navigation";
 import Footer from "../components/Footer";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import AboutHeaderBanner from "../components/AboutBanner";
 import MarkdownOnly from "../components/MarkdownOnly"; 
+import Breadcrumbs from "../components/Breadcrumbs";
 
 function AboutPage() {
   const [aboutContent, setAboutContent] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const items = useMemo(
+      () => [
+        { label: "About Us", to: "/about" },
+      ],
+      []
+    );
 
   useEffect(() => {
     const fetchAboutContent = async () => {
@@ -41,6 +49,7 @@ function AboutPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
+      <Breadcrumbs items={items} className="mt-16"/>
       <AboutHeaderBanner />
       {loading ? (
         <div className="flex justify-center items-center py-20">

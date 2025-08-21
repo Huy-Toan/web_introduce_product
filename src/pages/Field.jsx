@@ -3,6 +3,7 @@ import Footer from "../components/Footer";
 import { useEffect, useMemo, useState } from "react";
 import AboutHeaderBanner from "../components/AboutBanner";
 import MarkdownOnly from "../components/MarkdownOnly";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 // Thẻ logo/name cho Chứng nhận/Đối tác
 function CerPartnerLogoCard({ item }) {
@@ -30,15 +31,20 @@ function CerPartnerLogoCard({ item }) {
   );
 }
 
-
-
 function FieldPage() {
   const [fieldContent, setFieldContent] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Cer/Partner
-  const [cpItems, setCpItems] = useState([]); // lấy tất cả rồi tách
+  const [cpItems, setCpItems] = useState([]);
   const [loadingCp, setLoadingCp] = useState(false);
+
+  const items = useMemo(
+    () => [
+      { label: "What we do", to: "/what_we_do" },
+    ],
+    []
+  );
 
   // fetch Fields
   useEffect(() => {
@@ -90,6 +96,7 @@ function FieldPage() {
 return (
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
+      <Breadcrumbs items={items} className="mt-16" />
       <AboutHeaderBanner />
 
       {loading ? (

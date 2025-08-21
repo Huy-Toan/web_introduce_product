@@ -248,7 +248,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
                         className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2 group h-full pointer-events-auto overflow-hidden"
                       >
                         {/* Image - chiếm toàn bộ phần trên */}
-                        <div className="w-full h-48 sm:h-40 lg:h-52 overflow-hidden">
+                        <div className="w-full aspect-[4/5] sm:aspect-[3/4] overflow-hidden">
                           <img
                             src={img}
                             alt={name}

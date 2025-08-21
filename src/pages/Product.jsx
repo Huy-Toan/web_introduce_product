@@ -8,12 +8,92 @@ import ProductHeaderBanner from "../components/ProductBanner";
 import SidebarCategoriesTwoLevel from "../components/SidebarCategories";
 import useProducts from "./admin/hook/Useproduct";
 import Pagination from "../components/Pagination";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 const PAGE_SIZE = 9;
 
 export default function Products() {
   const navigate = useNavigate();
-  const { parentSlug, subSlug } = useParams(); 
+  const { parentSlug, subSlug } = useParams();
+
+  const [parentMeta, setParentMeta] = useState(null);
+  const [subMeta, setSubMeta] = useState(null);
+
+  // fetch tên parent theo slug
+  useEffect(() => {
+    let ac = new AbortController();
+    (async () => {
+      setParentMeta(null);
+      if (!parentSlug) return;
+      try {
+        const res = await fetch(`/api/parent_categories/${encodeURIComponent(parentSlug)}`, { signal: ac.signal });
+        if (!res.ok) return; // fallback dùng slug
+        const data = await res.json();
+        // BE có thể trả { parent: {...} } hoặc thẳng object
+        const parent = data.parent || data;
+        setParentMeta(parent);
+      } catch {}
+    })();
+    return () => ac.abort();
+  }, [parentSlug]);
+
+  // fetch tên sub theo slug
+// fetch tên sub theo slug (FIXED)
+useEffect(() => {
+  const ac = new AbortController();
+
+  (async () => {
+    setSubMeta(null);
+    if (!subSlug) return;
+    try {
+      // thử 2 endpoint, nhớ truyền { signal: ac.signal }
+      let res = await fetch(`/api/sub_categories/${encodeURIComponent(subSlug)}`, { signal: ac.signal });
+      if (!res.ok) {
+        res = await fetch(`/api/subcategories/${encodeURIComponent(subSlug)}`, { signal: ac.signal });
+      }
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const sub = data.subcategory || data;
+      setSubMeta(sub);
+    } catch (e) {
+      if (e.name !== "AbortError") console.error(e);
+    }
+  })();
+
+  return () => ac.abort();
+}, [subSlug]);
+
+
+  // --- Breadcrumbs dựa theo URL + meta ---
+  const items = useMemo(() => {
+    // Base
+    const arr = [{ label: "Product", to: "/product" }];
+
+    if (!parentSlug && !subSlug) {
+      // /product
+      arr.push({ label: "All" });
+      return arr;
+    }
+
+    if (parentSlug && !subSlug) {
+      // /product/:parent
+      arr.push({
+        label: parentMeta?.name || decodeURIComponent(parentSlug),
+      });
+      return arr;
+    }
+
+    // /product/:parent/:sub
+    arr.push({
+      label: parentMeta?.name || decodeURIComponent(parentSlug),
+      to: `/product/${encodeURIComponent(parentSlug)}`,
+    });
+    arr.push({
+      label: subMeta?.name || decodeURIComponent(subSlug),
+    });
+    return arr;
+  }, [parentSlug, subSlug, parentMeta, subMeta]);
 
   const {
     products,
@@ -21,15 +101,13 @@ export default function Products() {
     setSelectedSubcategorySlug,
   } = useProducts({ initialSubSlug: subSlug || "" });
 
-  // State để highlight Sidebar
   const [activeParentSlug, setActiveParentSlug] = useState(parentSlug || null);
   const [activeSubSlug, setActiveSubSlug] = useState(subSlug || null);
 
-  // Đồng bộ khi URL đổi
   useEffect(() => {
     setActiveParentSlug(parentSlug || null);
     setActiveSubSlug(subSlug || null);
-    setSelectedSubcategorySlug(subSlug || ""); 
+    setSelectedSubcategorySlug(subSlug || "");
   }, [parentSlug, subSlug, setSelectedSubcategorySlug]);
 
   const [parentProducts, setParentProducts] = useState([]);
@@ -70,14 +148,12 @@ export default function Products() {
     return () => { try { controller.abort(); } catch {} };
   }, [parentSlug, subSlug]);
 
-  // Data hiển thị
   const isFilteringBySub = !!subSlug;
   const displayedLoading = isFilteringBySub ? productsLoading : (parentLoading || productsLoading);
   const displayedProducts = isFilteringBySub
     ? (products || [])
     : (parentSlug ? (parentProducts || []) : (products || []));
 
-  // Phân trang
   const [currentPage, setCurrentPage] = useState(1);
   useEffect(() => setCurrentPage(1), [parentSlug, subSlug]);
 
@@ -101,6 +177,7 @@ export default function Products() {
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
+      <Breadcrumbs items={items} className="mt-16" />
       <ProductHeaderBanner />
 
       <main className="container mx-auto px-4 py-6 max-w-7xl">

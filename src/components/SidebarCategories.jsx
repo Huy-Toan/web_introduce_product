@@ -32,12 +32,10 @@ function SidebarCategoriesTwoLevel({
     if (subsByParent[key]) return;
     try {
       setSubsLoadingFor(key);
-      // dùng query ?parent_id= rõ ràng hơn
       const res = await fetch(`/api/sub_categories?parent_id=${encodeURIComponent(parent.id)}`);
       const data = await res.json();
-      const list = (data?.subcategories || []).map(s => ({
+      const list = (data?.subcategories || []).map((s) => ({
         ...s,
-        // đảm bảo luôn có parent_slug để build URL
         parent_slug: s.parent_slug || parent.slug,
       }));
       setSubsByParent((prev) => ({ ...prev, [key]: list }));
@@ -59,7 +57,7 @@ function SidebarCategoriesTwoLevel({
     setOpenParentIds(next);
   };
 
-  // —— Điều hướng path-based —— //
+  // Điều hướng theo path
   const goAll = () => navigate("/product");
   const goParent = (parent) => navigate(`/product/${parent.slug}`);
   const goSub = (sub) => navigate(`/product/${sub.parent_slug}/${sub.slug}`);
@@ -68,7 +66,7 @@ function SidebarCategoriesTwoLevel({
     <aside className="w-full md:w-72 bg-white p-4 border rounded-md shadow-sm self-start">
       <div className="flex items-center gap-2 mb-4">
         <Layers size={18} className="text-green-600" />
-        <h2 className="text-lg font-bold">Danh mục</h2>
+        <h2 className="text-lg font-bold uppercase tracking-wide">Danh mục</h2>
       </div>
 
       {parentsLoading ? (
@@ -83,11 +81,11 @@ function SidebarCategoriesTwoLevel({
             <li>
               <button
                 onClick={goAll}
-                className={`w-full text-left px-3 py-2 rounded-md hover:bg-green-100 ${
-                  !activeParentSlug && !activeSubSlug ? "bg-green-200 font-medium" : ""
+                className={`w-full text-left px-3 py-2 cursor-pointer rounded-md hover:bg-green-100 uppercase tracking-wide ${
+                  !activeParentSlug && !activeSubSlug ? "bg-green-200 font-extrabold" : "font-bold"
                 }`}
               >
-                Tất cả
+                TẤT CẢ
               </button>
             </li>
           )}
@@ -100,30 +98,32 @@ function SidebarCategoriesTwoLevel({
             const isLoadingSubs = subsLoadingFor === pid;
 
             return (
-              <li key={pid}>
-                <div className="flex items-stretch">
+              <li key={pid} className="rounded-md">
+                {/* Hàng cấp 1: label bên trái, chevron ở CUỐI bên phải */}
+                <div className="flex items-stretch gap-1">
+                  <button
+                    onClick={() => goParent(parent)}
+                    className={`flex-1 text-left px-3 py-2 cursor-pointer rounded-md hover:bg-green-100 uppercase tracking-wide
+                      ${isActiveParent ? "bg-green-200 font-extrabold text-[15px]" : "font-extrabold text-[15px]"}
+                    `}
+                    title={parent.name}
+                  >
+                    <span className="block truncate">{parent.name}</span>
+                  </button>
+
                   <button
                     onClick={() => toggleParent(parent)}
-                    className="shrink-0 w-8 h-8 flex items-center justify-center rounded-md hover:bg-gray-100 mr-1"
+                    className="shrink-0 w-8 h-8 flex items-center cursor-pointer justify-center rounded-md hover:bg-gray-100"
                     aria-label={isOpen ? "Thu gọn" : "Mở rộng"}
                     title={isOpen ? "Thu gọn" : "Mở rộng"}
                   >
                     {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                   </button>
-
-                  <button
-                    onClick={() => goParent(parent)}
-                    className={`flex-1 text-left px-3 py-2 rounded-md hover:bg-green-100 ${
-                      isActiveParent ? "bg-green-200 font-medium" : ""
-                    }`}
-                    title={parent.name}
-                  >
-                    <span className="block truncate">{parent.name}</span>
-                  </button>
                 </div>
 
+                {/* Danh sách cấp 2 */}
                 {isOpen && (
-                  <div className="mt-1 ml-9">
+                  <div className="mt-1 pl-3">
                     {isLoadingSubs ? (
                       <div className="space-y-1">
                         {Array.from({ length: 3 }).map((_, i) => (
@@ -138,19 +138,19 @@ function SidebarCategoriesTwoLevel({
                             <li key={sub.id ?? sub.slug}>
                               <button
                                 onClick={() => goSub(sub)}
-                                className={`w-full text-left px-3 py-1.5 rounded-md hover:bg-green-50 ${
-                                  isActiveSub ? "bg-green-100 font-medium" : ""
-                                }`}
+                                className={`w-full text-left px-3 py-1.5 cursor-pointer rounded-md hover:bg-green-50 uppercase tracking-wide
+                                  ${isActiveSub ? "bg-green-100 font-bold text-[13px]" : "font-bold text-[13px]"}
+                                `}
                                 title={sub.name}
                               >
-                                <span className="block truncate text-sm">{sub.name}</span>
+                                <span className="block truncate">{sub.name}</span>
                               </button>
                             </li>
                           );
                         })}
                       </ul>
                     ) : (
-                      <div className="text-xs text-gray-500 italic px-2 py-1.5">
+                      <div className="text-[11px] text-gray-500 italic px-2 py-1.5 uppercase tracking-wide">
                         Chưa có danh mục con
                       </div>
                     )}
