@@ -6608,6 +6608,59 @@ app.post("/wa/inbox", async (c) => {
   } catch (e) {
     console.error("D1 insert incoming error:", e);
   }
+  let forwarded = false;
+  try {
+    if (env2.PHONE_NUMBER_ID && env2.WHATSAPP_TOKEN && env2.BUSINESS_WA_E164) {
+      const payload = {
+        messaging_product: "whatsapp",
+        to: env2.BUSINESS_WA_E164,
+        type: "text",
+        text: { body: `[${sender}] ${text}` }
+      };
+      const res = await fetch(`${GRAPH}/${env2.PHONE_NUMBER_ID}/messages`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env2.WHATSAPP_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) forwarded = true;
+      else console.error("Cloud API forward error", await res.text());
+    }
+  } catch (e) {
+    console.error("Forward to business failed:", e);
+  }
+  return addCORS(
+    new Response(JSON.stringify({ ok: true, dbInserted, forwarded }), {
+      headers: { "Content-Type": "application/json" }
+    })
+  );
+});
+app.post("/wa/inbox", async (c) => {
+  const env2 = c.env;
+  const { from, body } = await c.req.json().catch(() => ({}));
+  const sender = (from || "").replace(/\D/g, "");
+  const text = (body || "").toString();
+  if (!sender || !text) {
+    return addCORS(
+      new Response(JSON.stringify({ ok: false, error: "Missing from/body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+  }
+  let dbInserted = false;
+  try {
+    if (env2.DB) {
+      await env2.DB.prepare(
+        "INSERT INTO messages(chat_id, direction, wa_from, wa_to, type, body, ts) VALUES (?,?,?,?,?,?,?)"
+      ).bind(sender, "in", sender, env2.BUSINESS_WA_E164 || "", "text", text, Date.now()).run();
+      dbInserted = true;
+    }
+  } catch (e) {
+    console.error("D1 insert incoming error:", e);
+  }
   return addCORS(
     new Response(JSON.stringify({ ok: true, dbInserted }), {
       headers: { "Content-Type": "application/json" }
