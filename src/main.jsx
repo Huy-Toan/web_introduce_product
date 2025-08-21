@@ -33,8 +33,8 @@ createRoot(document.getElementById("root")).render(
                 <Route path="/what_we_do" element={<FieldPage />} />
                 <Route path="/product" element={<Products />} />
                 <Route path="/contact" element={<ContactPage />} />
-                <Route path="/chat" element={<UserChat />} />
                 <Route path="/news" element={<News />} />
+                <Route path="/chat" element={<UserChat />} />
                 <Route path="/api/admin/login" element={<AdminLogin />} />
                 <Route
                     path="/api/admin/dashboard"

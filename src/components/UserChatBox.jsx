@@ -22,8 +22,19 @@ export default function UserChatBox({ msg }) {
         if (!canChat) return;
         let stop = false;
         const load = async () => {
-            const rows = await fetchHistory(phone, 100);
-            if (!stop) setMessages(rows);
+            try {
+                const rows = await fetchHistory(phone, 100);
+                if (!stop) {
+                    setMessages(m => {
+                        const pending = m.filter(x => x.pending);
+                        const sentKeys = new Set(rows.map(r => `${r.ts}-${r.body}`));
+                        const stillPending = pending.filter(p => !sentKeys.has(`${p.ts}-${p.body}`));
+                        return [...rows, ...stillPending];
+                    });
+                }
+            } catch (e) {
+                console.error("History failed", e);
+            }
         };
         load();
         const id = setInterval(load, 3000);
@@ -35,11 +46,19 @@ export default function UserChatBox({ msg }) {
     const onSend = async () => {
         const t = text.trim(); if (!t || !canChat) return;
         setText("");
-        setMessages(m => [...m, { direction: "in", body: t, ts: Date.now() }]);
+        const temp = { direction: "in", body: t, ts: Date.now(), pending: true };
+        setMessages(m => [...m, temp]);
         try {
             await sendUserMessage(phone, t);
         } catch (e) {
             console.error("Send failed", e);
+            return;
+        }
+        try {
+            const rows = await fetchHistory(phone, 100);
+            setMessages(rows);
+        } catch (e) {
+            console.error("Refresh failed", e);
         }
     };
 
@@ -90,7 +109,7 @@ export default function UserChatBox({ msg }) {
                 <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[#0b141a]">
                     {messages.map((m,i)=>(
                         <div key={i} className={`w-full flex ${m.direction === "out" ? "justify-start" : "justify-end"}`}>
-                            <div className={`max-w-[70%] px-3 py-2 rounded-lg text-[15px] whitespace-pre-wrap ${m.direction === "out" ? "bg-[#202c33]" : "bg-[#005c4b]"}`}>
+                            <div className={`max-w-[70%] px-3 py-2 rounded-lg text-[15px] whitespace-pre-wrap ${m.direction === "out" ? "bg-[#202c33]" : "bg-[#005c4b]"} ${m.pending ? "opacity-60" : ""}`}>
                                 {m.body}
                                 <div className="text-[10px] text-gray-300 mt-1 text-right">{new Date(m.ts).toLocaleTimeString()}</div>
                             </div>
