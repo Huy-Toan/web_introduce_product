@@ -404,7 +404,6 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
         keywords: t.keywords || '',
       }
       if (lc === 'vi') {
-        // VI fallback base when missing
         return {
           title: fromTr.title || rawData.title || '',
           slug: fromTr.slug || rawData.slug || '',
@@ -460,7 +459,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
     }
   }, [isOpen, rawData])
 
-  // —— Lazy load bản dịch (giữ nguyên) —— //
+  // —— Lazy load bản dịch —— //
   useEffect(() => {
     if (!isOpen || !rawData?.id) return
     const controller = new AbortController()
@@ -844,10 +843,10 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
             )}
           </div>
 
-          {/* Khối chung (keyword + ảnh cover) */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Cột trái */}
-            <div className="lg:col-span-2 space-y-4">
+          {/* Khối chung: full-width một cột */}
+          <div className="space-y-6">
+            {/* Form: full-width */}
+            <div className="space-y-4">
               {/* Keyword + Tạo nội dung */}
               <div>
                 <label className="block text-sm font-medium mb-1">{L(activeLang, 'keyword')}</label>
@@ -1079,30 +1078,51 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
               </div>
             </div>
 
-            {/* Cột phải: Ảnh cover */}
+            {/* Cover: Drag & Drop style, full-width & nằm cuối */}
             <div className="space-y-2">
               <label className="block text-sm font-medium mb-1">{L(activeLang, 'cover')}</label>
-              {imagePreview && (
-                <div className="mb-3 relative inline-block">
-                  <img src={imagePreview} alt="Preview" className="cursor-pointer w-56 h-36 object-cover rounded-md border" />
-                  <button
-                    type="button"
-                    onClick={() => { setImageFile(null); setImagePreview(''); setShared(p => ({ ...p, image_url: '' })) }}
-                    className="cursor-pointer absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
-                    disabled={isGenerating || isUploading}
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageChange}
-                className="cursor-pointer block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                disabled={isGenerating || isUploading}
-              />
-              <p className="text-xs text-gray-500">PNG/JPG/GIF ≤ 5MB.</p>
+
+              <label
+                htmlFor="cover-upload"
+                className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100"
+              >
+                {imagePreview ? (
+                  <div className="relative">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="max-h-40 rounded-md object-contain"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImageFile(null)
+                        setImagePreview('')
+                        setShared((p) => ({ ...p, image_url: '' }))
+                      }}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
+                      disabled={isGenerating || isUploading}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6 text-gray-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-upload text-gray-400" aria-hidden="true"><path d="M12 3v12"></path><path d="m17 8-5-5-5 5"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path></svg>
+                    <p className="mb-1 text-sm">Chọn ảnh từ máy tính</p>
+                    <p className="text-xs">PNG, JPG, GIF tối đa 5MB</p>
+                  </div>
+                )}
+
+                <input
+                  id="cover-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageChange}
+                  className="hidden"
+                  disabled={isGenerating || isUploading}
+                />
+              </label>
             </div>
           </div>
 
