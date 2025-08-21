@@ -30,6 +30,7 @@ import useField from './hook/UseField';
 import Cer_PartnerCard from './components/Cer_PartnerCard';
 import CertPartnerFormModal from './components/Cer_PartnerFormModal';
 import useCerPartner from './hook/UseCer_Partner';
+import AdminChat from './AdminChat.jsx';
 
 import { clearAuth } from '../../../api/admin/auth';
 const AdminDashboard = () => {
@@ -490,6 +491,7 @@ const AdminDashboard = () => {
 
         {activeTab === 'users' && <UsersPanel />}
         {activeTab === 'contacts' && <ContactsPanel />}
+          {activeTab === 'chat' && <AdminChat />}
       </main>
     </div>
   );

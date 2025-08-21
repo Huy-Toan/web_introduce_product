@@ -1,4 +1,13 @@
--- Migration number: 0004 	 2025-08-13T09:07:06.341Z
+-- Migration number: 0004        2025-08-13T09:07:06.341Z
+-- Ensure users table exists before inserting default accounts
+CREATE TABLE IF NOT EXISTS users (
+                                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                                     name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(100) NOT NULL,
+    role VARCHAR(20) DEFAULT 'user',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
 INSERT INTO users (name, email, password, role) VALUES
 -- Toàn quyền hệ thống
 ('Nguyễn Super Admin', 'superadmin@example.com', 'Temp@12345', 'superadmin'),
