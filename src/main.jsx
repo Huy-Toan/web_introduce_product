@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import "./index.css";
 import "./pages/i18n"
-import {TProvider} from "./context/TContext";
 
 import HomePage from "./pages/Home";
 import AboutPage from "./pages/AboutUs";
@@ -18,6 +17,7 @@ import ScrollToTop from "./components/ScrollTop";
 import GlobalWhatsApp from "./components/GlobalWhatsApp";;
 import News_Detail from "./pages/NewsDetail";
 import RequireAuth from "./pages/admin/components/RequireAuth";
+import UserChat from "./pages/UserChat";
 
 createRoot(document.getElementById("root")).render(
     <StrictMode>
@@ -33,6 +33,7 @@ createRoot(document.getElementById("root")).render(
                 <Route path="/what_we_do" element={<FieldPage />} />
                 <Route path="/product" element={<Products />} />
                 <Route path="/contact" element={<ContactPage />} />
+                <Route path="/chat" element={<UserChat />} />
                 <Route path="/news" element={<News />} />
                 <Route path="/api/admin/login" element={<AdminLogin />} />
                 <Route

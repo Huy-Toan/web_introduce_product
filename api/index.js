@@ -184,6 +184,44 @@ app.post("/wa/send", async (c) => {
     );
 });
 
+/* ================== 2b) /wa/inbox – user gửi tin nhắn ================== */
+app.post("/wa/inbox", async (c) => {
+    const env = c.env;
+    const { from, body } = await c.req.json().catch(() => ({}));
+    const sender = (from || "").replace(/\D/g, "");
+    const text = (body || "").toString();
+
+    if (!sender || !text) {
+        return addCORS(
+            new Response(JSON.stringify({ ok: false, error: "Missing from/body" }), {
+                status: 400,
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+    }
+
+    let dbInserted = false;
+    try {
+        if (env.DB) {
+            await env.DB
+                .prepare(
+                    "INSERT INTO messages(chat_id, direction, wa_from, wa_to, type, body, ts) VALUES (?,?,?,?,?,?,?)"
+                )
+                .bind(sender, "in", sender, env.BUSINESS_WA_E164 || "", "text", text, Date.now())
+                .run();
+            dbInserted = true;
+        }
+    } catch (e) {
+        console.error("D1 insert incoming error:", e);
+    }
+
+    return addCORS(
+        new Response(JSON.stringify({ ok: true, dbInserted }), {
+            headers: { "Content-Type": "application/json" },
+        })
+    );
+});
+
 /* ================== 3) /wa/history – đọc lịch sử D1 ================== */
 app.get("/wa/history", async (c) => {
     const env = c.env;

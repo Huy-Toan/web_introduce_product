@@ -11,6 +11,17 @@ export async function sendMessage(to, body) {
     if (!j.ok) throw new Error(j.error || "Send failed");
     return j;
 }
+
+export async function sendUserMessage(from, body) {
+    const r = await fetch(`${API_BASE}/wa/inbox`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ from, body })
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || "Send failed");
+    return j;
+}
 export async function fetchHistory(chat, limit=50) {
     const r = await fetch(`${API_BASE}/wa/history?chat=${encodeURIComponent(chat)}&limit=${limit}`);
     const j = await r.json();
