@@ -1,10 +1,10 @@
-
 // src/pages/ProductDetailPage.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import TopNavigation from "../components/Navigation";
 import MarkdownOnly from "../components/MarkdownOnly";
 import Footer from "../components/Footer";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 export default function ProductDetailPage() {
   const { idOrSlug } = useParams();
@@ -16,11 +16,19 @@ export default function ProductDetailPage() {
   const [relLoading, setRelLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Ảnh fallback nếu null/"null"
+  const items = [
+    { label: "Sản phẩm", to: "/product" },
+    ...(product?.parent_name && product?.parent_slug
+      ? [{ label: product.parent_name, to: `/product?parent=${encodeURIComponent(product.parent_slug)}` }]
+      : []),
+    ...(product?.subcategory_name && product?.subcategory_slug
+      ? [{ label: product.subcategory_name, to: `/product?sub=${encodeURIComponent(product.subcategory_slug)}` }]
+      : []),
+    { label: product?.title || "Chi tiết" },
+  ];
+
   const imageSrc = useMemo(() => {
-    if (!product?.image_url || product.image_url === "null") {
-      return "/placeholder.png"; // đổi theo ảnh mặc định của bạn
-    }
+    if (!product?.image_url || product.image_url === "null") return "/placeholder.png";
     return product.image_url;
   }, [product]);
 
@@ -28,6 +36,8 @@ export default function ProductDetailPage() {
     if (!idOrSlug) return;
 
     const ac = new AbortController();
+    const safeJson = async (res) => { try { return await res.json(); } catch { return {}; } };
+
     (async () => {
       try {
         setLoading(true);
@@ -47,25 +57,46 @@ export default function ProductDetailPage() {
         const p = data?.product || null;
         setProduct(p);
 
-        // 2) Fetch related theo category (nếu có)
-        if (p?.category_id) {
-          setRelLoading(true);
-          const relRes = await fetch(`/api/products?category_id=${p.category_id}`, {
+        // 2) Related theo sub -> parent
+        setRelLoading(true);
+        let relatedList = [];
+
+        const subSlug = p?.subcategory_slug ?? p?.subcategory?.slug ?? null;
+        const parentSlug = p?.parent_slug ?? p?.parent?.slug ?? null;
+
+        if (subSlug) {
+          // ưu tiên endpoint theo sidebar: /api/sub_categories/:slug/products
+          let relRes = await fetch(`/api/sub_categories/${encodeURIComponent(subSlug)}/products`, {
+            cache: "no-store",
+            signal: ac.signal,
+          });
+
+          // fallback sang /api/subcategories nếu BE dùng tên này
+          if (!relRes.ok) {
+            relRes = await fetch(`/api/subcategories/${encodeURIComponent(subSlug)}/products`, {
+              cache: "no-store",
+              signal: ac.signal,
+            });
+          }
+
+          if (relRes.ok) {
+            const relData = await safeJson(relRes);
+            relatedList = Array.isArray(relData?.products) ? relData.products : [];
+          }
+        } else if (parentSlug) {
+          const relRes = await fetch(`/api/parent_categories/${encodeURIComponent(parentSlug)}/products`, {
             cache: "no-store",
             signal: ac.signal,
           });
           if (relRes.ok) {
-            const relData = await relRes.json();
-            const list = Array.isArray(relData?.products) ? relData.products : [];
-            // loại chính nó
-            setRelated(list.filter((x) => x.id !== p.id));
-          } else {
-            setRelated([]);
+            const relData = await safeJson(relRes);
+            relatedList = Array.isArray(relData?.products) ? relData.products : [];
           }
-          setRelLoading(false);
-        } else {
-          setRelated([]);
         }
+
+        // loại chính nó + giới hạn
+        relatedList = relatedList.filter(x => x.id !== p?.id).slice(0, 12);
+        setRelated(relatedList);
       } catch (e) {
         if (e.name !== "AbortError") {
           console.error("Load product error:", e);
@@ -74,6 +105,7 @@ export default function ProductDetailPage() {
           setRelated([]);
         }
       } finally {
+        setRelLoading(false);
         setLoading(false);
       }
     })();
@@ -81,26 +113,28 @@ export default function ProductDetailPage() {
     return () => ac.abort();
   }, [idOrSlug]);
 
+  const handleCategoryClick = () => {
+    const subSlug = product?.subcategory_slug ?? product?.subcategory?.slug ?? null;
+    const parentSlug = product?.parent_slug ?? product?.parent?.slug ?? null;
+
+    if (subSlug) {
+      navigate(`/product?sub=${encodeURIComponent(subSlug)}`);
+      return;
+    }
+    if (parentSlug) {
+      navigate(`/product?parent=${encodeURIComponent(parentSlug)}`);
+    }
+  };
+
   const handleRelatedClick = (item) => {
     navigate(`/product/product-detail/${item.slug || item.id}`);
   };
-
-  const handleCategoryClick = () => {
-  // Cố gắng lấy slug trước, nếu không có thì fallback sang id
-  const catSlug =
-    product.category_slug ??
-    product.category?.slug ??
-    (product.category_id ? String(product.category_id) : null);
-
-  if (!catSlug) return;
-
-  navigate(`/product?category=${encodeURIComponent(catSlug)}`);
-};
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
         <TopNavigation />
+        <Breadcrumbs items={items} className="mb-4" />
         <div className="flex justify-center items-center py-20">
           <div className="h-10 w-10 border-2 border-blue-800 border-t-transparent rounded-full animate-spin"></div>
         </div>
@@ -113,6 +147,7 @@ export default function ProductDetailPage() {
     return (
       <div className="min-h-screen bg-gray-50">
         <TopNavigation />
+        <Breadcrumbs items={items} className="mb-4" />
         <div className="container mx-auto px-4 py-20">
           <div className="text-center text-gray-600">
             <h2 className="text-2xl font-semibold mb-4">Không tìm thấy sản phẩm</h2>
@@ -128,8 +163,10 @@ export default function ProductDetailPage() {
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
 
+      {/* sửa className: bỏ "mb-" dư, chỉ cần khoảng cách phía trên nếu cần */}
+      <Breadcrumbs items={items} className="mt-20" />
+
       <main className="container mx-auto px-4 py-6 max-w-7xl mt-12">
-        {/* Khối thông tin cơ bản */}
         <div className="card p-4 space-y-6">
           <div className="md:flex gap-10">
             <div className="md:w-1/3 lg:w-1/4 flex-shrink-0 mb-6 md:mb-0">
@@ -143,41 +180,46 @@ export default function ProductDetailPage() {
             <div className="md:w-2/3 lg:w-3/4">
               <h1 className="text-2xl font-semibold mb-3">{product.title}</h1>
 
-              {/* Category badge nếu có */}
-            {product.category_name && ( 
-              <div className="mb-3"> 
-                <button 
-                  type="button" 
-                  onClick={handleCategoryClick} 
-                  className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-800 
-                              hover:bg-green-100 hover:text-green-800 transition-colors cursor-pointer" 
-                  title={`Xem sản phẩm trong ${product.category_name}`} 
-                > 
-                  {product.category_name} 
-                </button> 
-              </div> 
-            )}
+              {/* Badge danh mục (ưu tiên parent/sub mới) */}
+              {(product.parent_name || product.subcategory_name) && (
+                <div className="mb-3">
+                  <button
+                    type="button"
+                    onClick={handleCategoryClick}
+                    className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-800 
+                               hover:bg-green-100 hover:text-green-800 transition-colors cursor-pointer"
+                    title={`Xem sản phẩm trong ${
+                      (product.parent_name ? product.parent_name + (product.subcategory_name ? " / " : "") : "") +
+                      (product.subcategory_name || "")
+                    }`}
+                  >
+                    {product.parent_name && <span className="mr-1">{product.parent_name}</span>}
+                    {product.parent_name && product.subcategory_name && <span className="mx-1">/</span>}
+                    {product.subcategory_name && <span>{product.subcategory_name}</span>}
+                  </button>
+                </div>
+              )}
 
-              {/* Description ngắn */}
               {product.description && (
                 <p className="text-gray-900 leading-relaxed">{product.description}</p>
               )}
             </div>
           </div>
 
-          {/* Content đầy đủ */}
-             <section className="prose max-w-none">
-               <h2 className="text-xl font-semibold mb-3">Nội dung</h2>
-               <MarkdownOnly value={product.content || ""} />
-             </section>
+          <section className="prose max-w-none">
+            <h2 className="text-xl font-semibold mb-3">Nội dung</h2>
+            <MarkdownOnly value={product.content || ""} />
+          </section>
         </div>
 
         {/* Related */}
         <section className="mt-10">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">
-              {product.category_name
-                ? `Sản phẩm cùng loại: ${product.category_name}`
+              {product.subcategory_name
+                ? `Sản phẩm cùng loại: ${product.subcategory_name}`
+                : product.parent_name
+                ? `Sản phẩm thuộc: ${product.parent_name}`
                 : "Có thể bạn cũng thích"}
             </h3>
           </div>
