@@ -6,7 +6,7 @@ function ProductCard({ product, onClick }) {
     >
       <div className="w-full h-80">
         <img
-          src={product.image_url}
+          src={product.image_url || "/banner.jpg"}
           alt={product.title}
           className="w-full h-full object-cover transition-transform hover:scale-[1.03] duration-300"
         />

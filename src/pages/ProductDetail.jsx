@@ -1,5 +1,5 @@
 // src/pages/ProductDetailPage.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import TopNavigation from "../components/Navigation";
 import MarkdownOnly from "../components/MarkdownOnly";
@@ -9,6 +9,7 @@ import Breadcrumbs from "../components/Breadcrumbs";
 export default function ProductDetailPage() {
   const { idOrSlug } = useParams();
   const navigate = useNavigate();
+  const trackRef = useRef(null);
 
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
@@ -16,19 +17,40 @@ export default function ProductDetailPage() {
   const [relLoading, setRelLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // gọi sub_categories để lấy parent_* (có fallback tên endpoint)
+  const fetchParentBySub = async (subSlug, signal) => {
+    let res = await fetch(`/api/sub_categories/${encodeURIComponent(subSlug)}`, { signal });
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const sub = data.subcategory || data; // tuỳ BE
+    return {
+      parent_slug: sub.parent_slug || sub.parent?.slug || null,
+      parent_name: sub.parent_name || sub.parent?.name || null,
+    };
+  };
+
+
+
+  const scrollRelated = (dir = 1) => {
+    const el = trackRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * el.clientWidth, behavior: "smooth" });
+  };
+
   const items = [
-    { label: "Sản phẩm", to: "/product" },
+    { label: "Product", to: "/product" },
     ...(product?.parent_name && product?.parent_slug
-      ? [{ label: product.parent_name, to: `/product?parent=${encodeURIComponent(product.parent_slug)}` }]
+      ? [{ label: product.parent_name, to: `/product/${encodeURIComponent(product.parent_slug)}` }]
       : []),
     ...(product?.subcategory_name && product?.subcategory_slug
-      ? [{ label: product.subcategory_name, to: `/product?sub=${encodeURIComponent(product.subcategory_slug)}` }]
+      ? [{ label: product.subcategory_name, to: `/product/${encodeURIComponent(product.parent_slug)}/${encodeURIComponent(product.subcategory_slug)}` }]
       : []),
     { label: product?.title || "Chi tiết" },
   ];
 
   const imageSrc = useMemo(() => {
-    if (!product?.image_url || product.image_url === "null") return "/placeholder.png";
+    if (!product?.image_url || product.image_url === "null") return "/banner.jpg";
     return product.image_url;
   }, [product]);
 
@@ -57,6 +79,14 @@ export default function ProductDetailPage() {
         const p = data?.product || null;
         setProduct(p);
 
+        if (!p?.parent_slug && p?.subcategory_slug) {
+          const parent = await fetchParentBySub(p.subcategory_slug, ac.signal);
+          if (parent?.parent_slug) {
+            setProduct(prev => ({ ...prev, ...parent }));
+          }
+        }
+
+        console.log("Loaded product:", p);
         // 2) Related theo sub -> parent
         setRelLoading(true);
         let relatedList = [];
@@ -116,18 +146,14 @@ export default function ProductDetailPage() {
   const handleCategoryClick = () => {
     const subSlug = product?.subcategory_slug ?? product?.subcategory?.slug ?? null;
     const parentSlug = product?.parent_slug ?? product?.parent?.slug ?? null;
+    console.log("Navigate to category:", parentSlug, subSlug);
 
-    if (subSlug) {
-      navigate(`/product?sub=${encodeURIComponent(subSlug)}`);
-      return;
-    }
-    if (parentSlug) {
-      navigate(`/product?parent=${encodeURIComponent(parentSlug)}`);
-    }
+    navigate(`/product/${encodeURIComponent(parentSlug)}/${encodeURIComponent(subSlug)}`);
+
   };
 
   const handleRelatedClick = (item) => {
-    navigate(`/product/product-detail/${item.slug || item.id}`);
+    navigate(`/product/product-detail/${item.product_slug}`);
   };
 
   if (loading) {
@@ -162,40 +188,41 @@ export default function ProductDetailPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
+      <Breadcrumbs items={items} className="mt-16" />
 
-      {/* sửa className: bỏ "mb-" dư, chỉ cần khoảng cách phía trên nếu cần */}
-      <Breadcrumbs items={items} className="mt-20" />
-
-      <main className="container mx-auto px-4 py-6 max-w-7xl mt-12">
+      <main className="container mx-auto px-4 py-6 max-w-7xl">
         <div className="card p-4 space-y-6">
           <div className="md:flex gap-10">
-            <div className="md:w-1/3 lg:w-1/4 flex-shrink-0 mb-6 md:mb-0">
+          <div className="md:w-1/2 flex-shrink-0 mb-6 md:mb-0">
+            {/* Khung cố định chiều cao, full chiều ngang */}
+            <div className="w-full h-[520px] md:h-[560px] rounded-md border border-gray-200 bg-white overflow-hidden">
               <img
-                src={imageSrc}
+                src={imageSrc}            
                 alt={product.title}
-                className="w-full h-full object-contain rounded-md border border-gray-200"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = "/banner.jpg"; 
+                }}
               />
             </div>
+          </div>
+
 
             <div className="md:w-2/3 lg:w-3/4">
               <h1 className="text-2xl font-semibold mb-3">{product.title}</h1>
 
               {/* Badge danh mục (ưu tiên parent/sub mới) */}
-              {(product.parent_name || product.subcategory_name) && (
-                <div className="mb-3">
+              {product.subcategory_name && (
+                <div className="mb-5">
                   <button
                     type="button"
                     onClick={handleCategoryClick}
-                    className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-800 
+                    className="inline-flex items-center px-4 py-1 rounded-full text-xl bg-gray-100 text-gray-800 
                                hover:bg-green-100 hover:text-green-800 transition-colors cursor-pointer"
-                    title={`Xem sản phẩm trong ${
-                      (product.parent_name ? product.parent_name + (product.subcategory_name ? " / " : "") : "") +
-                      (product.subcategory_name || "")
-                    }`}
+                    title={`Xem sản phẩm trong ${product.subcategory_name}`}
                   >
-                    {product.parent_name && <span className="mr-1">{product.parent_name}</span>}
-                    {product.parent_name && product.subcategory_name && <span className="mx-1">/</span>}
-                    {product.subcategory_name && <span>{product.subcategory_name}</span>}
+                    {product.subcategory_name && <span className="block truncate font-medium">{product.subcategory_name}</span>}
                   </button>
                 </div>
               )}
@@ -212,43 +239,101 @@ export default function ProductDetailPage() {
           </section>
         </div>
 
-        {/* Related */}
-        <section className="mt-10">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">
-              {product.subcategory_name
-                ? `Sản phẩm cùng loại: ${product.subcategory_name}`
-                : product.parent_name
-                ? `Sản phẩm thuộc: ${product.parent_name}`
-                : "Có thể bạn cũng thích"}
-            </h3>
-          </div>
+{/* Related */}
+      <section className="mt-10">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold">
+            {product.subcategory_name
+              ? `Sản phẩm cùng loại: ${product.subcategory_name}`
+              : product.parent_name
+              ? `Sản phẩm thuộc: ${product.parent_name}`
+              : "Có thể bạn cũng thích"}
+          </h3>
 
-          {relLoading ? (
-            <p>Đang tải...</p>
-          ) : related.length === 0 ? (
-            <p className="text-gray-600">Chưa có sản phẩm liên quan.</p>
-          ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-4">
+          {/* Nút điều hướng (ẩn trên mobile nếu muốn) */}
+          {related.length > 0 && (
+            <div className="hidden md:flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => scrollRelated(-1)}
+                className="cursor-pointer px-3 py-1.5 rounded-md border hover:bg-gray-50"
+                aria-label="Prev"
+                title="Prev"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollRelated(1)}
+                className="cursor-pointer px-3 py-1.5 rounded-md border hover:bg-gray-50"
+                aria-label="Next"
+                title="Next"
+              >
+                ›
+              </button>
+            </div>
+          )}
+        </div>
+
+        {relLoading ? (
+          <p>Đang tải...</p>
+        ) : related.length === 0 ? (
+          <p className="text-gray-600">Chưa có sản phẩm liên quan.</p>
+        ) : (
+          <div className="relative">
+            {/* Track */}
+            <div
+              ref={trackRef}
+              className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar"
+            >
               {related.map((rel) => (
                 <div
                   key={rel.id}
-                  className="card p-4 text-center cursor-pointer hover:shadow"
                   onClick={() => handleRelatedClick(rel)}
+                  className="shrink-0 w-1/2 md:w-1/4 snap-start cursor-pointer rounded-md border border-gray-200 overflow-hidden hover:shadow group transition"
                 >
-                  <div className="w-full aspect-[3/4] mx-auto mb-3">
+                  <div className="w-full aspect-[3/4] overflow-hidden bg-white">
                     <img
-                      src={!rel.image_url || rel.image_url === "null" ? "/placeholder.png" : rel.image_url}
+                      src={!rel.image_url || rel.image_url === "null" ? "/banner.jpg" : rel.image_url}
                       alt={rel.title}
-                      className="w-full h-full object-contain rounded-sm border border-gray-200"
+                      className="block w-full h-full object-cover transform transition-transform duration-300 ease-in-out group-hover:scale-110"
+                      loading="lazy"
                     />
                   </div>
-                  <div className="font-medium text-gray-900 line-clamp-2">{rel.title}</div>
+                  <div className="px-3 py-2 text-center">
+                    <div className="font-medium text-gray-900 line-clamp-2">{rel.title}</div>
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-        </section>
+
+            {/* Nút điều hướng nổi (hiện cả mobile nếu muốn) */}
+            {related.length > 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => scrollRelated(-1)}
+                  className="md:hidden absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 bg-white cursor-pointer hover:bg-gray-50 shadow rounded-full w-9 h-9 flex items-center justify-center"
+                  aria-label="Prev"
+                  title="Prev"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollRelated(1)}
+                  className="md:hidden absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10 bg-white cursor-pointer hover:bg-gray-50 shadow rounded-full w-9 h-9 flex items-center justify-center"
+                  aria-label="Next"
+                  title="Next"
+                >
+                  ›
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </section>
+
       </main>
 
       <Footer />

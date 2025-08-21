@@ -7,7 +7,7 @@ export const NewsCard = ({ news, onClick }) => {
     >
       <div className="aspect-video overflow-hidden">
         <img
-          src={news.image_url}
+          src={news.image_url || "/banner.jpg"}
           alt={news.title}
           className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
         />
@@ -17,7 +17,7 @@ export const NewsCard = ({ news, onClick }) => {
           {news.title}
         </h3>
         <p className="text-gray-600 text-sm line-clamp-3">
-          {news.meta_description || news.content || ''}
+          Ngày đăng : {new Date(news.created_at).toLocaleDateString('vi-VN')}
         </p>  
       </div>
     </div>

@@ -15,6 +15,88 @@ const slugify = (s = '') =>
 const isValidSlug = (s = '') => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s);
 const ALL_LOCALES = ['vi', 'en', 'ja', 'ko', 'zh', 'fr', 'de'];
 
+/** Nhãn & placeholder theo locale */
+const LABELS = {
+  vi: {
+    title: 'Tên sản phẩm',
+    title_ph: 'Nhập tên sản phẩm',
+    description: 'Mô tả ngắn',
+    description_ph: 'Mô tả ngắn',
+    content: 'Nội dung chi tiết',
+    content_ph: 'Nhập nội dung chi tiết',
+    autoTranslate: 'Tự dịch từ VI',
+    subcat: 'Danh mục con',
+    translateContentBtn: 'Dịch nội dung từ VI',
+  },
+  en: {
+    title: 'Title',
+    title_ph: 'Enter product title',
+    description: 'Description',
+    description_ph: 'Short description',
+    content: 'Content',
+    content_ph: 'Enter detailed content',
+    autoTranslate: 'Auto-translate from VI',
+    subcat: 'Subcategory',
+    translateContentBtn: 'Translate content from VI',
+  },
+  ja: {
+    title: 'タイトル',
+    title_ph: '商品名を入力',
+    description: '説明',
+    description_ph: '短い説明',
+    content: 'コンテンツ',
+    content_ph: '詳細コンテンツを入力',
+    autoTranslate: 'VI から自動翻訳',
+    subcat: 'サブカテゴリ',
+    translateContentBtn: 'VI から内容を翻訳',
+  },
+  ko: {
+    title: '제목',
+    title_ph: '제품 이름을 입력하세요',
+    description: '설명',
+    description_ph: '짧은 설명',
+    content: '내용',
+    content_ph: '상세 내용을 입력하세요',
+    autoTranslate: '베트남어에서 자동 번역',
+    subcat: '하위 카테고리',
+    translateContentBtn: 'VI에서 내용 번역',
+  },
+  zh: {
+    title: '标题',
+    title_ph: '输入产品标题',
+    description: '描述',
+    description_ph: '简短描述',
+    content: '内容',
+    content_ph: '输入详细内容',
+    autoTranslate: '从越南语自动翻译',
+    subcat: '子分类',
+    translateContentBtn: '从越南语翻译内容',
+  },
+  fr: {
+    title: 'Titre',
+    title_ph: 'Saisir le titre du produit',
+    description: 'Description',
+    description_ph: 'Courte description',
+    content: 'Contenu',
+    content_ph: 'Saisir le contenu détaillé',
+    autoTranslate: 'Traduire automatiquement depuis le VI',
+    subcat: 'Sous-catégorie',
+    translateContentBtn: 'Traduire le contenu depuis le VI',
+  },
+  de: {
+    title: 'Titel',
+    title_ph: 'Produkttitel eingeben',
+    description: 'Beschreibung',
+    description_ph: 'Kurze Beschreibung',
+    content: 'Inhalt',
+    content_ph: 'Detaillierten Inhalt eingeben',
+    autoTranslate: 'Automatisch aus VI übersetzen',
+    subcat: 'Unterkategorie',
+    translateContentBtn: 'Inhalt aus VI übersetzen',
+  },
+};
+const L = (lc, key) => LABELS[lc]?.[key] ?? LABELS.en[key] ?? key;
+
 /** Dịch markdown theo dòng, giữ prefix cú pháp */
 async function translateMarkdown(md, source, target) {
   const lines = String(md || '').split('\n');
@@ -32,7 +114,7 @@ async function translateMarkdown(md, source, target) {
           body: JSON.stringify({ text, source, target }),
         });
         if (r.ok) translated = (await r.json())?.translated || text;
-      } catch { }
+      } catch { /* noop */ }
     }
     out.push(prefix ? prefix + translated : translated);
   }
@@ -42,22 +124,20 @@ async function translateMarkdown(md, source, target) {
 const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id);
 
-  // Base (VI) -> products
+  // Base (VI)
   const [base, setBase] = useState({
     title: '',
     slug: '',
     description: '',
     content: '',
     image_url: '',
-    parent_id: null,       // để chọn parent trong UI (không gửi lên)
-    subcategory_id: null,  // gửi lên API
+    subcategory_id: null,
   });
 
-  // Translations -> products_translations (title, description, content)
+  // Translations
   const [translations, setTranslations] = useState(
     /** @type {Record<string,{title:string,description:string,content:string}>} */({})
   );
-
   const [touched, setTouched] = useState(
     /** @type {Record<string,{title?:boolean,description?:boolean,content?:boolean}>} */({})
   );
@@ -75,42 +155,21 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const lastSourceTitle = useRef('');
   const lastSourceDesc = useRef('');
 
-  // Data cho dropdown
-  const [parents, setParents] = useState([]);           // [{id,name,slug}]
-  const [parentsLoading, setParentsLoading] = useState(false);
-  const [subcats, setSubcats] = useState([]);           // [{id,parent_id,name,slug}]
+  // Subcategories for dropdown
+  const [subcats, setSubcats] = useState([]);
   const [subcatsLoading, setSubcatsLoading] = useState(false);
 
   // Editors
   const editorVIRef = useRef(null);
   const editorRefs = useRef({}); // per-locale
 
-  // ===== Fetch parents khi mở modal
+  // Fetch subcategories
   useEffect(() => {
     if (!isOpen) return;
-    (async () => {
-      try {
-        setParentsLoading(true);
-        const r = await fetch('/api/parent_categories');
-        const j = await r.json();
-        setParents(j?.parents || []);
-      } catch {
-        setParents([]);
-      } finally {
-        setParentsLoading(false);
-      }
-    })();
-  }, [isOpen]);
-
-  // ===== Khi chọn parent → fetch subcategories theo parent
-  useEffect(() => {
-    if (!isOpen) return;
-    const pid = base.parent_id;
-    if (!pid) { setSubcats([]); setBase(prev => ({ ...prev, subcategory_id: null })); return; }
     (async () => {
       try {
         setSubcatsLoading(true);
-        const r = await fetch(`/api/sub_categories?parent_id=${pid}&locale=vi`);
+        const r = await fetch(`/api/sub_categories?locale=vi`);
         const j = await r.json();
         setSubcats(j?.subcategories || []);
       } catch {
@@ -119,18 +178,13 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
         setSubcatsLoading(false);
       }
     })();
-  }, [isOpen, base.parent_id]);
+  }, [isOpen]);
 
-  // ===== Nạp initialData vào form
+  // Load initialData
   useEffect(() => {
     if (!isOpen) return;
 
-    const viDesc =
-      initialData.description
-      ?? initialData?.translations?.vi?.description
-      ?? '';
-
-    const parentFromData = typeof initialData.parent_id === 'number' ? initialData.parent_id : null;
+    const viDesc = initialData.description ?? initialData?.translations?.vi?.description ?? '';
     const subFromData = typeof initialData.subcategory_id === 'number' ? initialData.subcategory_id : null;
 
     setBase({
@@ -139,7 +193,6 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       description: viDesc,
       content: initialData.content || '',
       image_url: initialData.image_url || '',
-      parent_id: parentFromData,
       subcategory_id: subFromData,
     });
 
@@ -149,7 +202,6 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     lastSourceTitle.current = initialData.title || '';
     lastSourceDesc.current = viDesc;
 
-    // map translations nếu server trả kèm
     const initTr = { ...(initialData.translations || {}) };
     delete initTr.vi;
     setTranslations(
@@ -170,7 +222,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     setTimeout(() => editorVIRef.current?.refresh?.(), 0);
   }, [isOpen, initialData?.id]);
 
-  // ===== Nếu edit: gọi API lấy translations nếu BE không trả kèm
+  // Load translations if editing
   useEffect(() => {
     const loadTr = async () => {
       if (!isOpen || !initialData?.id) return;
@@ -191,12 +243,12 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
           setTranslations(prev => ({ ...merged, ...prev }));
           setOpenLocales(prev => Array.from(new Set(['vi', 'en', ...Object.keys(merged), ...prev])));
         }
-      } catch { }
+      } catch { /* noop */ }
     };
     loadTr();
   }, [isOpen, initialData?.id]);
 
-  // ===== Lock editors khi upload
+  // Lock editors when uploading
   useEffect(() => {
     editorVIRef.current?.cm?.setOption('readOnly', isUploading ? 'nocursor' : false);
     Object.values(editorRefs.current || {}).forEach((ref) =>
@@ -204,7 +256,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     );
   }, [isUploading]);
 
-  // ===== Auto-translate title + description từ VI
+  // Auto-translate title + description from VI
   useEffect(() => {
     if (!autoTranslate) return;
     const srcTitle = base.title?.trim() || '';
@@ -243,7 +295,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             });
             if (rd.ok) newDesc = (await rd.json())?.translated || '';
           }
-        } catch { }
+        } catch { /* noop */ }
 
         setTranslations(prev => {
           const curr = prev[lc] || { title: '', description: '', content: '' };
@@ -262,23 +314,15 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     return () => clearTimeout(debounceTimer.current);
   }, [base.title, base.description, autoTranslate, openLocales, touched]);
 
-  // ===== Derived
-  const selectedParent = useMemo(
-    () => parents.find(p => String(p.id) === String(base.parent_id)),
-    [parents, base.parent_id]
-  );
+  // Derived
   const selectedSub = useMemo(
     () => subcats.find(s => String(s.id) === String(base.subcategory_id)),
     [subcats, base.subcategory_id]
   );
 
-  // ===== Handlers
+  // Handlers
   const handleBaseChange = (e) => {
     const { name, value } = e.target;
-    if (name === 'parent_id') {
-      setBase(prev => ({ ...prev, parent_id: value ? Number(value) : null, subcategory_id: null }));
-      return;
-    }
     if (name === 'subcategory_id') {
       setBase(prev => ({ ...prev, subcategory_id: value ? Number(value) : null }));
       return;
@@ -326,10 +370,10 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       const translated = await translateMarkdown(src, 'vi', lc);
       if (!translated) return;
       handleTrChange(lc, 'content', translated);
-    } catch { }
+    } catch { /* noop */ }
   };
 
-  // ===== Submit
+  // Submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!base.title?.trim()) { alert('Vui lòng nhập Tên sản phẩm'); return; }
@@ -345,23 +389,20 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       let image_url = base.image_url;
       if (imageFile) image_url = await uploadImage(imageFile);
 
-      // Build base payload
       let payloadBase = {
         title: base.title,
         description: base.description,
         content: base.content,
         image_url,
-        subcategory_id: base.subcategory_id ?? null, // IMPORTANT: theo schema mới
+        subcategory_id: base.subcategory_id ?? null,
       };
       if (isEditing) payloadBase.slug = slugify(base.slug || '');
 
-      // Tạo mới: bỏ slug để BE tự sinh
       if (!isEditing && payloadBase.slug) {
         const { slug, ...rest } = payloadBase;
         payloadBase = rest;
       }
 
-      // Build translations payload theo schema mới
       const cleanTranslations = {};
       for (const [lc, v] of Object.entries(translations)) {
         const hasAny = (v?.title || v?.description || v?.content);
@@ -382,8 +423,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       await onSubmit(finalPayload);
       onClose();
 
-      // reset
-      setBase({ title: '', slug: '', description: '', content: '', image_url: '', parent_id: null, subcategory_id: null });
+      setBase({ title: '', slug: '', description: '', content: '', image_url: '', subcategory_id: null });
       setTranslations({});
       setTouched({});
       setOpenLocales(['vi', 'en']);
@@ -420,7 +460,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 disabled={isUploading}
               />
               <span className="inline-flex items-center gap-1">
-                <Sparkles size={16} /> Tự dịch từ VI
+                <Sparkles size={16} /> {L(activeTab, 'autoTranslate')}
               </span>
             </label>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600" disabled={isUploading}>
@@ -449,52 +489,39 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
           {activeTab === 'vi' && (
             <div className="space-y-6">
-              {/* Parent & Subcategory */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Danh mục cha *</label>
-                  <div className="relative">
-                    <select
-                      name="parent_id"
-                      value={base.parent_id ?? ''}
-                      onChange={handleBaseChange}
-                      disabled={isUploading || parentsLoading}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                    >
-                      <option value="">— Chọn danh mục cha —</option>
-                      {parents.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                    {parentsLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2"><Loader2 className="animate-spin text-gray-400" size={18} /></div>}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Danh mục con</label>
-                  <div className="relative">
-                    <select
-                      name="subcategory_id"
-                      value={base.subcategory_id ?? ''}
-                      onChange={handleBaseChange}
-                      disabled={isUploading || subcatsLoading || !base.parent_id}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
-                    >
-                      <option value="">{base.parent_id ? '— Chọn danh mục con —' : 'Hãy chọn danh mục cha trước'}</option>
-                      {subcats.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                    {subcatsLoading && <div className="absolute right-3 top-1/2 -translate-y-1/2"><Loader2 className="animate-spin text-gray-400" size={18} /></div>}
-                  </div>
+              {/* Subcategory only */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{L('vi', 'subcat')}</label>
+                <div className="relative">
+                  <select
+                    name="subcategory_id"
+                    value={base.subcategory_id ?? ''}
+                    onChange={handleBaseChange}
+                    disabled={isUploading || subcatsLoading}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                  >
+                    <option value="">— Không chọn —</option>
+                    {subcats.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  {subcatsLoading && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="animate-spin text-gray-400" size={18} />
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Title & Slug (VI) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tên sản phẩm (VI) *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{L('vi', 'title')} (VI) *</label>
                   <input
                     name="title"
                     value={base.title}
                     onChange={handleBaseChange}
-                    placeholder="Nhập tên sản phẩm"
+                    placeholder={L('vi', 'title_ph')}
                     required
                     disabled={isUploading}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
@@ -537,13 +564,13 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
               {/* Description (VI) */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả ngắn (VI)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{L('vi', 'description')} (VI)</label>
                 <textarea
                   name="description"
                   value={base.description}
                   onChange={handleBaseChange}
                   rows={3}
-                  placeholder="Mô tả ngắn"
+                  placeholder={L('vi', 'description_ph')}
                   disabled={isUploading}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                 />
@@ -552,7 +579,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               {/* Content (VI) */}
               <div>
                 <div className="flex items-center justify-between">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nội dung chi tiết (VI) *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{L('vi', 'content')} (VI) *</label>
                 </div>
                 <EditorMd
                   ref={editorVIRef}
@@ -574,28 +601,32 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             </div>
           )}
 
-          {/* Các tab i18n khác */}
+          {/* i18n tabs */}
           {openLocales.filter(lc => lc !== 'vi').map(lc =>
             activeTab === lc && (
               <div key={lc} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Title ({lc.toUpperCase()})</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {L(lc, 'title')} ({lc.toUpperCase()})
+                    </label>
                     <input
                       value={translations[lc]?.title || ''}
                       onChange={(e) => handleTrChange(lc, 'title', e.target.value)}
-                      placeholder={`Product title (${lc.toUpperCase()})`}
+                      placeholder={`${L(lc, 'title_ph')}`}
                       disabled={isUploading}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả ngắn ({lc.toUpperCase()})</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {L(lc, 'description')} ({lc.toUpperCase()})
+                    </label>
                     <textarea
                       value={translations[lc]?.description || ''}
                       onChange={(e) => handleTrChange(lc, 'description', e.target.value)}
                       rows={3}
-                      placeholder={`Short description (${lc.toUpperCase()})`}
+                      placeholder={`${L(lc, 'description_ph')}`}
                       disabled={isUploading}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                     />
@@ -604,15 +635,17 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
                 <div>
                   <div className="flex items-center justify-between">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Nội dung ({lc.toUpperCase()})</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {L(lc, 'content')} ({lc.toUpperCase()})
+                    </label>
                     <button
                       type="button"
                       onClick={() => translateContentFromVI(lc)}
                       disabled={isUploading || !base.content}
                       className="text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
-                      title="Dịch nội dung từ VI"
+                      title={L(lc, 'translateContentBtn')}
                     >
-                      <Languages size={16} /> Dịch nội dung từ VI
+                      <Languages size={16} /> {L(lc, 'translateContentBtn')}
                     </button>
                   </div>
                   <EditorMd

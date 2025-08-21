@@ -1,3 +1,4 @@
+// src/components/ParentCategoriesFormModal.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Upload, Loader2, Wand2, Plus, Sparkles } from 'lucide-react';
 
@@ -12,6 +13,60 @@ const slugify = (s = '') =>
 
 const isValidSlug = (s = '') => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s);
 const ALL_LOCALES = ['vi', 'en', 'ja', 'ko', 'zh', 'fr', 'de'];
+
+/** Nhãn & placeholder theo locale */
+const LABELS = {
+  vi: {
+    name: 'Tên danh mục lớn',
+    name_ph: 'Nhập tên danh mục',
+    description: 'Mô tả',
+    description_ph: 'Nhập mô tả danh mục',
+    autoTranslate: 'Tự dịch từ VI',
+  },
+  en: {
+    name: 'Category name',
+    name_ph: 'Enter category name',
+    description: 'Description',
+    description_ph: 'Enter category description',
+    autoTranslate: 'Auto-translate from VI',
+  },
+  ja: {
+    name: 'カテゴリ名',
+    name_ph: 'カテゴリ名を入力',
+    description: '説明',
+    description_ph: 'カテゴリの説明を入力',
+    autoTranslate: 'VI から自動翻訳',
+  },
+  ko: {
+    name: '카테고리명',
+    name_ph: '카테고리명을 입력하세요',
+    description: '설명',
+    description_ph: '카테고리 설명을 입력하세요',
+    autoTranslate: '베트남어에서 자동 번역',
+  },
+  zh: {
+    name: '分类名称',
+    name_ph: '输入分类名称',
+    description: '描述',
+    description_ph: '输入分类描述',
+    autoTranslate: '从越南语自动翻译',
+  },
+  fr: {
+    name: 'Nom de catégorie',
+    name_ph: 'Saisir le nom de la catégorie',
+    description: 'Description',
+    description_ph: 'Saisir la description de la catégorie',
+    autoTranslate: 'Traduire automatiquement depuis le VI',
+  },
+  de: {
+    name: 'Kategoriename',
+    name_ph: 'Kategorienamen eingeben',
+    description: 'Beschreibung',
+    description_ph: 'Kategorie­beschreibung eingeben',
+    autoTranslate: 'Automatisch aus VI übersetzen',
+  },
+};
+const L = (lc, key) => LABELS[lc]?.[key] ?? LABELS.en[key] ?? key;
 
 const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id);
@@ -52,7 +107,6 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
         description: initialData.description || ''
       };
 
-      // Nếu response detail đã kèm translations (tuỳ backend), map vào
       const initTr = { ...(initialData.translations || {}) };
       delete initTr.vi;
       const addLocales = Object.keys(initTr);
@@ -73,8 +127,8 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     const loadTranslationsIfEditing = async () => {
       if (!isOpen || !initialData?.id) return;
       try {
-        const r = await fetch(`/api/parents/${initialData.id}/translations`);
-        if (!r.ok) return; // không có route này cũng không sao
+        const r = await fetch(`/api/parent_categories/${initialData.id}/translations`);
+        if (!r.ok) return;
         const j = await r.json();
         if (j?.translations && typeof j.translations === 'object') {
           const initTr = {};
@@ -85,7 +139,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
               description: v?.description || ''
             };
           }
-          setTranslations(prev => ({ ...initTr, ...prev })); // ưu tiên dữ liệu từ API
+          setTranslations(prev => ({ ...initTr, ...prev }));
           const nextOpen = Array.from(new Set(['vi', 'en', ...Object.keys(initTr)]));
           setOpenLocales(nextOpen);
         }
@@ -114,7 +168,6 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
         const isTouched = touched[lc]?.name || touched[lc]?.description;
         if (isTouched) continue;
 
-        // Gọi /api/translate (nếu có); fallback: copy nguyên rồi slugify khi cần (slug theo locale đã bỏ)
         let nameTranslated = '';
         let descTranslated = '';
         try {
@@ -124,10 +177,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ text: srcName, source: 'vi', target: lc })
             });
-            if (r.ok) {
-              const j = await r.json();
-              nameTranslated = j?.translated || '';
-            }
+            if (r.ok) nameTranslated = (await r.json())?.translated || '';
           }
           if (srcDesc) {
             const r2 = await fetch('/api/translate', {
@@ -135,10 +185,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ text: srcDesc, source: 'vi', target: lc })
             });
-            if (r2.ok) {
-              const j2 = await r2.json();
-              descTranslated = j2?.translated || '';
-            }
+            if (r2.ok) descTranslated = (await r2.json())?.translated || '';
           }
         } catch { /* noop */ }
 
@@ -194,7 +241,6 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
   };
 
   const handleSlugBlurVI = () => {
-    // Cho phép chỉnh slug khi EDIT; khi CREATE, backend có thể tự sinh nếu không truyền
     const normalized = slugify(base.slug || '');
     setBase(prev => ({ ...prev, slug: normalized }));
     if (normalized && !isValidSlug(normalized)) {
@@ -219,7 +265,11 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validate VI slug khi edit (nếu bạn muốn giữ chặt)
+    // Validate tối thiểu
+    if (!base.name?.trim()) {
+      alert('Vui lòng nhập tên danh mục (VI).');
+      return;
+    }
     if (isEditing && base.slug && !isValidSlug(base.slug)) {
       setSlugErrorVI('Slug không hợp lệ.');
       return;
@@ -228,27 +278,27 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     setIsUploading(true);
     try {
       let image_url = base.image_url;
-      if (imageFile) {
-        image_url = await uploadImage(imageFile);
-      }
+      if (imageFile) image_url = await uploadImage(imageFile);
 
-      // Build base payload
+      // Base payload
       let payloadBase = { name: base.name, description: base.description, image_url };
       if (isEditing && base.slug) payloadBase.slug = slugify(base.slug || '');
-
-      // Nếu tạo mới và muốn backend tự sinh slug, KHÔNG gửi slug khi create
+      // Tạo mới: nếu muốn để BE tự sinh slug -> đừng gửi slug
       if (!isEditing && payloadBase.slug) {
         const { slug, ...rest } = payloadBase;
         payloadBase = rest;
       }
 
-      // Build translations payload: { lc: { name?, description? } }
+      // Translations payload
       const cleanTranslations = {};
       for (const [lc, v] of Object.entries(translations)) {
         const tName = (v?.name || '').trim();
         const tDesc = (v?.description || '').trim();
-        if (!tName && !tDesc) continue; // bỏ bản dịch trống
-        cleanTranslations[lc] = { ...(tName ? { name: tName } : {}), ...(tDesc ? { description: tDesc } : {}) };
+        if (!tName && !tDesc) continue;
+        cleanTranslations[lc] = {
+          ...(tName ? { name: tName } : {}),
+          ...(tDesc ? { description: tDesc } : {}),
+        };
       }
 
       const finalPayload = {
@@ -297,7 +347,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
                 disabled={isUploading}
               />
               <span className="inline-flex items-center gap-1">
-                <Sparkles size={16} /> Tự dịch từ VI
+                <Sparkles size={16} /> {L(activeTab, 'autoTranslate')}
               </span>
             </label>
             <button
@@ -364,20 +414,20 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Tên danh mục lớn (VI) *
+                    {L('vi', 'name')} (VI) *
                   </label>
                   <input
                     name="name"
                     value={base.name}
                     onChange={handleBaseChange}
-                    placeholder="Nhập tên danh mục"
+                    placeholder={L('vi', 'name_ph')}
                     required
                     disabled={isUploading}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                   />
                 </div>
 
-                {/* Slug VI: cho phép chỉnh khi EDIT; khi CREATE thường để backend tự sinh */}
+                {/* Slug VI */}
                 <div>
                   <div className="flex items-center justify-between">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -418,14 +468,14 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mô tả (VI) *
+                  {L('vi', 'description')} (VI) *
                 </label>
                 <textarea
                   name="description"
                   value={base.description}
                   onChange={handleBaseChange}
                   rows={6}
-                  placeholder="Nhập mô tả danh mục"
+                  placeholder={L('vi', 'description_ph')}
                   required
                   disabled={isUploading}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
@@ -450,12 +500,12 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Tên ({lc.toUpperCase()})
+                      {L(lc, 'name')} ({lc.toUpperCase()})
                     </label>
                     <input
                       value={translations[lc]?.name || ''}
                       onChange={(e) => handleTrChange(lc, 'name', e.target.value)}
-                      placeholder={`Category name (${lc.toUpperCase()})`}
+                      placeholder={`${L(lc, 'name_ph')}`}
                       disabled={isUploading}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                     />
@@ -463,13 +513,13 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Mô tả ({lc.toUpperCase()})
+                      {L(lc, 'description')} ({lc.toUpperCase()})
                     </label>
                     <textarea
                       value={translations[lc]?.description || ''}
                       onChange={(e) => handleTrChange(lc, 'description', e.target.value)}
                       rows={6}
-                      placeholder={`Description (${lc.toUpperCase()})`}
+                      placeholder={`${L(lc, 'description_ph')}`}
                       disabled={isUploading}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                     />

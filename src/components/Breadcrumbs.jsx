@@ -25,7 +25,7 @@ export default function Breadcrumbs({ items = [], className = "" }) {
 
   return (
     <nav
-      className={`w-full bg-gray-100 text-gray-700 border-y ${className}`}
+      className={`w-full bg-gray-100 text-gray-700 ${className}`}
       aria-label="Breadcrumb"
     >
       {/* cuộn ngang khi dài (mobile) */}

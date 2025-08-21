@@ -26,9 +26,9 @@ function ProductCategories({ categories = [], onSelectCategory }) {
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch("/api/categories", { cache: "no-store", signal: ac.signal });
+        const res = await fetch("/api/parent_categories", { cache: "no-store", signal: ac.signal });
         const data = await res.json();
-        const list = Array.isArray(data?.categories) ? data.categories : [];
+        const list = Array.isArray(data?.parents) ? data.parents : [];
         // Chuẩn hóa nhẹ
         setCats(
           list.map((c) => ({
@@ -40,7 +40,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
         );
       } catch (err) {
         if (err.name !== "AbortError") {
-          console.error("Failed to load categories:", err);
+          console.error("Failed to load parents:", err);
           setCats([]);
         }
       } finally {
@@ -55,7 +55,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
     const updateItemsPerView = () => {
       if (window.innerWidth < 640) setItemsPerView(1);
       else if (window.innerWidth < 1024) setItemsPerView(2);
-      else setItemsPerView(4);
+      else setItemsPerView(3);
     };
     updateItemsPerView();
     window.addEventListener("resize", updateItemsPerView);
@@ -136,10 +136,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
   const handleCategoryClick = (category) => {
     const slug = category.slug || category.id;
     // Điều hướng SPA tới trang products kèm filter bằng slug
-    navigate({
-      pathname: "/product",
-      search: `?category=${encodeURIComponent(slug)}`,
-    });
+    navigate(`/product/${encodeURIComponent(slug)}`);
     onSelectCategory?.(category);
   };
 
@@ -239,7 +236,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
                 const img =
                   category.image_url && category.image_url !== "null"
                     ? category.image_url
-                    : "/placeholder.png";
+                    : "/banner.jpg";
                   return (
                     <div
                       key={category.id || category.slug || name || index}
@@ -251,7 +248,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
                         className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2 group h-full pointer-events-auto overflow-hidden"
                       >
                         {/* Image - chiếm toàn bộ phần trên */}
-                        <div className="w-full h-48 sm:h-40 lg:h-52 overflow-hidden">
+                        <div className="w-full aspect-[4/5] sm:aspect-[3/4] overflow-hidden">
                           <img
                             src={img}
                             alt={name}

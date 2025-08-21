@@ -1,3 +1,4 @@
+// src/components/SubCategoriesFormModal.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Upload, Loader2, Wand2, Sparkles, Plus } from 'lucide-react';
 
@@ -12,6 +13,105 @@ const slugify = (s = '') =>
 
 const isValidSlug = (s = '') => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s);
 const ALL_LOCALES = ['vi', 'en', 'ja', 'ko', 'zh', 'fr', 'de'];
+
+/** Nhãn/placeholder theo locale */
+const LABELS = {
+  vi: {
+    parent: 'Danh mục cha',
+    parent_ph: '— Chọn danh mục cha —',
+    name: 'Tên danh mục con',
+    name_ph: 'Nhập tên danh mục con',
+    description: 'Mô tả',
+    description_ph: 'Nhập mô tả danh mục con',
+    autoTranslate: 'Tự dịch từ VI',
+    name_any: (lc) => `Tên (${lc})`,
+    name_any_ph: (lc) => `Name (${lc})`,
+    desc_any: (lc) => `Mô tả (${lc})`,
+    desc_any_ph: (lc) => `Description (${lc})`,
+  },
+  en: {
+    parent: 'Parent category',
+    parent_ph: '— Select parent category —',
+    name: 'Subcategory name',
+    name_ph: 'Enter subcategory name',
+    description: 'Description',
+    description_ph: 'Enter subcategory description',
+    autoTranslate: 'Auto-translate from VI',
+    name_any: (lc) => `Name (${lc})`,
+    name_any_ph: (lc) => `Name (${lc})`,
+    desc_any: (lc) => `Description (${lc})`,
+    desc_any_ph: (lc) => `Description (${lc})`,
+  },
+  ja: {
+    parent: '親カテゴリ',
+    parent_ph: '— 親カテゴリを選択 —',
+    name: 'サブカテゴリ名',
+    name_ph: 'サブカテゴリ名を入力',
+    description: '説明',
+    description_ph: 'サブカテゴリの説明を入力',
+    autoTranslate: 'VI から自動翻訳',
+    name_any: (lc) => `名称 (${lc})`,
+    name_any_ph: (lc) => `名称 (${lc})`,
+    desc_any: (lc) => `説明 (${lc})`,
+    desc_any_ph: (lc) => `説明 (${lc})`,
+  },
+  ko: {
+    parent: '상위 카테고리',
+    parent_ph: '— 상위 카테고리 선택 —',
+    name: '하위 카테고리명',
+    name_ph: '하위 카테고리명을 입력하세요',
+    description: '설명',
+    description_ph: '하위 카테고리 설명을 입력하세요',
+    autoTranslate: '베트남어에서 자동 번역',
+    name_any: (lc) => `이름 (${lc})`,
+    name_any_ph: (lc) => `이름 (${lc})`,
+    desc_any: (lc) => `설명 (${lc})`,
+    desc_any_ph: (lc) => `설명 (${lc})`,
+  },
+  zh: {
+    parent: '父级分类',
+    parent_ph: '— 选择父级分类 —',
+    name: '子分类名称',
+    name_ph: '输入子分类名称',
+    description: '描述',
+    description_ph: '输入子分类描述',
+    autoTranslate: '从越南语自动翻译',
+    name_any: (lc) => `名称 (${lc})`,
+    name_any_ph: (lc) => `名称 (${lc})`,
+    desc_any: (lc) => `描述 (${lc})`,
+    desc_any_ph: (lc) => `描述 (${lc})`,
+  },
+  fr: {
+    parent: 'Catégorie parente',
+    parent_ph: '— Sélectionner la catégorie parente —',
+    name: 'Nom de la sous-catégorie',
+    name_ph: 'Saisir le nom de la sous-catégorie',
+    description: 'Description',
+    description_ph: 'Saisir la description de la sous-catégorie',
+    autoTranslate: 'Traduire automatiquement depuis le VI',
+    name_any: (lc) => `Nom (${lc})`,
+    name_any_ph: (lc) => `Nom (${lc})`,
+    desc_any: (lc) => `Description (${lc})`,
+    desc_any_ph: (lc) => `Description (${lc})`,
+  },
+  de: {
+    parent: 'Übergeordnete Kategorie',
+    parent_ph: '— Übergeordnete Kategorie wählen —',
+    name: 'Unterkategoriename',
+    name_ph: 'Unterkategorienamen eingeben',
+    description: 'Beschreibung',
+    description_ph: 'Beschreibung der Unterkategorie eingeben',
+    autoTranslate: 'Automatisch aus VI übersetzen',
+    name_any: (lc) => `Name (${lc})`,
+    name_any_ph: (lc) => `Name (${lc})`,
+    desc_any: (lc) => `Beschreibung (${lc})`,
+    desc_any_ph: (lc) => `Beschreibung (${lc})`,
+  },
+};
+const L = (lc, key, ...args) =>
+  typeof LABELS[lc]?.[key] === 'function'
+    ? LABELS[lc][key](...args)
+    : LABELS[lc]?.[key] ?? LABELS.en[key] ?? key;
 
 const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id);
@@ -101,7 +201,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
     const loadTranslationsIfEditing = async () => {
       if (!isOpen || !initialData?.id) return;
       try {
-        const r = await fetch(`/api/subcategories/${initialData.id}/translations`);
+        const r = await fetch(`/api/sub_categories/${initialData.id}/translations`);
         if (!r.ok) return;
         const j = await r.json();
         if (j?.translations && typeof j.translations === 'object') {
@@ -114,7 +214,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
             };
           }
           setTranslations(prev => ({ ...apiTr, ...prev })); // ưu tiên dữ liệu từ API
-          const nextOpen = Array.from(new Set(['vi', 'en', ...Object.keys(apiTr), ...Object.keys(prev || {})]));
+          const nextOpen = Array.from(new Set(['vi', 'en', ...Object.keys(apiTr)]));
           setOpenLocales(nextOpen);
         }
       } catch (e) {
@@ -236,8 +336,8 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
     e.preventDefault();
 
     // validate bắt buộc
-    if (!form.parent_id) { alert('Vui lòng chọn Danh mục cha.'); return; }
-    if (!form.name?.trim()) { alert('Vui lòng nhập Tên danh mục con.'); return; }
+    if (!form.parent_id) { alert(L('vi', 'parent') + ' *'); return; }
+    if (!form.name?.trim()) { alert(L('vi', 'name') + ' *'); return; }
 
     // validate slug khi EDIT
     if (isEditing) {
@@ -323,7 +423,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
                 disabled={isUploading}
               />
               <span className="inline-flex items-center gap-1">
-                <Sparkles size={16} /> Tự dịch từ VI
+                <Sparkles size={16} /> {L(activeTab, 'autoTranslate')}
               </span>
             </label>
             <button
@@ -403,7 +503,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
               {/* Parent Category */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Danh mục cha *
+                  {L('vi', 'parent')} *
                 </label>
                 <div className="relative">
                   <select
@@ -413,7 +513,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
                     disabled={isUploading || parentsLoading}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                   >
-                    <option value="">— Chọn danh mục cha —</option>
+                    <option value="">{L('vi', 'parent_ph')}</option>
                     {parents.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
@@ -436,13 +536,13 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
               {/* Name */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Tên danh mục con *
+                  {L('vi', 'name')} *
                 </label>
                 <input
                   name="name"
                   value={form.name}
                   onChange={handleChange}
-                  placeholder="Nhập tên danh mục con"
+                  placeholder={L('vi', 'name_ph')}
                   required
                   disabled={isUploading}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
@@ -458,11 +558,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
                     </label>
                     <button
                       type="button"
-                      onClick={() => {
-                        const s = slugify(form.name || '');
-                        setForm(prev => ({ ...prev, slug: s }));
-                        setSlugError(s && !isValidSlug(s) ? 'Slug không hợp lệ.' : '');
-                      }}
+                      onClick={generateSlugFromName}
                       disabled={isUploading}
                       className="text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
                       title="Sinh slug từ tên danh mục"
@@ -496,14 +592,14 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
               {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mô tả (VI) *
+                  {L('vi', 'description')} (VI) *
                 </label>
                 <textarea
                   name="description"
                   value={form.description}
                   onChange={handleChange}
                   rows={8}
-                  placeholder="Nhập mô tả danh mục con"
+                  placeholder={L('vi', 'description_ph')}
                   required
                   disabled={isUploading}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
@@ -528,12 +624,12 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Tên ({lc.toUpperCase()})
+                      {L(lc, 'name_any', lc.toUpperCase())}
                     </label>
                     <input
                       value={translations[lc]?.name || ''}
                       onChange={(e) => handleTrChange(lc, 'name', e.target.value)}
-                      placeholder={`Name (${lc.toUpperCase()})`}
+                      placeholder={L(lc, 'name_any_ph', lc.toUpperCase())}
                       disabled={isUploading}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                     />
@@ -541,13 +637,13 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Mô tả ({lc.toUpperCase()})
+                      {L(lc, 'desc_any', lc.toUpperCase())}
                     </label>
                     <textarea
                       value={translations[lc]?.description || ''}
                       onChange={(e) => handleTrChange(lc, 'description', e.target.value)}
                       rows={6}
-                      placeholder={`Description (${lc.toUpperCase()})`}
+                      placeholder={L(lc, 'desc_any_ph', lc.toUpperCase())}
                       disabled={isUploading}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                     />

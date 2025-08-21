@@ -4,12 +4,11 @@ import remarkBreaks from "remark-breaks";
 
 export default function MarkdownOnly({ value = "" }) {
   return (
-    <div className="prose max-w-none">
+    <div className="prose max-w-none text-justify">
       <ReactMarkdown
         children={value || ""}
         remarkPlugins={[remarkGfm, remarkBreaks]}
         components={{
-          // Ép style list-number và bullets (nếu CSS global đang xoá list-style)
           ol: ({ node, ...props }) => (
             <ol {...props} className={"list-decimal ml-6 " + (props.className || "")} />
           ),

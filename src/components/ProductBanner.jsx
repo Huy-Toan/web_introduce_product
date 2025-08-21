@@ -1,11 +1,11 @@
 function ProductHeaderBanner() {
   return (
-    <div className="relative h-48 md:h-64 bg-gradient-to-r from-gray-900 to-gray-800 overflow-hidden mt-12">
+    <div className="relative h-48 md:h-64 bg-gradient-to-r from-gray-900 to-gray-800 overflow-hidden">
       {/* Background Image */}
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: "url('./banner_header.jpg')",
+          backgroundImage: "url('/banner_header.jpg')",
         }}
       >
         {/* Dark Overlay */}

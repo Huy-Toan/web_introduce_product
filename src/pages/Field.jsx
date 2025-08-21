@@ -3,6 +3,7 @@ import Footer from "../components/Footer";
 import { useEffect, useMemo, useState } from "react";
 import AboutHeaderBanner from "../components/AboutBanner";
 import MarkdownOnly from "../components/MarkdownOnly";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 // Thẻ logo/name cho Chứng nhận/Đối tác
 function CerPartnerLogoCard({ item }) {
@@ -16,7 +17,7 @@ function CerPartnerLogoCard({ item }) {
             className="max-h-full max-w-full object-contain"
             onError={(e) => {
               e.currentTarget.onerror = null;
-              e.currentTarget.src = "/fallback.jpg";
+              e.currentTarget.src = "/banner.jpg";
             }}
           />
         ) : (
@@ -30,15 +31,20 @@ function CerPartnerLogoCard({ item }) {
   );
 }
 
-
-
 function FieldPage() {
   const [fieldContent, setFieldContent] = useState([]);
   const [loading, setLoading] = useState(false);
 
   // Cer/Partner
-  const [cpItems, setCpItems] = useState([]); // lấy tất cả rồi tách
+  const [cpItems, setCpItems] = useState([]);
   const [loadingCp, setLoadingCp] = useState(false);
+
+  const items = useMemo(
+    () => [
+      { label: "What we do", to: "/what_we_do" },
+    ],
+    []
+  );
 
   // fetch Fields
   useEffect(() => {
@@ -90,6 +96,7 @@ function FieldPage() {
 return (
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
+      <Breadcrumbs items={items} className="mt-16" />
       <AboutHeaderBanner />
 
       {loading ? (
@@ -116,12 +123,12 @@ return (
                   {item.image_url && (
                     <div className="mt-8">
                       <img
-                        src={item.image_url || "./banner.jpg"}
+                        src={item.image_url || "/banner.jpg"}
                         alt={item.name || "Field image"}
                         className="w-full max-h-[520px] object-cover rounded-lg shadow"
                         onError={(e) => {
                           e.currentTarget.onerror = null;
-                          e.currentTarget.src = "./banner.jpg";
+                          e.currentTarget.src = "/banner.jpg";
                         }}
                       />
                     </div>

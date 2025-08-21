@@ -1,70 +1,137 @@
 // src/pages/Products.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import TopNavigation from "../components/Navigation";
 import Footer from "../components/Footer";
 import ProductCard from "../components/ProductCard";
 import ProductHeaderBanner from "../components/ProductBanner";
 import SidebarCategoriesTwoLevel from "../components/SidebarCategories";
-import useProducts from "./admin/hook/Useproduct"; // Giữ nguyên import của bạn
+import useProducts from "./admin/hook/Useproduct";
 import Pagination from "../components/Pagination";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 const PAGE_SIZE = 9;
 
 export default function Products() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { parentSlug, subSlug } = useParams();
 
-  // Đọc param TRƯỚC khi gọi hook để init đúng ngay lần mount đầu
-  const initialUrlParent = searchParams.get("parent") || "";
-  const initialUrlSub = searchParams.get("sub") || "";
+  const [parentMeta, setParentMeta] = useState(null);
+  const [subMeta, setSubMeta] = useState(null);
 
-  // Hook sản phẩm (lọc theo subcategory) — khởi tạo từ URL
+  // fetch tên parent theo slug
+  useEffect(() => {
+    let ac = new AbortController();
+    (async () => {
+      setParentMeta(null);
+      if (!parentSlug) return;
+      try {
+        const res = await fetch(`/api/parent_categories/${encodeURIComponent(parentSlug)}`, { signal: ac.signal });
+        if (!res.ok) return; // fallback dùng slug
+        const data = await res.json();
+        // BE có thể trả { parent: {...} } hoặc thẳng object
+        const parent = data.parent || data;
+        setParentMeta(parent);
+      } catch {}
+    })();
+    return () => ac.abort();
+  }, [parentSlug]);
+
+  // fetch tên sub theo slug
+// fetch tên sub theo slug (FIXED)
+useEffect(() => {
+  const ac = new AbortController();
+
+  (async () => {
+    setSubMeta(null);
+    if (!subSlug) return;
+    try {
+      // thử 2 endpoint, nhớ truyền { signal: ac.signal }
+      let res = await fetch(`/api/sub_categories/${encodeURIComponent(subSlug)}`, { signal: ac.signal });
+      if (!res.ok) {
+        res = await fetch(`/api/subcategories/${encodeURIComponent(subSlug)}`, { signal: ac.signal });
+      }
+      if (!res.ok) return;
+
+      const data = await res.json();
+      const sub = data.subcategory || data;
+      setSubMeta(sub);
+    } catch (e) {
+      if (e.name !== "AbortError") console.error(e);
+    }
+  })();
+
+  return () => ac.abort();
+}, [subSlug]);
+
+
+  // --- Breadcrumbs dựa theo URL + meta ---
+  const items = useMemo(() => {
+    // Base
+    const arr = [{ label: "Product", to: "/product" }];
+
+    if (!parentSlug && !subSlug) {
+      // /product
+      arr.push({ label: "All" });
+      return arr;
+    }
+
+    if (parentSlug && !subSlug) {
+      // /product/:parent
+      arr.push({
+        label: parentMeta?.name || decodeURIComponent(parentSlug),
+      });
+      return arr;
+    }
+
+    // /product/:parent/:sub
+    arr.push({
+      label: parentMeta?.name || decodeURIComponent(parentSlug),
+      to: `/product/${encodeURIComponent(parentSlug)}`,
+    });
+    arr.push({
+      label: subMeta?.name || decodeURIComponent(subSlug),
+    });
+    return arr;
+  }, [parentSlug, subSlug, parentMeta, subMeta]);
+
   const {
     products,
     productsLoading,
-    selectedSubcategorySlug,
     setSelectedSubcategorySlug,
-  } = useProducts({ initialSubSlug: initialUrlSub });
+  } = useProducts({ initialSubSlug: subSlug || "" });
 
-  // State để render UI Sidebar (không dùng để fetch sản phẩm)
-  const [activeParentSlug, setActiveParentSlug] = useState(initialUrlParent || null);
-  const [activeSubSlug, setActiveSubSlug] = useState(initialUrlSub || null);
+  const [activeParentSlug, setActiveParentSlug] = useState(parentSlug || null);
+  const [activeSubSlug, setActiveSubSlug] = useState(subSlug || null);
 
-  // Khi URL đổi (paste link, back/forward…), đồng bộ vào state + hook
   useEffect(() => {
-    const urlParent = searchParams.get("parent") || null;
-    const urlSub = searchParams.get("sub") || null;
-    setActiveParentSlug(urlParent);
-    setActiveSubSlug(urlSub);
-    setSelectedSubcategorySlug(urlSub || "");
-  }, [searchParams, setSelectedSubcategorySlug]);
+    setActiveParentSlug(parentSlug || null);
+    setActiveSubSlug(subSlug || null);
+    setSelectedSubcategorySlug(subSlug || "");
+  }, [parentSlug, subSlug, setSelectedSubcategorySlug]);
 
-  // ---- Fetch theo PARENT khi không có sub ----
   const [parentProducts, setParentProducts] = useState([]);
   const [parentLoading, setParentLoading] = useState(false);
   const parentControllerRef = useRef(null);
 
   useEffect(() => {
-    const onlyParent = !!activeParentSlug && !activeSubSlug;
-    // Không lọc theo parent-only -> clear
+    const onlyParent = !!parentSlug && !subSlug;
+
     if (!onlyParent) {
       setParentProducts([]);
       setParentLoading(false);
-      // Hủy req parent đang chạy nếu có
       try { parentControllerRef.current?.abort?.(); } catch {}
       return;
     }
 
-    // Hủy req cũ (nếu có), tránh race
     try { parentControllerRef.current?.abort?.(); } catch {}
     const controller = new AbortController();
     parentControllerRef.current = controller;
 
-    const fetchByParent = async () => {
+    (async () => {
       try {
         setParentLoading(true);
-        const url = `/api/parent_categories/${encodeURIComponent(activeParentSlug)}/products`;
+        const url = `/api/parent_categories/${encodeURIComponent(parentSlug)}/products`;
         const res = await fetch(url, { signal: controller.signal });
         const data = await res.json();
         setParentProducts(Array.isArray(data?.products) ? data.products : []);
@@ -76,64 +143,27 @@ export default function Products() {
       } finally {
         setParentLoading(false);
       }
-    };
+    })();
 
-    fetchByParent();
+    return () => { try { controller.abort(); } catch {} };
+  }, [parentSlug, subSlug]);
 
-    // cleanup khi deps đổi/unmount
-    return () => {
-      try { controller.abort(); } catch {}
-    };
-  }, [activeParentSlug, activeSubSlug]);
-
-  // ---- Handlers: cập nhật URL khi chọn ở Sidebar ----
-  const handleSelectParentSlug = (slugOrNull) => {
-    const next = new URLSearchParams(searchParams);
-    if (slugOrNull) next.set("parent", slugOrNull);
-    else next.delete("parent");
-    // reset sub khi chọn parent
-    next.delete("sub");
-    setSearchParams(next, { replace: false });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const handleSelectSubSlug = (slugOrNull) => {
-    const next = new URLSearchParams(searchParams);
-    if (slugOrNull) {
-      next.set("sub", slugOrNull);
-      // Khi chọn sub, bỏ parent (nếu muốn giữ parent thì đừng delete)
-      next.delete("parent");
-    } else {
-      next.delete("sub");
-    }
-    setSearchParams(next, { replace: false });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  // ---- Chọn data hiển thị + trạng thái loading ----
-  const isFilteringBySub = !!activeSubSlug;
+  const isFilteringBySub = !!subSlug;
   const displayedLoading = isFilteringBySub ? productsLoading : (parentLoading || productsLoading);
   const displayedProducts = isFilteringBySub
     ? (products || [])
-    : (activeParentSlug ? (parentProducts || []) : (products || []));
+    : (parentSlug ? (parentProducts || []) : (products || []));
 
-  // ---- Phân trang ----
   const [currentPage, setCurrentPage] = useState(1);
-  // Reset về page 1 mỗi khi filter đổi
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeParentSlug, activeSubSlug]);
+  useEffect(() => setCurrentPage(1), [parentSlug, subSlug]);
 
   const totalPages = useMemo(() => {
     const total = displayedProducts?.length || 0;
     return Math.max(1, Math.ceil(total / PAGE_SIZE));
   }, [displayedProducts]);
 
-  const goToPage = (pageNum) => {
-    setCurrentPage((prev) => {
-      const next = Math.max(1, Math.min(pageNum, totalPages));
-      return next;
-    });
+  const goToPage = (n) => {
+    setCurrentPage((prev) => Math.max(1, Math.min(n, totalPages)));
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -147,20 +177,17 @@ export default function Products() {
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
+      <Breadcrumbs items={items} className="mt-16" />
       <ProductHeaderBanner />
 
       <main className="container mx-auto px-4 py-6 max-w-7xl">
         <div className="flex flex-col md:flex-row gap-6">
-          {/* Sidebar 2 cấp */}
           <SidebarCategoriesTwoLevel
             activeParentSlug={activeParentSlug}
             activeSubSlug={activeSubSlug}
-            onSelectParentSlug={handleSelectParentSlug}
-            onSelectSubSlug={handleSelectSubSlug}
             showAll
           />
 
-          {/* Content */}
           <div className="flex-1">
             {displayedLoading ? (
               <div className="flex justify-center items-center py-20">
@@ -170,18 +197,12 @@ export default function Products() {
               <p className="text-gray-600">Không có sản phẩm.</p>
             ) : (
               <>
-                {/* Grid sản phẩm */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {paginated.map((p) => (
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      onClick={() => openDetail(p)}
-                    />
+                    <ProductCard key={p.id} product={p} onClick={() => openDetail(p)} />
                   ))}
                 </div>
 
-                {/* Phân trang */}
                 <Pagination
                   className="mt-8"
                   totalPages={totalPages}

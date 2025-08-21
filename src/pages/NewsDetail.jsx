@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import TopNavigation from "../components/Navigation";
 import Footer from "../components/Footer";
 import NewsDetail from "../components/NewsDetail";
 import SidebarNews from "../components/NewsSidebar";
+import Breadcrumbs from "../components/Breadcrumbs";
 
 function News_Detail() {
   const { slug } = useParams();
@@ -11,6 +12,14 @@ function News_Detail() {
   const [newsData, setNewsData] = useState(null);
   const [allNews, setAllNews] = useState([]); 
   const [loading, setLoading] = useState(true);
+
+  const items = useMemo(() => {
+    const title = newsData?.news?.title;
+    return [
+      { label: "News", to: "/news" },
+      { label: title || "Chi tiết" },
+    ];
+  }, [newsData?.news?.title]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -27,7 +36,7 @@ function News_Detail() {
           news: newsDetail.news,
         });
 
-        const sidebarNews = (allNewsData.news || []).slice(0, 5);
+        const sidebarNews = (allNewsData.news || []);
 
         setAllNews(sidebarNews);
 
@@ -78,14 +87,14 @@ function News_Detail() {
   return (
     <div className="min-h-screen bg-gray-50">
       <TopNavigation />
-      
+      <Breadcrumbs items={items} className="mt-16" />
       <main className="container mx-auto px-4 py-6 max-w-7xl">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar */}
           <div className="lg:w-80 flex-shrink-0">
             <SidebarNews 
               newsItems={allNews}
-              currentNewsId={slug}
+              currentNewsId={newsData?.news?.id}
               onSelectNews={handleSelectNews}
             />
           </div>

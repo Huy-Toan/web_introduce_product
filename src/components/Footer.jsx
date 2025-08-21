@@ -9,9 +9,9 @@ function Footer() {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const res = await fetch("/api/categories");
+        const res = await fetch("/api/parent_categories");
         const data = await res.json();
-        setCategories(data.categories || []);
+        setCategories(data.parents || []);
       } catch (err) {
         console.error("Failed to fetch categories:", err);
       }
@@ -103,7 +103,7 @@ function Footer() {
               categories.map((cat) => (
                 <li key={cat.id}>
                   <button
-                    onClick={() => handleNavigation(`/product?category=${cat.slug}`)}
+                    onClick={() => handleNavigation(`/product/${cat.slug}`)}
                     className="hover:text-blue-600 cursor-pointer"
                   >
                     {cat.name}

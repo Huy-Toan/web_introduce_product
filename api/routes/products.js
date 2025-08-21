@@ -17,7 +17,7 @@ const slugify = (s = "") =>
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
 
-// Lấy chi tiết qua id hoặc slug (đã i18n)
+// Lấy chi tiết sản phẩm theo id/slug (i18n) — CHỈ JOIN subcategories
 const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
   const isNumericId = /^\d+$/.test(idOrSlug);
   const sql = `
@@ -33,11 +33,7 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
 
       s.id                                    AS subcategory_id,
       COALESCE(sct.name, s.name)              AS subcategory_name,
-      s.slug                                  AS subcategory_slug,
-
-      pc.id                                   AS parent_id,
-      COALESCE(pct.name, pc.name)             AS parent_name,
-      pc.slug                                 AS parent_slug
+      s.slug                                  AS subcategory_slug
     FROM products p
     LEFT JOIN products_translations pt
       ON pt.product_id = p.id AND pt.locale = ?
@@ -45,16 +41,12 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
       ON s.id = p.subcategory_id
     LEFT JOIN subcategories_translations sct
       ON sct.sub_id = s.id AND sct.locale = ?
-    LEFT JOIN parent_categories pc
-      ON pc.id = s.parent_id
-    LEFT JOIN parent_categories_translations pct
-      ON pct.parent_id = pc.id AND pct.locale = ?
     WHERE ${isNumericId ? "p.id = ?" : "p.slug = ?"}
     LIMIT 1
   `;
   return db
     .prepare(sql)
-    .bind(locale, locale, locale, isNumericId ? Number(idOrSlug) : idOrSlug)
+    .bind(locale, locale, isNumericId ? Number(idOrSlug) : idOrSlug)
     .first();
 };
 
@@ -64,13 +56,12 @@ export const productsRouter = new Hono();
  * GET /api/products
  * Query:
  *  - locale=vi|en|...
- *  - parent_id, parent_slug
  *  - subcategory_id, sub_slug
  *  - q: tìm theo title/description/content (ưu tiên bản dịch)
  *  - limit, offset
  */
 productsRouter.get("/", async (c) => {
-  const { parent_id, parent_slug, subcategory_id, sub_slug, limit, offset, q } = c.req.query();
+  const { subcategory_id, sub_slug, limit, offset, q } = c.req.query();
 
   try {
     if (!hasDB(c.env)) {
@@ -78,8 +69,8 @@ productsRouter.get("/", async (c) => {
     }
 
     const locale = getLocale(c);
-    // Thứ tự bind: pt.locale, sct.locale, pct.locale, ...filters..., limit, offset
-    const params = [locale, locale, locale];
+    // Thứ tự bind: pt.locale, sct.locale, ...filters..., limit, offset
+    const params = [locale, locale];
     const conds = [];
 
     if (subcategory_id) {
@@ -89,14 +80,6 @@ productsRouter.get("/", async (c) => {
     if (sub_slug) {
       conds.push("s.slug = ?");
       params.push(String(sub_slug));
-    }
-    if (parent_id) {
-      conds.push("pc.id = ?");
-      params.push(Number(parent_id));
-    }
-    if (parent_slug) {
-      conds.push("pc.slug = ?");
-      params.push(String(parent_slug));
     }
 
     if (q && q.trim()) {
@@ -134,11 +117,7 @@ productsRouter.get("/", async (c) => {
 
         s.id                                    AS subcategory_id,
         COALESCE(sct.name, s.name)              AS subcategory_name,
-        s.slug                                  AS subcategory_slug,
-
-        pc.id                                   AS parent_id,
-        COALESCE(pct.name, pc.name)             AS parent_name,
-        pc.slug                                 AS parent_slug
+        s.slug                                  AS subcategory_slug
       FROM products p
       LEFT JOIN products_translations pt
         ON pt.product_id = p.id AND pt.locale = ?
@@ -146,10 +125,6 @@ productsRouter.get("/", async (c) => {
         ON s.id = p.subcategory_id
       LEFT JOIN subcategories_translations sct
         ON sct.sub_id = s.id AND sct.locale = ?
-      LEFT JOIN parent_categories pc
-        ON pc.id = s.parent_id
-      LEFT JOIN parent_categories_translations pct
-        ON pct.parent_id = pc.id AND pct.locale = ?
       ${where}
       ORDER BY p.created_at DESC
       ${limitSql}
@@ -257,7 +232,7 @@ productsRouter.post("/", async (c) => {
     if (!runRes.success) throw new Error("Insert failed");
     const newId = runRes.meta?.last_row_id;
 
-    // Upsert translations nếu có
+    // Upsert translations (nếu có)
     if (translations && typeof translations === "object") {
       const upsertT = `
         INSERT INTO products_translations(product_id, locale, title, description, content)
