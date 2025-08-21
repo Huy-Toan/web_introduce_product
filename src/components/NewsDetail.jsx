@@ -13,7 +13,7 @@ import SEO, { buildNewsArticleJsonLd, stripMd } from './SEOhead'
 function NewsDetail({ newsData }) {
   const { news } = newsData || {};
   const markdown = news?.content || '';
-  const SITE_URL = import.meta.env.VITE_SITE_URL || 'https://example.com'
+  const SITE_URL = import.meta.env.VITE_SITE_URL || 'https://itxeasy.com'
   const canonical = news?.slug ? `${SITE_URL}/news/${news.slug}` : SITE_URL
   const seoTitle =
     (news?.title && news.title.trim()) ||
@@ -34,8 +34,8 @@ function NewsDetail({ newsData }) {
     images: news?.image_url ? [news.image_url] : [],
     datePublished: published,
     dateModified: modified,
-    authorName: news?.author || 'HuyToan',
-    publisherName: 'AllXone',
+    authorName: news?.author || 'ITX Easy',
+    publisherName: 'ITX Easy',
     publisherLogo: `${SITE_URL}/logo-512.png`,
   })
 

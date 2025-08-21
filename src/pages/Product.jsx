@@ -10,6 +10,9 @@ import useProducts from "./admin/hook/Useproduct";
 import Pagination from "../components/Pagination";
 import Breadcrumbs from "../components/Breadcrumbs";
 
+// ⬇️ thêm: SEO head (điều chỉnh path nếu khác)
+import SEO from "../components/SEOhead";
+
 const PAGE_SIZE = 9;
 
 export default function Products() {
@@ -27,71 +30,49 @@ export default function Products() {
       if (!parentSlug) return;
       try {
         const res = await fetch(`/api/parent_categories/${encodeURIComponent(parentSlug)}`, { signal: ac.signal });
-        if (!res.ok) return; // fallback dùng slug
+        if (!res.ok) return;
         const data = await res.json();
-        // BE có thể trả { parent: {...} } hoặc thẳng object
-        const parent = data.parent || data;
-        setParentMeta(parent);
+        setParentMeta(data.parent || data);
       } catch {}
     })();
     return () => ac.abort();
   }, [parentSlug]);
 
-  // fetch tên sub theo slug
-// fetch tên sub theo slug (FIXED)
-useEffect(() => {
-  const ac = new AbortController();
-
-  (async () => {
-    setSubMeta(null);
-    if (!subSlug) return;
-    try {
-      // thử 2 endpoint, nhớ truyền { signal: ac.signal }
-      let res = await fetch(`/api/sub_categories/${encodeURIComponent(subSlug)}`, { signal: ac.signal });
-      if (!res.ok) {
-        res = await fetch(`/api/subcategories/${encodeURIComponent(subSlug)}`, { signal: ac.signal });
+  // fetch tên sub theo slug (đã FIX kèm AbortController)
+  useEffect(() => {
+    const ac = new AbortController();
+    (async () => {
+      setSubMeta(null);
+      if (!subSlug) return;
+      try {
+        let res = await fetch(`/api/sub_categories/${encodeURIComponent(subSlug)}`, { signal: ac.signal });
+        if (!res.ok) res = await fetch(`/api/subcategories/${encodeURIComponent(subSlug)}`, { signal: ac.signal });
+        if (!res.ok) return;
+        const data = await res.json();
+        setSubMeta(data.subcategory || data);
+      } catch (e) {
+        if (e.name !== "AbortError") console.error(e);
       }
-      if (!res.ok) return;
-
-      const data = await res.json();
-      const sub = data.subcategory || data;
-      setSubMeta(sub);
-    } catch (e) {
-      if (e.name !== "AbortError") console.error(e);
-    }
-  })();
-
-  return () => ac.abort();
-}, [subSlug]);
-
+    })();
+    return () => ac.abort();
+  }, [subSlug]);
 
   // --- Breadcrumbs dựa theo URL + meta ---
   const items = useMemo(() => {
-    // Base
     const arr = [{ label: "Product", to: "/product" }];
-
     if (!parentSlug && !subSlug) {
-      // /product
       arr.push({ label: "All" });
       return arr;
     }
-
     if (parentSlug && !subSlug) {
-      // /product/:parent
-      arr.push({
-        label: parentMeta?.name || decodeURIComponent(parentSlug),
-      });
+      arr.push({ label: parentMeta?.name || decodeURIComponent(parentSlug) });
       return arr;
     }
-
-    // /product/:parent/:sub
     arr.push({
       label: parentMeta?.name || decodeURIComponent(parentSlug),
       to: `/product/${encodeURIComponent(parentSlug)}`,
     });
-    arr.push({
-      label: subMeta?.name || decodeURIComponent(subSlug),
-    });
+    arr.push({ label: subMeta?.name || decodeURIComponent(subSlug) });
     return arr;
   }, [parentSlug, subSlug, parentMeta, subMeta]);
 
@@ -116,14 +97,12 @@ useEffect(() => {
 
   useEffect(() => {
     const onlyParent = !!parentSlug && !subSlug;
-
     if (!onlyParent) {
       setParentProducts([]);
       setParentLoading(false);
       try { parentControllerRef.current?.abort?.(); } catch {}
       return;
     }
-
     try { parentControllerRef.current?.abort?.(); } catch {}
     const controller = new AbortController();
     parentControllerRef.current = controller;
@@ -174,8 +153,128 @@ useEffect(() => {
 
   const openDetail = (p) => navigate(`/product/product-detail/${p.slug || p.id}`);
 
+  /* ====================== SEO for Products ====================== */
+  const SITE_URL = import.meta.env.VITE_SITE_URL || "https://itxeasy.com";
+  const BRAND = import.meta.env.VITE_BRAND_NAME || "ALLXONE";
+
+  // Canonical theo slug hiện tại
+  const canonicalPath = useMemo(() => {
+    let p = "/product";
+    if (parentSlug) p += `/${encodeURIComponent(parentSlug)}`;
+    if (subSlug) p += `/${encodeURIComponent(subSlug)}`;
+    return p;
+  }, [parentSlug, subSlug]);
+  const canonical = `${SITE_URL}${canonicalPath}`;
+
+  // Title/Description/Keywords
+  const pageTitle = useMemo(() => {
+    if (subMeta?.name) return `${subMeta.name} | Sản phẩm | ${BRAND}`;
+    if (parentMeta?.name) return `${parentMeta.name} | Sản phẩm | ${BRAND}`;
+    return `Sản phẩm | ${BRAND}`;
+  }, [parentMeta, subMeta]);
+
+  const topTitles = (displayedProducts || [])
+    .slice(0, 12)
+    .map((p) => p.title || p.name)
+    .filter(Boolean);
+
+  const pageDesc = useMemo(() => {
+    const prefix = subMeta?.description || parentMeta?.description || "";
+    const tail = topTitles.join(", ");
+    const base = [prefix, tail].filter(Boolean).join(" — ");
+    return base || `Danh mục sản phẩm ${subMeta?.name || parentMeta?.name || BRAND}. Xuất khẩu nông sản Việt Nam chất lượng cao.`;
+  }, [subMeta, parentMeta, topTitles, BRAND]);
+
+  const keywords = useMemo(() => {
+    const arr = [
+      subMeta?.name,
+      parentMeta?.name,
+      "sản phẩm",
+      "xuất khẩu",
+      "nông sản",
+      "trái cây",
+      "export",
+      "agriculture",
+      "Vietnam"
+    ].filter(Boolean);
+    return Array.from(new Set(arr));
+  }, [subMeta, parentMeta]);
+
+  // JSON-LD: BreadcrumbList + CollectionPage + ItemList (sản phẩm trang hiện tại)
+  const breadcrumbLd = useMemo(() => {
+    const base = [
+      { name: "Product", url: `${SITE_URL}/product` }
+    ];
+    if (parentSlug) base.push({
+      name: parentMeta?.name || decodeURIComponent(parentSlug),
+      url: `${SITE_URL}/product/${encodeURIComponent(parentSlug)}`
+    });
+    if (subSlug) base.push({
+      name: subMeta?.name || decodeURIComponent(subSlug),
+      url: `${SITE_URL}/product/${encodeURIComponent(parentSlug)}/${encodeURIComponent(subSlug)}`
+    });
+    return {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: base.map((b, i) => ({
+        "@type": "ListItem",
+        position: i + 1,
+        name: b.name,
+        item: b.url
+      }))
+    };
+  }, [SITE_URL, parentSlug, subSlug, parentMeta, subMeta]);
+
+  const collectionPageLd = useMemo(() => ({
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: pageTitle,
+    description: pageDesc,
+    url: canonical,
+    isPartOf: {
+      "@type": "WebSite",
+      name: BRAND,
+      url: SITE_URL
+    }
+  }), [pageTitle, pageDesc, canonical, BRAND, SITE_URL]);
+
+  const itemListLd = useMemo(() => {
+    const items = (paginated || []).map((p, idx) => ({
+      "@type": "ListItem",
+      position: idx + 1 + (currentPage - 1) * PAGE_SIZE,
+      item: {
+        "@type": "Product",
+        name: p.title || p.name,
+        url: `${SITE_URL}/product/product-detail/${encodeURIComponent(p.slug || p.id)}`,
+        image: p.image_url || undefined,
+        brand: BRAND
+      }
+    }));
+    return {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      itemListElement: items
+    };
+  }, [paginated, currentPage, BRAND, SITE_URL]);
+
+  const noindex = !displayedLoading && (displayedProducts || []).length === 0;
+
+  /* ============================================================= */
+
   return (
     <div className="min-h-screen bg-gray-50">
+      <SEO
+        title={pageTitle}
+        description={pageDesc}
+        url={canonical}
+        siteName={BRAND}
+        noindex={noindex}
+        keywords={keywords}
+        ogType="website"
+        twitterCard="summary_large_image"
+        jsonLd={[breadcrumbLd, collectionPageLd, itemListLd]}
+      />
+
       <TopNavigation />
       <Breadcrumbs items={items} className="mt-16" />
       <ProductHeaderBanner />

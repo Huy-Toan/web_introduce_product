@@ -86,7 +86,6 @@ export default function ProductDetailPage() {
           }
         }
 
-        console.log("Loaded product:", p);
         // 2) Related theo sub -> parent
         setRelLoading(true);
         let relatedList = [];
@@ -146,7 +145,6 @@ export default function ProductDetailPage() {
   const handleCategoryClick = () => {
     const subSlug = product?.subcategory_slug ?? product?.subcategory?.slug ?? null;
     const parentSlug = product?.parent_slug ?? product?.parent?.slug ?? null;
-    console.log("Navigate to category:", parentSlug, subSlug);
 
     navigate(`/product/${encodeURIComponent(parentSlug)}/${encodeURIComponent(subSlug)}`);
 

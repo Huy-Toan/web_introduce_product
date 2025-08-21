@@ -3,7 +3,6 @@ import TopNavigation from "../components/Navigation";
 import Footer from "../components/Footer";
 import Banner from "../components/Banner";
 import ProductCategories from "../components/Categori";
-// import TakimexWebsite from "../components/Section";
 import  AboutSection  from "../components/AboutSection";
 import  NewsSection  from "../components/NewsSection";
 import FieldHighlightsSection from "../components/FieldSection";

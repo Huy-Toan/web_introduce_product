@@ -1,3 +1,4 @@
+// src/pages/News.jsx
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router";
 import TopNavigation from "../components/Navigation";
@@ -5,6 +6,9 @@ import Footer from "../components/Footer";
 import { NewsCard } from "../components/NewsCard";
 import { NewsHeaderBanner } from "../components/Newsheader";
 import Breadcrumbs from "../components/Breadcrumbs";
+
+// ⬇️ Thêm SEO head + util
+import SEO, { stripMd } from "../components/SEOhead";
 
 const PAGE_SIZE = 4;
 
@@ -51,8 +55,107 @@ export default function News() {
     navigate(`/news/news-detail/${item.slug}`);
   };
 
+  /* ====================== SEO cho News list ====================== */
+  const SITE_URL = import.meta.env.VITE_SITE_URL || "https://itxeasy.com";
+  const BRAND = import.meta.env.VITE_BRAND_NAME || "ALLXONE";
+
+  // canonical: nếu bạn muốn SEO tốt hơn cho phân trang, có thể thêm ?page=N (xem ghi chú bên dưới)
+  const canonical = `${SITE_URL}/news`;
+
+  const pageTitle = `News | ${BRAND}`;
+
+  const topSnippets = (newsData || [])
+    .slice(0, 6)
+    .map(n => n.meta_description || stripMd(n.content || "").slice(0, 140) || n.title)
+    .filter(Boolean)
+    .join(" • ");
+
+  const pageDesc =
+    topSnippets ||
+    `Tin tức ${BRAND}: cập nhật thị trường, quy trình xuất khẩu, chứng nhận, đối tác, logistics nông sản Việt Nam.`;
+
+  const ogImage = (newsData?.find(n => n.image_url)?.image_url) || undefined;
+
+  const keywords = useMemo(() => {
+    const kws = (newsData || []).flatMap(n =>
+      String(n.keywords || "")
+        .split(",")
+        .map(s => s.trim())
+        .filter(Boolean)
+    );
+    const base = ["news", "tin tức", "xuất khẩu", "nông sản", "Vietnam export", BRAND];
+    return Array.from(new Set([...base, ...kws]));
+  }, [newsData, BRAND]);
+
+  const publishedTime = useMemo(() => {
+    const dates = (newsData || []).map(n => n.published_at || n.created_at).filter(Boolean).sort();
+    return dates[0];
+  }, [newsData]);
+
+  const modifiedTime = useMemo(() => {
+    const dates = (newsData || []).map(n => n.updated_at || n.published_at || n.created_at).filter(Boolean).sort();
+    return dates[dates.length - 1] || publishedTime;
+  }, [newsData, publishedTime]);
+
+  const noindex = !loading && (newsData.length === 0);
+
+  // JSON-LD
+  const breadcrumbLd = useMemo(() => ({
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+      { "@type": "ListItem", position: 2, name: "News", item: canonical }
+    ]
+  }), [SITE_URL, canonical]);
+
+  const collectionPageLd = useMemo(() => ({
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: pageTitle,
+    description: pageDesc,
+    url: canonical,
+    isPartOf: { "@type": "WebSite", name: BRAND, url: SITE_URL }
+  }), [pageTitle, pageDesc, canonical, BRAND, SITE_URL]);
+
+  const itemListLd = useMemo(() => ({
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    itemListElement: (paginated || []).map((n, i) => ({
+      "@type": "ListItem",
+      position: (currentPage - 1) * PAGE_SIZE + i + 1,
+      item: {
+        "@type": "NewsArticle",
+        headline: n.title,
+        url: `${SITE_URL}/news/news-detail/${encodeURIComponent(n.slug)}`,
+        datePublished: n.published_at || n.created_at || undefined,
+        dateModified: n.updated_at || undefined,
+        image: n.image_url || undefined,
+        author: n.author ? [{ "@type": "Person", name: n.author }] : undefined,
+        publisher: { "@type": "Organization", name: BRAND, logo: `${SITE_URL}/logo-512.png` }
+      }
+    }))
+  }), [paginated, currentPage, SITE_URL, BRAND]);
+  /* ============================================================= */
+
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* ⬇️ SEO cho trang News */}
+      <SEO
+        title={pageTitle}
+        description={pageDesc}
+        url={canonical}
+        image={ogImage}
+        siteName={BRAND}
+        noindex={noindex}
+        publishedTime={publishedTime}
+        modifiedTime={modifiedTime}
+        keywords={keywords}
+        ogType="website"
+        twitterCard="summary_large_image"
+        jsonLd={[breadcrumbLd, collectionPageLd, itemListLd]}
+      />
+
       <TopNavigation />
       <Breadcrumbs items={items} className="mt-16" />
       <NewsHeaderBanner />

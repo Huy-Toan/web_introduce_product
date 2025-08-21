@@ -12,7 +12,7 @@ function SidebarCategoriesTwoLevel({
 
   const [parents, setParents] = useState([]);
   const [parentsLoading, setParentsLoading] = useState(false);
-  const [subsByParent, setSubsByParent] = useState({}); // { [parentId]: Sub[] }
+  const [subsByParent, setSubsByParent] = useState({});
   const [subsLoadingFor, setSubsLoadingFor] = useState(null);
   const [openParentIds, setOpenParentIds] = useState(new Set());
 
@@ -57,7 +57,6 @@ function SidebarCategoriesTwoLevel({
     setOpenParentIds(next);
   };
 
-  // Điều hướng theo path
   const goAll = () => navigate("/product");
   const goParent = (parent) => navigate(`/product/${parent.slug}`);
   const goSub = (sub) => navigate(`/product/${sub.parent_slug}/${sub.slug}`);
@@ -99,16 +98,19 @@ function SidebarCategoriesTwoLevel({
 
             return (
               <li key={pid} className="rounded-md">
-                {/* Hàng cấp 1: label bên trái, chevron ở CUỐI bên phải */}
-                <div className="flex items-stretch gap-1">
+                {/* Hàng cấp 1 */}
+                <div className="flex items-stretch gap-1 min-w-0">
                   <button
                     onClick={() => goParent(parent)}
-                    className={`flex-1 text-left px-3 py-2 cursor-pointer rounded-md hover:bg-green-100 uppercase tracking-wide
+                    className={`flex-1 min-w-0 text-left px-3 py-2 cursor-pointer rounded-md hover:bg-green-100 uppercase tracking-wide
                       ${isActiveParent ? "bg-green-200 font-extrabold text-[15px]" : "font-extrabold text-[15px]"}
                     `}
                     title={parent.name}
                   >
-                    <span className="block truncate">{parent.name}</span>
+                    {/* TÊN CẤP 1: CHIỀU NGANG CỐ ĐỊNH + XUỐNG DÒNG */}
+                    <span className="block w-[180px] md:w-[220px] whitespace-normal break-words leading-tight">
+                      {parent.name}
+                    </span>
                   </button>
 
                   <button
@@ -135,7 +137,7 @@ function SidebarCategoriesTwoLevel({
                         {subs.map((sub) => {
                           const isActiveSub = activeSubSlug === sub.slug;
                           return (
-                            <li key={sub.id ?? sub.slug}>
+                            <li key={sub.id ?? sub.slug} className="min-w-0">
                               <button
                                 onClick={() => goSub(sub)}
                                 className={`w-full text-left px-3 py-1.5 cursor-pointer rounded-md hover:bg-green-50 uppercase tracking-wide
@@ -143,7 +145,10 @@ function SidebarCategoriesTwoLevel({
                                 `}
                                 title={sub.name}
                               >
-                                <span className="block truncate">{sub.name}</span>
+                                {/* TÊN CẤP 2: CHIỀU NGANG CỐ ĐỊNH + XUỐNG DÒNG */}
+                                <span className="block w-[180px] md:w-[220px] whitespace-normal break-words leading-tight">
+                                  {sub.name}
+                                </span>
                               </button>
                             </li>
                           );
