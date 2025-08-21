@@ -1,12 +1,33 @@
-// api/upload-image.js (Next.js API route)
+// api/upload-image.js
 import { Hono } from 'hono';
 
-// Hàm tạo UUID v4 thuần JS cho môi trường Cloudflare Workers
+// UUID v4
 function uuidv4() {
   return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
     (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
   );
 }
+
+// slug tiếng Việt -> không dấu, chữ thường, - thay khoảng trắng
+function toSlug(s = '', maxLen = 80) {
+  return String(s)
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // bỏ dấu
+    .replace(/[^a-z0-9\s-_.]/g, '')                  // bỏ ký tự lạ
+    .replace(/\s+/g, '-')                            // space -> -
+    .replace(/-+/g, '-')                             // gộp --
+    .replace(/^[-.]+|[-.]+$/g, '')                   // bỏ -/. ở đầu/cuối
+    .slice(0, maxLen)
+    .replace(/[-.]+$/g, '');                         // tránh kết thúc bằng - hoặc .
+}
+
+const EXT_BY_MIME = {
+  'image/jpeg': 'jpg',
+  'image/jpg':  'jpg',
+  'image/png':  'png',
+  'image/gif':  'gif',
+  'image/webp': 'webp',
+};
 
 const uploadImageRouter = new Hono();
 
@@ -18,38 +39,49 @@ uploadImageRouter.post('/', async (c) => {
       return c.json({ error: 'Không có file nào được upload' }, 400);
     }
 
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    const allowedTypes = Object.keys(EXT_BY_MIME);
     if (!allowedTypes.includes(file.type)) {
       return c.json({ error: 'Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP)' }, 400);
     }
-
     if (file.size > 5 * 1024 * 1024) {
       return c.json({ error: 'Kích thước ảnh không được vượt quá 5MB!' }, 400);
     }
 
-    // Tạo tên file unique
-    const ext = file.name.split('.').pop();
-    const fileName = `books/${uuidv4()}.${ext}`;
+    const urlObj = new URL(c.req.url);
+    const rawSeoName =
+      formData.get('seoName') ||
+      urlObj.searchParams.get('seoName') ||
+      (file.name ? file.name.replace(/\.[^.]+$/, '') : 'image');
 
-    // Upload lên R2 Cloudflare qua binding
+    const baseSlug = toSlug(rawSeoName) || 'image';
+
+    const extFromName = (file.name && file.name.includes('.')) ? file.name.split('.').pop() : '';
+    const ext = (extFromName || EXT_BY_MIME[file.type] || 'jpg').toLowerCase();
+
+    const addId = String(c.env.ADD_RANDOM_ID || '').toLowerCase() === 'true';
+    const shortId = Math.random().toString(36).slice(2, 8);
+    const fileName = addId ? `${baseSlug}-${shortId}.${ext}` : `${baseSlug}.${ext}`;
+
     const r2 = c.env.IMAGES;
     await r2.put(fileName, await file.arrayBuffer(), {
-      httpMetadata: { contentType: file.type },
+      httpMetadata: {
+        contentType: file.type,
+        cacheControl: 'public, max-age=31536000, immutable',
+        contentDisposition: `inline; filename="${fileName}"`,
+      },
     });
 
-    // Tạo public URL (dùng public development URL nếu không có custom domain)
     if (!c.env.PUBLIC_R2_URL) {
-        return c.json({ error: 'Thiếu PUBLIC_R2_URL trong cấu hình môi trường' }, 500);
-        }
-
+      return c.json({ error: 'Thiếu PUBLIC_R2_URL trong cấu hình môi trường' }, 500);
+    }
     const baseUrl = c.env.PUBLIC_R2_URL.replace(/\/+$/, '');
     const publicUrl = `${baseUrl}/${fileName}`;
-
 
     return c.json({
       success: true,
       url: publicUrl,
-      fileName,
+      fileName,        
+      alt: baseSlug,
     });
   } catch (error) {
     console.error('Upload error:', error);
