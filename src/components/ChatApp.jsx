@@ -25,8 +25,12 @@ export default function ChatApp() {
     const onSend = async () => {
         const t = text.trim(); if (!t || !canChat) return;
         setText("");
-        setMessages(m => [...m, { direction:"out", body:t, ts: Date.now() }]);
-        try { await sendMessage(peer, t); } catch {}
+        setMessages(m => [...m, { direction: "out", body: t, ts: Date.now() }]);
+        try {
+            await sendMessage(peer, t);
+        } catch (e) {
+            console.error("Send failed", e);
+        }
     };
 
     return (

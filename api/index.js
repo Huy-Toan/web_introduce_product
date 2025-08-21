@@ -162,6 +162,7 @@ app.post("/wa/send", async (c) => {
         );
     }
 
+    let dbInserted = false;
     try {
         if (env.DB) {
             await env.DB
@@ -170,13 +171,14 @@ app.post("/wa/send", async (c) => {
                 )
                 .bind(dest, "out", env.BUSINESS_WA_E164 || "", dest, dbType, dbBody, Date.now())
                 .run();
+            dbInserted = true;
         }
     } catch (e) {
         console.error("D1 insert outgoing error:", e);
     }
 
     return addCORS(
-        new Response(JSON.stringify({ ok: true, data }), {
+        new Response(JSON.stringify({ ok: true, data, dbInserted }), {
             headers: { "Content-Type": "application/json" },
         })
     );
