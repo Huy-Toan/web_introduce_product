@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { fetchHistory, sendUserMessage } from "../lib/waApi";
 
 export default function UserChatBox() {
+    const [open, setOpen] = useState(false);
     const [phone, setPhone] = useState("");
     const [messages, setMessages] = useState([]);
     const [text, setText] = useState("");
@@ -33,8 +34,27 @@ export default function UserChatBox() {
         }
     };
 
+    if (!open) {
+        return (
+            <button
+                onClick={() => setOpen(true)}
+                className="fixed bottom-40 right-8 w-14 h-14 rounded-full bg-[#00a884] text-white shadow-lg flex items-center justify-center z-50 hover:scale-105 transition-transform"
+                aria-label="Open chat"
+            >
+                💬
+            </button>
+        );
+    }
+
     return (
-        <div className="w-full h-[80vh] flex flex-col bg-[#111b21] text-white rounded-xl overflow-hidden">
+        <div className="fixed bottom-40 right-8 w-80 h-96 flex flex-col bg-[#111b21] text-white rounded-xl overflow-hidden shadow-xl z-50">
+            <button
+                onClick={() => setOpen(false)}
+                className="absolute top-2 right-2 text-gray-300 hover:text-white"
+                aria-label="Close chat"
+            >
+                ×
+            </button>
             <div className="bg-[#202c33] p-3">
                 <div className="text-sm text-gray-300 mb-2">Số của bạn (E.164)</div>
                 <input value={phone} onChange={e=>setPhone(e.target.value.replace(/\D/g,""))}

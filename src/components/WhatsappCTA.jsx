@@ -1,4 +1,5 @@
 import { useMemo, useState, lazy, Suspense } from "react";
+import PropTypes from "prop-types";
 import { useWhatsAppLink } from "../hooks/useWhatsAppLink";
 
 const QRCodeCanvas = lazy(() =>
@@ -13,10 +14,10 @@ export default function WhatsappCTA({ msg, position = "br" }) {
     if (!isPhoneOk()) return null;
 
     const posClass = {
-        br: "fixed right-5 bottom-24",
-        bl: "fixed left-5 bottom-24",
-        tr: "fixed right-5 top-5",
-        tl: "fixed left-5 top-5",
+        br: "fixed right-8 bottom-24 flex flex-col items-end space-y-2",
+        bl: "fixed left-8 bottom-24 flex flex-col items-start space-y-2",
+        tr: "fixed right-8 top-5 flex flex-col items-end space-y-2",
+        tl: "fixed left-8 top-5 flex flex-col items-start space-y-2",
     }[position];
 
     return (
@@ -36,14 +37,14 @@ export default function WhatsappCTA({ msg, position = "br" }) {
 
             <button
                 onClick={() => setShowQR(v => !v)}
-                className="mt-2 block text-xs text-gray-700"
+                className="block text-xs text-gray-700"
                 aria-expanded={showQR}
             >
                 {showQR ? "Ẩn mã QR" : "Hoặc quét QR"}
             </button>
 
             {showQR && (
-                <div className="mt-2 p-3 bg-white rounded-2xl shadow">
+                <div className="p-3 bg-white rounded-2xl shadow">
                     <Suspense fallback={<div style={{ width: 164, height: 164 }} />}>
                         <QRCodeCanvas value={url} size={164} />
                     </Suspense>
@@ -52,3 +53,9 @@ export default function WhatsappCTA({ msg, position = "br" }) {
         </div>
     );
 }
+
+
+WhatsappCTA.propTypes = {
+    msg: PropTypes.string,
+    position: PropTypes.oneOf(["br", "bl", "tr", "tl"])
+};
