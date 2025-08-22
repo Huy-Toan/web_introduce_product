@@ -1,8 +1,11 @@
+// src/pages/ContactPage.jsx
 import React, { useState, useMemo } from "react";
 import TopNavigation from "../components/Navigation";
 import Footer from "../components/Footer";
 import ContactHeader from "../components/ContactHeader";
 import Breadcrumbs from "../components/Breadcrumbs";
+import { getSiteOrigin, getCanonicalBase, isNonCanonicalHost } from "../lib/siteUrl";
+import SEO from "../components/SEOhead";
 
 function ContactPage() {
   const [form, setForm] = useState({
@@ -11,18 +14,90 @@ function ContactPage() {
     phone: "",
     address: "",
     message: "",
-    website: "",        // honeypot (field ẩn)
+    website: "", // honeypot
   });
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  const items = useMemo(
-    () => [
-      { label: "Contact", to: "/contact" },
+  const items = useMemo(() => [{ label: "Contact", to: "/contact" }], []);
+
+  /* =================== SEO cho Contact =================== */
+  const SITE_URL = getSiteOrigin();
+  const BRAND = import.meta.env.VITE_BRAND_NAME || "ALLXONE";
+    const canonical = `${getCanonicalBase()}/contact`;
+
+  const pageTitle = `Contact | ${BRAND}`;
+  const pageDesc =
+    `Liên hệ ${BRAND}: địa chỉ, email, số điện thoại, WhatsApp. ` +
+    `Gửi yêu cầu báo giá/đối tác về xuất khẩu nông sản Việt Nam.`;
+
+  // Nếu có banner cho Contact, điền URL vào đây
+  const ogImage = undefined;
+
+  const keywords = [
+    "Contact",
+    "Liên hệ",
+    BRAND,
+    "xuất khẩu nông sản",
+    "Vietnam export",
+    "address",
+    "email",
+    "phone",
+    "whatsapp",
+  ];
+
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+      { "@type": "ListItem", position: 2, name: "Contact", item: canonical },
     ],
-    []
-  );
+  };
+
+  const contactPageLd = {
+    "@context": "https://schema.org",
+    "@type": "ContactPage",
+    name: pageTitle,
+    description: pageDesc,
+    url: canonical,
+    isPartOf: { "@type": "WebSite", name: BRAND, url: SITE_URL },
+  };
+
+  const organizationLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: BRAND,
+    url: SITE_URL,
+    logo: `${SITE_URL}/logo-512.png`,
+    email: "info@allxone.com",
+    telephone: "+84 383 655 628",
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: "140 Nguyen Xi Street",
+      addressLocality: "Binh Thanh District",
+      addressRegion: "Ho Chi Minh City",
+      addressCountry: "VN",
+    },
+    contactPoint: [
+      {
+        "@type": "ContactPoint",
+        telephone: "+84 383 655 628",
+        contactType: "customer service",
+        areaServed: ["VN", "Global"],
+        availableLanguage: ["vi", "en"],
+      },
+      {
+        "@type": "ContactPoint",
+        telephone: "+84 905 926 612",
+        contactType: "customer service",
+        areaServed: ["VN", "Global"],
+        availableLanguage: ["vi", "en"],
+      },
+    ],
+  };
+  /* ====================================================== */
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -37,13 +112,13 @@ function ContactPage() {
     setErrorMsg("");
     setSuccessMsg("");
 
-    // Honeypot: nếu bot điền vào field ẩn => bỏ qua
+    // Honeypot: nếu bot điền vào field ẩn => bỏ qua (trả về giống thành công)
     if (form.website.trim()) {
-      setSuccessMsg("Gửi liên hệ thành công!"); // trả về giống thành công để không lộ honeypot
+      setSuccessMsg("Gửi liên hệ thành công!");
       return;
     }
 
-    // Chỉ bắt buộc 3 trường này (khớp backend)
+    // Bắt buộc các trường chính
     if (!form.full_name.trim() || !form.email.trim() || !form.message.trim()) {
       setErrorMsg("Vui lòng nhập Họ tên, Email và Nội dung.");
       return;
@@ -59,7 +134,7 @@ function ContactPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Accept": "application/json",
+          Accept: "application/json",
         },
         body: JSON.stringify({
           full_name: form.full_name.trim(),
@@ -67,7 +142,6 @@ function ContactPage() {
           phone: form.phone.trim(),
           address: form.address.trim(),
           message: form.message.trim(),
-          // website không gửi lên server (chỉ dùng client-side)
         }),
       });
       const data = await res.json();
@@ -94,6 +168,19 @@ function ContactPage() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      {/* SEO đặt đầu trang để Browser Rendering “thấy” sớm */}
+      <SEO
+        title={pageTitle}
+        description={pageDesc}
+        url={canonical}
+        image={ogImage}
+        siteName={BRAND}
+        keywords={keywords}
+        ogType="website"
+        twitterCard="summary_large_image"
+        jsonLd={[breadcrumbLd, contactPageLd, organizationLd]}
+      />
+
       <TopNavigation />
       <Breadcrumbs items={items} className="mt-16" />
       <ContactHeader />
@@ -116,17 +203,20 @@ function ContactPage() {
 
           {/* Thông tin liên hệ + form */}
           <div>
-            <h2 className="text-2xl font-bold text-yellow-700 mb-4">
-              CONTACT US
-            </h2>
+            <h2 className="text-2xl font-bold text-yellow-700 mb-4">CONTACT US</h2>
             <div className="text-gray-800 space-y-2 mb-6">
-              <p><strong>Company:</strong> ALLXONE</p>
+              <p>
+                <strong>Company:</strong> {BRAND}
+              </p>
               <p>140 Nguyen Xi Street, Binh Thanh District, Ho Chi Minh City, Vietnam</p>
-              <p><strong>Mobile phone / Whatsapp:</strong> +84 383 655 628 (Ms. Amy) / +84 905 926 612 (Ms. Jenny)</p>
-              <p><strong>Email:</strong> info@allxone.com</p>
+              <p>
+                <strong>Mobile phone / Whatsapp:</strong> +84 383 655 628 (Ms. Amy) / +84 905 926 612 (Ms. Jenny)
+              </p>
+              <p>
+                <strong>Email:</strong> info@allxone.com
+              </p>
             </div>
 
-            {/* Form liên lạc */}
             <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Honeypot hidden */}
               <input
@@ -194,7 +284,6 @@ function ContactPage() {
                 maxLength={5000}
               />
 
-              {/* trạng thái */}
               {errorMsg && (
                 <div className="sm:col-span-2 text-red-600 text-sm">{errorMsg}</div>
               )}

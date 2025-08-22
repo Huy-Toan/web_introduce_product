@@ -9,8 +9,8 @@ import SidebarCategoriesTwoLevel from "../components/SidebarCategories";
 import useProducts from "./admin/hook/Useproduct";
 import Pagination from "../components/Pagination";
 import Breadcrumbs from "../components/Breadcrumbs";
+import { getSiteOrigin, getCanonicalBase, isNonCanonicalHost } from "../lib/siteUrl";
 
-// ⬇️ thêm: SEO head (điều chỉnh path nếu khác)
 import SEO from "../components/SEOhead";
 
 const PAGE_SIZE = 9;
@@ -154,8 +154,8 @@ export default function Products() {
   const openDetail = (p) => navigate(`/product/product-detail/${p.slug || p.id}`);
 
   /* ====================== SEO for Products ====================== */
-  const SITE_URL = import.meta.env.VITE_SITE_URL || "https://itxeasy.com";
-  const BRAND = import.meta.env.VITE_BRAND_NAME || "ALLXONE";
+  const SITE_URL = getSiteOrigin();
+  const BRAND = import.meta.env.VITE_BRAND_NAME || "ITXEASY";
 
   // Canonical theo slug hiện tại
   const canonicalPath = useMemo(() => {

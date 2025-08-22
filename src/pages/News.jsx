@@ -2,12 +2,12 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router";
 import TopNavigation from "../components/Navigation";
+import { getSiteOrigin, getCanonicalBase, isNonCanonicalHost } from "../lib/siteUrl";
 import Footer from "../components/Footer";
 import { NewsCard } from "../components/NewsCard";
 import { NewsHeaderBanner } from "../components/Newsheader";
 import Breadcrumbs from "../components/Breadcrumbs";
 
-// ⬇️ Thêm SEO head + util
 import SEO, { stripMd } from "../components/SEOhead";
 
 const PAGE_SIZE = 4;
@@ -56,11 +56,10 @@ export default function News() {
   };
 
   /* ====================== SEO cho News list ====================== */
-  const SITE_URL = import.meta.env.VITE_SITE_URL || "https://itxeasy.com";
-  const BRAND = import.meta.env.VITE_BRAND_NAME || "ALLXONE";
+  const SITE_URL = getSiteOrigin();
+  const BRAND = import.meta.env.VITE_BRAND_NAME || "ITXEASY";
 
-  // canonical: nếu bạn muốn SEO tốt hơn cho phân trang, có thể thêm ?page=N (xem ghi chú bên dưới)
-  const canonical = `${SITE_URL}/news`;
+  const canonical = `${getCanonicalBase()}/news`;
 
   const pageTitle = `News | ${BRAND}`;
 

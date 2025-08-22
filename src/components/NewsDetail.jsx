@@ -9,12 +9,21 @@ import rehypeSanitize from 'rehype-sanitize';
 import { defaultSchema } from 'hast-util-sanitize';
 import Slugger from 'github-slugger';
 import SEO, { buildNewsArticleJsonLd, stripMd } from './SEOhead'
+import { getSiteOrigin, getCanonicalBase, isNonCanonicalHost } from "../lib/siteUrl";
 
 function NewsDetail({ newsData }) {
   const { news } = newsData || {};
   const markdown = news?.content || '';
-  const SITE_URL = import.meta.env.VITE_SITE_URL || 'https://itxeasy.com'
-  const canonical = news?.slug ? `${SITE_URL}/news/${news.slug}` : SITE_URL
+  const SITE_URL = getSiteOrigin();       
+  const CANON_BASE = getCanonicalBase(); 
+  const BRAND = import.meta.env.VITE_BRAND_NAME || 'ITXEASY';
+
+  // Đường dẫn & canonical
+  const slug = news?.slug && String(news.slug).trim();
+  const path = slug ? `/news/${encodeURIComponent(slug)}` : `/news`;
+  const canonical = `${CANON_BASE}${path}`;
+  const noindex = isNonCanonicalHost(); 
+
   const seoTitle =
     (news?.title && news.title.trim()) ||
     (markdown.match(/^#\s+(.+)$/m) || [])[1] ||
@@ -34,8 +43,8 @@ function NewsDetail({ newsData }) {
     images: news?.image_url ? [news.image_url] : [],
     datePublished: published,
     dateModified: modified,
-    authorName: news?.author || 'ITX Easy',
-    publisherName: 'ITX Easy',
+    authorName: news?.author || 'ITXEASY',
+    publisherName: 'ITXEASY',
     publisherLogo: `${SITE_URL}/logo-512.png`,
   })
 

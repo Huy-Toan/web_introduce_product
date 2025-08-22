@@ -3,6 +3,7 @@ import TopNavigation from "../components/Navigation";
 import Footer from "../components/Footer";
 import { useEffect, useMemo, useState } from "react";
 import FieldHeaderBanner from "../components/FieldBannerHead";
+import { getSiteOrigin, getCanonicalBase, isNonCanonicalHost } from "../lib/siteUrl";
 import MarkdownOnly from "../components/MarkdownOnly";
 import Breadcrumbs from "../components/Breadcrumbs";
 import SEO, { stripMd } from "../components/SEOhead";
@@ -90,9 +91,9 @@ function FieldPage() {
   }, [cpItems]);
 
   /* =================== SEO cho What we do =================== */
-  const SITE_URL = import.meta.env.VITE_SITE_URL || "https://itxeasy.com";
-  const BRAND = import.meta.env.VITE_BRAND_NAME || "ALLXONE";
-  const canonical = `${SITE_URL}/what_we_do`;
+  const SITE_URL = getSiteOrigin();
+  const BRAND = import.meta.env.VITE_BRAND_NAME || "ITXEASY";
+  const canonical = `${getCanonicalBase()}/what_we_do`;
 
   // Title: ưu tiên field đầu tiên
   const pageTitle = useMemo(() => {

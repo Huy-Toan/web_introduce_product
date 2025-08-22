@@ -5,7 +5,7 @@ import { useEffect, useState, useMemo } from "react";
 import AboutHeaderBanner from "../components/AboutBanner";
 import MarkdownOnly from "../components/MarkdownOnly";
 import Breadcrumbs from "../components/Breadcrumbs";
-
+import { getSiteOrigin, getCanonicalBase, isNonCanonicalHost } from "../lib/siteUrl";
 import SEO, { stripMd } from "../components/SEOhead";
 
 function AboutPage() {
@@ -36,9 +36,9 @@ function AboutPage() {
   }, []);
 
   /* =================== SEO cho About =================== */
-  const SITE_URL = import.meta.env.VITE_SITE_URL || "https://itxeasy.com";
-  const BRAND = import.meta.env.VITE_BRAND_NAME || "ALLXONE";
-  const canonical = `${SITE_URL}/about`;
+  const SITE_URL = getSiteOrigin();
+  const BRAND = import.meta.env.VITE_BRAND_NAME || "ITXEASY";
+  const canonical = `${getCanonicalBase()}/about`;
 
   // Tiêu đề: ưu tiên title mục đầu tiên, fallback “About Us | BRAND”
   const pageTitle = useMemo(() => {

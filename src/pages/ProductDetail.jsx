@@ -17,13 +17,12 @@ export default function ProductDetailPage() {
   const [relLoading, setRelLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // gọi sub_categories để lấy parent_* (có fallback tên endpoint)
   const fetchParentBySub = async (subSlug, signal) => {
     let res = await fetch(`/api/sub_categories/${encodeURIComponent(subSlug)}`, { signal });
     if (!res.ok) return null;
 
     const data = await res.json();
-    const sub = data.subcategory || data; // tuỳ BE
+    const sub = data.subcategory || data; 
     return {
       parent_slug: sub.parent_slug || sub.parent?.slug || null,
       parent_name: sub.parent_name || sub.parent?.name || null,
