@@ -1,6 +1,6 @@
 import { Library, Shapes, Newspaper, Activity } from 'lucide-react';
 
-const DashboardOverview = ({ products, categories, news }) => (
+const DashboardOverview = ({ products, parents, news }) => (
   <div>
     <h2 className="text-2xl font-bold text-gray-900 mb-6">Tổng quan</h2>
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -25,8 +25,8 @@ const DashboardOverview = ({ products, categories, news }) => (
             <Shapes className="text-green-600" size={24} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Tổng số danh mục</h3>
-            <p className="text-2xl font-bold text-green-600">{categories}</p>
+            <h3 className="text-lg font-semibold text-gray-900">Tổng số danh mục lớn</h3>
+            <p className="text-2xl font-bold text-green-600">{parents}</p>
           </div>
         </div>
       </div>

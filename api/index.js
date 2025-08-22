@@ -16,7 +16,7 @@ import bannerRouter from "./routes/banner";
 import fieldRouter from "./routes/field";
 import cerPartnerRouter from "./routes/cer-partner";
 import translateRouter from "./routes/translate";
-import { seoRoot, sitemaps } from "./routes/seo-sitemap";
+import { seoRoot, sitemaps } from "./routes/seo-sitemap.js";
 
 const GRAPH = "https://graph.facebook.com/v20.0";
 const app = new Hono();

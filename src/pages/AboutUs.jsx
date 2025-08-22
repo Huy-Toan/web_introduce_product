@@ -111,7 +111,6 @@ function AboutPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* ⬇️ Đưa SEO vào đầu trang */}
       <SEO
         title={pageTitle}
         description={pageDesc}
