@@ -3125,6 +3125,21 @@ const getLocale$5 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$5).toLowerCa
 const hasDB$5 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const slugify$2 = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
 const parentsRouter = new Hono2();
+async function resolveParentId(c, idOrSlug) {
+  const isNumeric = /^\d+$/.test(idOrSlug);
+  if (isNumeric) return Number(idOrSlug);
+  const locale = getLocale$5(c);
+  const findIdSql = `
+    SELECT pc.id
+    FROM parent_categories pc
+    LEFT JOIN parent_categories_translations pct
+      ON pct.parent_id = pc.id AND pct.locale = ?
+    WHERE pc.slug = ? OR pct.slug = ?
+    LIMIT 1
+  `;
+  const row = await c.env.DB.prepare(findIdSql).bind(locale, idOrSlug, idOrSlug).first();
+  return row?.id ?? null;
+}
 parentsRouter.get("/", async (c) => {
   const { limit, offset, q, with_counts, with_subs } = c.req.query();
   try {
@@ -3142,18 +3157,20 @@ parentsRouter.get("/", async (c) => {
       where.push(`(
         (pct.name IS NOT NULL AND pct.name LIKE ?)
         OR (pct.description IS NOT NULL AND pct.description LIKE ?)
+        OR (pct.slug IS NOT NULL AND pct.slug LIKE ?)
         OR (pct.name IS NULL AND pc.name LIKE ?)
         OR (pct.description IS NULL AND pc.description LIKE ?)
+        OR (pct.slug IS NULL AND pc.slug LIKE ?)
       )`);
       const kw = `%${q.trim()}%`;
-      params.push(kw, kw, kw, kw);
+      params.push(kw, kw, kw, kw, kw, kw);
     }
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
     const baseSql = `
       SELECT
         pc.id,
-        COALESCE(pct.name, pc.name)          AS name,
-        pc.slug,
+        COALESCE(pct.name, pc.name)               AS name,
+        COALESCE(pct.slug, pc.slug)               AS slug,
         COALESCE(pct.description, pc.description) AS description,
         pc.image_url,
         pc.created_at
@@ -3169,43 +3186,44 @@ parentsRouter.get("/", async (c) => {
     if (hasOffset) params.push(Number(offset));
     const result = await c.env.DB.prepare(baseSql).bind(...params).all();
     let parents = result?.results ?? [];
-    if (String(with_counts) === "1") {
+    if (String(with_counts) === "1" && parents.length) {
       const ids = parents.map((p) => p.id);
-      if (ids.length) {
-        const placeholders = ids.map(() => "?").join(",");
-        const countsSql = `
-          WITH subs AS (
-            SELECT parent_id, COUNT(*) AS sub_count
-            FROM subcategories
-            WHERE parent_id IN (${placeholders})
-            GROUP BY parent_id
-          ),
-          prods AS (
-            SELECT sc.parent_id, COUNT(p.id) AS product_count
-            FROM subcategories sc
-            LEFT JOIN products p ON p.subcategory_id = sc.id
-            WHERE sc.parent_id IN (${placeholders})
-            GROUP BY sc.parent_id
-          )
-          SELECT
-            pc.id AS parent_id,
-            COALESCE(s.sub_count, 0) AS sub_count,
-            COALESCE(pr.product_count, 0) AS product_count
-          FROM parent_categories pc
-          LEFT JOIN subs s  ON s.parent_id  = pc.id
-          LEFT JOIN prods pr ON pr.parent_id = pc.id
-          WHERE pc.id IN (${placeholders})
-        `;
-        const countsRes = await c.env.DB.prepare(countsSql).bind(...ids, ...ids, ...ids).all();
-        const counts = (countsRes?.results ?? []).reduce((acc, r) => {
-          acc[r.parent_id] = { sub_count: r.sub_count, product_count: r.product_count };
-          return acc;
-        }, {});
-        parents = parents.map((p) => ({
-          ...p,
-          ...counts[p.id] || { sub_count: 0, product_count: 0 }
-        }));
-      }
+      const placeholders = ids.map(() => "?").join(",");
+      const countsSql = `
+        WITH subs AS (
+          SELECT parent_id, COUNT(*) AS sub_count
+          FROM subcategories
+          WHERE parent_id IN (${placeholders})
+          GROUP BY parent_id
+        ),
+        prods AS (
+          SELECT sc.parent_id, COUNT(p.id) AS product_count
+          FROM subcategories sc
+          LEFT JOIN products p ON p.subcategory_id = sc.id
+          WHERE sc.parent_id IN (${placeholders})
+          GROUP BY sc.parent_id
+        )
+        SELECT
+          pc.id AS parent_id,
+          COALESCE(s.sub_count, 0) AS sub_count,
+          COALESCE(pr.product_count, 0) AS product_count
+        FROM parent_categories pc
+        LEFT JOIN subs s  ON s.parent_id  = pc.id
+        LEFT JOIN prods pr ON pr.parent_id = pc.id
+        WHERE pc.id IN (${placeholders})
+      `;
+      const countsRes = await c.env.DB.prepare(countsSql).bind(...ids, ...ids, ...ids).all();
+      const counts = (countsRes?.results ?? []).reduce((acc, r) => {
+        acc[r.parent_id] = {
+          sub_count: r.sub_count,
+          product_count: r.product_count
+        };
+        return acc;
+      }, {});
+      parents = parents.map((p) => ({
+        ...p,
+        ...counts[p.id] || { sub_count: 0, product_count: 0 }
+      }));
     }
     if (String(with_subs) === "1" && parents.length) {
       const ids = parents.map((p) => p.id);
@@ -3214,8 +3232,8 @@ parentsRouter.get("/", async (c) => {
         SELECT
           sc.id,
           sc.parent_id,
-          COALESCE(sct.name, sc.name) AS name,
-          sc.slug,
+          COALESCE(sct.name, sc.name)               AS name,
+          COALESCE(sct.slug, sc.slug)               AS slug,
           COALESCE(sct.description, sc.description) AS description,
           sc.image_url,
           sc.created_at
@@ -3231,7 +3249,10 @@ parentsRouter.get("/", async (c) => {
         (acc[s.parent_id] ||= []).push(s);
         return acc;
       }, {});
-      parents = parents.map((p) => ({ ...p, subcategories: grouped[p.id] || [] }));
+      parents = parents.map((p) => ({
+        ...p,
+        subcategories: grouped[p.id] || []
+      }));
     }
     return c.json({
       parents,
@@ -3250,30 +3271,31 @@ parentsRouter.get("/:idOrSlug", async (c) => {
   try {
     if (!hasDB$5(c.env)) return c.json({ error: "Database not available" }, 503);
     const locale = getLocale$5(c);
-    const isNumeric = /^\d+$/.test(idOrSlug);
+    const parentId = await resolveParentId(c, idOrSlug);
+    if (!parentId) return c.json({ error: "Parent category not found" }, 404);
     const sql = `
       SELECT
         pc.id,
-        COALESCE(pct.name, pc.name)          AS name,
-        pc.slug,
+        COALESCE(pct.name, pc.name)               AS name,
+        COALESCE(pct.slug, pc.slug)               AS slug,
         COALESCE(pct.description, pc.description) AS description,
         pc.image_url,
         pc.created_at
       FROM parent_categories pc
       LEFT JOIN parent_categories_translations pct
         ON pct.parent_id = pc.id AND pct.locale = ?
-      WHERE ${isNumeric ? "pc.id = ?" : "pc.slug = ?"}
+      WHERE pc.id = ?
       LIMIT 1
     `;
-    const parent = await c.env.DB.prepare(sql).bind(locale, isNumeric ? Number(idOrSlug) : idOrSlug).first();
+    const parent = await c.env.DB.prepare(sql).bind(locale, parentId).first();
     if (!parent) return c.json({ error: "Parent category not found" }, 404);
     if (String(with_subs) === "1") {
       const subsSql = `
         SELECT
           sc.id,
           sc.parent_id,
-          COALESCE(sct.name, sc.name) AS name,
-          sc.slug,
+          COALESCE(sct.name, sc.name)               AS name,
+          COALESCE(sct.slug, sc.slug)               AS slug,
           COALESCE(sct.description, sc.description) AS description,
           sc.image_url,
           sc.created_at
@@ -3308,15 +3330,18 @@ parentsRouter.post("/", async (c) => {
     const newId = res.meta?.last_row_id;
     if (translations && typeof translations === "object") {
       const upsertT = `
-        INSERT INTO parent_categories_translations(parent_id, locale, name, description)
-        VALUES (?1, ?2, ?3, ?4)
+        INSERT INTO parent_categories_translations(parent_id, locale, name, slug, description)
+        VALUES (?1, ?2, ?3, ?4, ?5)
         ON CONFLICT(parent_id, locale) DO UPDATE SET
-          name=COALESCE(excluded.name, name),
-          description=COALESCE(excluded.description, description),
-          updated_at=CURRENT_TIMESTAMP
+          name        = COALESCE(excluded.name, name),
+          slug        = COALESCE(excluded.slug, slug),
+          description = COALESCE(excluded.description, description),
+          updated_at  = CURRENT_TIMESTAMP
       `;
       for (const [lc, tr] of Object.entries(translations)) {
-        await c.env.DB.prepare(upsertT).bind(newId, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null).run();
+        const tName = tr?.name ?? null;
+        const tSlug = tr?.slug ? slugify$2(tr.slug) : tName ? slugify$2(tName) : null;
+        await c.env.DB.prepare(upsertT).bind(newId, String(lc).toLowerCase(), tName, tSlug, tr?.description ?? null).run();
       }
     }
     const parent = await c.env.DB.prepare(
@@ -3344,7 +3369,7 @@ parentsRouter.put("/:id", async (c) => {
     }
     if (slug !== void 0) {
       sets.push("slug = ?");
-      params.push(slug);
+      params.push(slugify$2(slug));
     }
     if (description !== void 0) {
       sets.push("description = ?");
@@ -3358,27 +3383,31 @@ parentsRouter.put("/:id", async (c) => {
       const sql = `UPDATE parent_categories SET ${sets.join(", ")} WHERE id = ?`;
       params.push(id);
       const res = await c.env.DB.prepare(sql).bind(...params).run();
-      if ((res.meta?.changes || 0) === 0) return c.json({ error: "Parent category not found" }, 404);
+      if ((res.meta?.changes || 0) === 0)
+        return c.json({ error: "Parent category not found" }, 404);
     }
     if (translations && typeof translations === "object") {
       const upsertT = `
-        INSERT INTO parent_categories_translations(parent_id, locale, name, description)
-        VALUES (?1, ?2, ?3, ?4)
+        INSERT INTO parent_categories_translations(parent_id, locale, name, slug, description)
+        VALUES (?1, ?2, ?3, ?4, ?5)
         ON CONFLICT(parent_id, locale) DO UPDATE SET
-          name=COALESCE(excluded.name, name),
-          description=COALESCE(excluded.description, description),
-          updated_at=CURRENT_TIMESTAMP
+          name        = COALESCE(excluded.name, name),
+          slug        = COALESCE(excluded.slug, slug),
+          description = COALESCE(excluded.description, description),
+          updated_at  = CURRENT_TIMESTAMP
       `;
       for (const [lc, tr] of Object.entries(translations)) {
-        await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null).run();
+        const tName = tr?.name ?? null;
+        const tSlug = tr?.slug ? slugify$2(tr.slug) : tName ? slugify$2(tName) : null;
+        await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tName, tSlug, tr?.description ?? null).run();
       }
     }
     const locale = getLocale$5(c);
     const parent = await c.env.DB.prepare(
       `SELECT
            pc.id,
-           COALESCE(pct.name, pc.name)          AS name,
-           pc.slug,
+           COALESCE(pct.name, pc.name)               AS name,
+           COALESCE(pct.slug, pc.slug)               AS slug,
            COALESCE(pct.description, pc.description) AS description,
            pc.image_url,
            pc.created_at
@@ -3404,21 +3433,23 @@ parentsRouter.put("/:id/translations", async (c) => {
       return c.json({ error: "Missing translations" }, 400);
     }
     const upsertT = `
-      INSERT INTO parent_categories_translations(parent_id, locale, name, description)
-      VALUES (?1, ?2, ?3, ?4)
+      INSERT INTO parent_categories_translations(parent_id, locale, name, slug, description)
+      VALUES (?1, ?2, ?3, ?4, ?5)
       ON CONFLICT(parent_id, locale) DO UPDATE SET
-        name=COALESCE(excluded.name, name),
-        description=COALESCE(excluded.description, description),
-        updated_at=CURRENT_TIMESTAMP
+        name        = COALESCE(excluded.name, name),
+        slug        = COALESCE(excluded.slug, slug),
+        description = COALESCE(excluded.description, description),
+        updated_at  = CURRENT_TIMESTAMP
     `;
     for (const [lc, tr] of Object.entries(translations)) {
-      await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null).run();
+      const tName = tr?.name ?? null;
+      const tSlug = tr?.slug ? slugify$2(tr.slug) : tName ? slugify$2(tName) : null;
+      await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tName, tSlug, tr?.description ?? null).run();
     }
     return c.json({ ok: true });
   } catch (err) {
     console.error("Error upserting parent translations:", err);
-    const msg = "Failed to upsert translations";
-    return c.json({ error: msg }, 500);
+    return c.json({ error: "Failed to upsert translations" }, 500);
   }
 });
 parentsRouter.get("/:id/translations", async (c) => {
@@ -3426,7 +3457,7 @@ parentsRouter.get("/:id/translations", async (c) => {
   try {
     if (!hasDB$5(c.env)) return c.json({ error: "Database not available" }, 503);
     const sql = `
-      SELECT locale, name, description
+      SELECT locale, name, slug, description
       FROM parent_categories_translations
       WHERE parent_id = ?
       ORDER BY locale ASC
@@ -3436,6 +3467,7 @@ parentsRouter.get("/:id/translations", async (c) => {
     for (const row of results) {
       translations[row.locale] = {
         name: row.name || "",
+        slug: row.slug || "",
         description: row.description || ""
       };
     }
@@ -3462,11 +3494,13 @@ parentsRouter.delete("/:id", async (c) => {
   }
 });
 parentsRouter.get("/:slug/products", async (c) => {
-  const slug = c.req.param("slug");
+  const slugOrId = c.req.param("slug");
   try {
     if (!hasDB$5(c.env)) {
       return c.json({ products: [], source: "fallback", count: 0 });
     }
+    const parentId = await resolveParentId(c, slugOrId);
+    if (!parentId) return c.json({ products: [], source: "database", count: 0 });
     const sql = `
       SELECT
         p.*,
@@ -3479,10 +3513,10 @@ parentsRouter.get("/:slug/products", async (c) => {
       FROM products p
       JOIN subcategories s      ON s.id = p.subcategory_id
       JOIN parent_categories pc ON pc.id = s.parent_id
-      WHERE pc.slug = ?
+      WHERE pc.id = ?
       ORDER BY p.created_at DESC
     `;
-    const res = await c.env.DB.prepare(sql).bind(slug).all();
+    const res = await c.env.DB.prepare(sql).bind(parentId).all();
     const products = res?.results ?? [];
     return c.json({ products, count: products.length, source: "database" });
   } catch (err) {
@@ -3495,20 +3529,14 @@ parentsRouter.get("/:idOrSlug/subcategories", async (c) => {
   try {
     if (!hasDB$5(c.env)) return c.json({ error: "Database not available" }, 503);
     const locale = getLocale$5(c);
-    const isNumeric = /^\d+$/.test(idOrSlug);
-    const findSql = `
-      SELECT id FROM parent_categories
-      WHERE ${isNumeric ? "id = ?" : "slug = ?"}
-      LIMIT 1
-    `;
-    const row = await c.env.DB.prepare(findSql).bind(isNumeric ? Number(idOrSlug) : idOrSlug).first();
-    if (!row?.id) return c.json({ subcategories: [], count: 0, locale });
+    const parentId = await resolveParentId(c, idOrSlug);
+    if (!parentId) return c.json({ subcategories: [], count: 0, locale });
     const subsSql = `
       SELECT
         sc.id,
         sc.parent_id,
-        COALESCE(sct.name, sc.name) AS name,
-        sc.slug,
+        COALESCE(sct.name, sc.name)               AS name,
+        COALESCE(sct.slug, sc.slug)               AS slug,
         COALESCE(sct.description, sc.description) AS description,
         sc.image_url,
         sc.created_at
@@ -3518,7 +3546,7 @@ parentsRouter.get("/:idOrSlug/subcategories", async (c) => {
       WHERE sc.parent_id = ?
       ORDER BY sc.created_at DESC
     `;
-    const res = await c.env.DB.prepare(subsSql).bind(locale, row.id).all();
+    const res = await c.env.DB.prepare(subsSql).bind(locale, parentId).all();
     const subcategories = res?.results ?? [];
     return c.json({ subcategories, count: subcategories.length, source: "database", locale });
   } catch (err) {
@@ -3531,6 +3559,21 @@ const getLocale$4 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$4).toLowerCa
 const hasDB$4 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const slugify$1 = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
 const subCategoriesRouter = new Hono2();
+async function resolveSubId(c, idOrSlug) {
+  const isNumeric = /^\d+$/.test(idOrSlug);
+  if (isNumeric) return Number(idOrSlug);
+  const locale = getLocale$4(c);
+  const findSql = `
+    SELECT sc.id
+    FROM subcategories sc
+    LEFT JOIN subcategories_translations sct
+      ON sct.sub_id = sc.id AND sct.locale = ?
+    WHERE sc.slug = ? OR sct.slug = ?
+    LIMIT 1
+  `;
+  const row = await c.env.DB.prepare(findSql).bind(locale, idOrSlug, idOrSlug).first();
+  return row?.id ?? null;
+}
 subCategoriesRouter.get("/", async (c) => {
   const { parent_id, parent_slug, limit, offset, q, with_counts } = c.req.query();
   try {
@@ -3545,18 +3588,20 @@ subCategoriesRouter.get("/", async (c) => {
       params.push(Number(parent_id));
     }
     if (parent_slug) {
-      conds.push("pc.slug = ?");
-      params.push(String(parent_slug));
+      conds.push("(pc.slug = ? OR pct.slug = ?)");
+      params.push(String(parent_slug), String(parent_slug));
     }
     if (q && q.trim()) {
       const kw = `%${q.trim()}%`;
       conds.push(`(
         (sct.name IS NOT NULL AND sct.name LIKE ?)
         OR (sct.description IS NOT NULL AND sct.description LIKE ?)
+        OR (sct.slug IS NOT NULL AND sct.slug LIKE ?)
         OR (sct.name IS NULL AND sc.name LIKE ?)
         OR (sct.description IS NULL AND sc.description LIKE ?)
+        OR (sct.slug IS NULL AND sc.slug LIKE ?)
       )`);
-      params.push(kw, kw, kw, kw);
+      params.push(kw, kw, kw, kw, kw, kw);
     }
     const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
     const hasLimit = Number.isFinite(Number(limit));
@@ -3569,13 +3614,13 @@ subCategoriesRouter.get("/", async (c) => {
       SELECT
         sc.id,
         sc.parent_id,
-        COALESCE(sct.name, sc.name) AS name,
-        sc.slug,
+        COALESCE(sct.name, sc.name)               AS name,
+        COALESCE(sct.slug, sc.slug)               AS slug,
         COALESCE(sct.description, sc.description) AS description,
         sc.image_url,
         sc.created_at,
-        COALESCE(pct.name, pc.name) AS parent_name,
-        pc.slug AS parent_slug
+        COALESCE(pct.name, pc.name)               AS parent_name,
+        COALESCE(pct.slug, pc.slug)               AS parent_slug
       FROM subcategories sc
       LEFT JOIN subcategories_translations sct
         ON sct.sub_id = sc.id AND sct.locale = ?
@@ -3623,28 +3668,29 @@ subCategoriesRouter.get("/:idOrSlug", async (c) => {
   try {
     if (!hasDB$4(c.env)) return c.json({ error: "Database not available" }, 503);
     const locale = getLocale$4(c);
-    const isNumeric = /^\d+$/.test(idOrSlug);
+    const subId = await resolveSubId(c, idOrSlug);
+    if (!subId) return c.json({ error: "Subcategory not found" }, 404);
     const sql = `
       SELECT
         sc.id,
         sc.parent_id,
-        COALESCE(sct.name, sc.name) AS name,
-        sc.slug,
+        COALESCE(sct.name, sc.name)               AS name,
+        COALESCE(sct.slug, sc.slug)               AS slug,
         COALESCE(sct.description, sc.description) AS description,
         sc.image_url,
         sc.created_at,
-        COALESCE(pct.name, pc.name) AS parent_name,
-        pc.slug AS parent_slug
+        COALESCE(pct.name, pc.name)               AS parent_name,
+        COALESCE(pct.slug, pc.slug)               AS parent_slug
       FROM subcategories sc
       LEFT JOIN subcategories_translations sct
         ON sct.sub_id = sc.id AND sct.locale = ?
       JOIN parent_categories pc ON pc.id = sc.parent_id
       LEFT JOIN parent_categories_translations pct
         ON pct.parent_id = pc.id AND pct.locale = ?
-      WHERE ${isNumeric ? "sc.id = ?" : "sc.slug = ?"}
+      WHERE sc.id = ?
       LIMIT 1
     `;
-    const subcat = await c.env.DB.prepare(sql).bind(locale, locale, isNumeric ? Number(idOrSlug) : idOrSlug).first();
+    const subcat = await c.env.DB.prepare(sql).bind(locale, locale, subId).first();
     if (!subcat) return c.json({ error: "Subcategory not found" }, 404);
     if (String(with_counts) === "1") {
       const cnt = await c.env.DB.prepare(`SELECT COUNT(*) AS product_count FROM products WHERE subcategory_id = ?`).bind(subcat.id).first();
@@ -3681,15 +3727,18 @@ subCategoriesRouter.post("/", async (c) => {
     const newId = res.meta?.last_row_id;
     if (translations && typeof translations === "object") {
       const upsertT = `
-        INSERT INTO subcategories_translations(sub_id, locale, name, description)
-        VALUES (?1, ?2, ?3, ?4)
+        INSERT INTO subcategories_translations(sub_id, locale, name, slug, description)
+        VALUES (?1, ?2, ?3, ?4, ?5)
         ON CONFLICT(sub_id, locale) DO UPDATE SET
-          name=COALESCE(excluded.name, name),
-          description=COALESCE(excluded.description, description),
-          updated_at=CURRENT_TIMESTAMP
+          name        = COALESCE(excluded.name, name),
+          slug        = COALESCE(excluded.slug, slug),
+          description = COALESCE(excluded.description, description),
+          updated_at  = CURRENT_TIMESTAMP
       `;
       for (const [lc, tr] of Object.entries(translations)) {
-        await c.env.DB.prepare(upsertT).bind(newId, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null).run();
+        const tName = tr?.name ?? null;
+        const tSlug = tr?.slug ? slugify$1(tr.slug) : tName ? slugify$1(tName) : null;
+        await c.env.DB.prepare(upsertT).bind(newId, String(lc).toLowerCase(), tName, tSlug, tr?.description ?? null).run();
       }
     }
     const locale = getLocale$4(c);
@@ -3697,13 +3746,13 @@ subCategoriesRouter.post("/", async (c) => {
       `SELECT
            sc.id,
            sc.parent_id,
-           COALESCE(sct.name, sc.name) AS name,
-           sc.slug,
+           COALESCE(sct.name, sc.name)               AS name,
+           COALESCE(sct.slug, sc.slug)               AS slug,
            COALESCE(sct.description, sc.description) AS description,
            sc.image_url,
            sc.created_at,
-           COALESCE(pct.name, pc.name) AS parent_name,
-           pc.slug AS parent_slug
+           COALESCE(pct.name, pc.name)               AS parent_name,
+           COALESCE(pct.slug, pc.slug)               AS parent_slug
          FROM subcategories sc
          LEFT JOIN subcategories_translations sct
            ON sct.sub_id = sc.id AND sct.locale = ?
@@ -3741,7 +3790,7 @@ subCategoriesRouter.put("/:id", async (c) => {
     }
     if (slug !== void 0) {
       sets.push("slug = ?");
-      params.push(slug);
+      params.push(slugify$1(slug));
     }
     if (description !== void 0) {
       sets.push("description = ?");
@@ -3759,15 +3808,18 @@ subCategoriesRouter.put("/:id", async (c) => {
     }
     if (translations && typeof translations === "object") {
       const upsertT = `
-        INSERT INTO subcategories_translations(sub_id, locale, name, description)
-        VALUES (?1, ?2, ?3, ?4)
+        INSERT INTO subcategories_translations(sub_id, locale, name, slug, description)
+        VALUES (?1, ?2, ?3, ?4, ?5)
         ON CONFLICT(sub_id, locale) DO UPDATE SET
-          name=COALESCE(excluded.name, name),
-          description=COALESCE(excluded.description, description),
-          updated_at=CURRENT_TIMESTAMP
+          name        = COALESCE(excluded.name, name),
+          slug        = COALESCE(excluded.slug, slug),
+          description = COALESCE(excluded.description, description),
+          updated_at  = CURRENT_TIMESTAMP
       `;
       for (const [lc, tr] of Object.entries(translations)) {
-        await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null).run();
+        const tName = tr?.name ?? null;
+        const tSlug = tr?.slug ? slugify$1(tr.slug) : tName ? slugify$1(tName) : null;
+        await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tName, tSlug, tr?.description ?? null).run();
       }
     }
     const locale = getLocale$4(c);
@@ -3775,13 +3827,13 @@ subCategoriesRouter.put("/:id", async (c) => {
       `SELECT
            sc.id,
            sc.parent_id,
-           COALESCE(sct.name, sc.name) AS name,
-           sc.slug,
+           COALESCE(sct.name, sc.name)               AS name,
+           COALESCE(sct.slug, sc.slug)               AS slug,
            COALESCE(sct.description, sc.description) AS description,
            sc.image_url,
            sc.created_at,
-           COALESCE(pct.name, pc.name) AS parent_name,
-           pc.slug AS parent_slug
+           COALESCE(pct.name, pc.name)               AS parent_name,
+           COALESCE(pct.slug, pc.slug)               AS parent_slug
          FROM subcategories sc
          LEFT JOIN subcategories_translations sct
            ON sct.sub_id = sc.id AND sct.locale = ?
@@ -3807,15 +3859,18 @@ subCategoriesRouter.put("/:id/translations", async (c) => {
       return c.json({ error: "Missing translations" }, 400);
     }
     const upsertT = `
-      INSERT INTO subcategories_translations(sub_id, locale, name, description)
-      VALUES (?1, ?2, ?3, ?4)
+      INSERT INTO subcategories_translations(sub_id, locale, name, slug, description)
+      VALUES (?1, ?2, ?3, ?4, ?5)
       ON CONFLICT(sub_id, locale) DO UPDATE SET
-        name=COALESCE(excluded.name, name),
-        description=COALESCE(excluded.description, description),
-        updated_at=CURRENT_TIMESTAMP
+        name        = COALESCE(excluded.name, name),
+        slug        = COALESCE(excluded.slug, slug),
+        description = COALESCE(excluded.description, description),
+        updated_at  = CURRENT_TIMESTAMP
     `;
     for (const [lc, tr] of Object.entries(translations)) {
-      await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null).run();
+      const tName = tr?.name ?? null;
+      const tSlug = tr?.slug ? slugify$1(tr.slug) : tName ? slugify$1(tName) : null;
+      await c.env.DB.prepare(upsertT).bind(id, String(lc).toLowerCase(), tName, tSlug, tr?.description ?? null).run();
     }
     return c.json({ ok: true });
   } catch (err) {
@@ -3828,7 +3883,7 @@ subCategoriesRouter.get("/:id/translations", async (c) => {
   try {
     if (!hasDB$4(c.env)) return c.json({ error: "Database not available" }, 503);
     const sql = `
-      SELECT locale, name, description
+      SELECT locale, name, slug, description
       FROM subcategories_translations
       WHERE sub_id = ?
       ORDER BY locale ASC
@@ -3838,6 +3893,7 @@ subCategoriesRouter.get("/:id/translations", async (c) => {
     for (const row of results) {
       translations[row.locale] = {
         name: row.name || "",
+        slug: row.slug || "",
         description: row.description || ""
       };
     }
@@ -3864,28 +3920,30 @@ subCategoriesRouter.delete("/:id", async (c) => {
   }
 });
 subCategoriesRouter.get("/:slug/products", async (c) => {
-  const slug = c.req.param("slug");
+  const slugOrId = c.req.param("slug");
   try {
     if (!hasDB$4(c.env)) {
       return c.json({ products: [], source: "fallback", count: 0 });
     }
     const locale = getLocale$4(c);
+    const subId = await resolveSubId(c, slugOrId);
+    if (!subId) return c.json({ products: [], count: 0, source: "database", locale });
     const sql = `
       SELECT
         p.id,
         COALESCE(pt.title, p.title)               AS title,
-        p.slug                                    AS product_slug,
         COALESCE(pt.description, p.description)   AS description,
         COALESCE(pt.content, p.content)           AS content,
+        p.slug                                    AS product_slug,
         p.image_url,
         p.created_at,
         p.updated_at,
         s.id      AS subcategory_id,
-        COALESCE(sct.name, s.name) AS subcategory_name,
-        s.slug    AS subcategory_slug,
+        COALESCE(sct.name, s.name)                AS subcategory_name,
+        COALESCE(sct.slug, s.slug)                AS subcategory_slug,
         pc.id     AS parent_id,
-        COALESCE(pct.name, pc.name) AS parent_name,
-        pc.slug   AS parent_slug
+        COALESCE(pct.name, pc.name)               AS parent_name,
+        COALESCE(pct.slug, pc.slug)               AS parent_slug
       FROM products p
       LEFT JOIN products_translations pt
         ON pt.product_id = p.id AND pt.locale = ?
@@ -3897,10 +3955,10 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
         ON pc.id = s.parent_id
       LEFT JOIN parent_categories_translations pct
         ON pct.parent_id = pc.id AND pct.locale = ?
-      WHERE s.slug = ?
+      WHERE s.id = ?
       ORDER BY p.created_at DESC
     `;
-    const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, slug).all();
+    const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, subId).all();
     const products = res?.results ?? [];
     return c.json({ products, count: products.length, source: "database", locale });
   } catch (err) {
@@ -5284,17 +5342,17 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
   const sql = `
     SELECT
       p.id,
-      COALESCE(pt.title, p.title)             AS title,
-      p.slug                                  AS slug,
-      COALESCE(pt.description, p.description) AS description,
-      COALESCE(pt.content, p.content)         AS content,
+      COALESCE(pt.title, p.title)               AS title,
+      COALESCE(pt.slug,  p.slug)                AS slug,
+      COALESCE(pt.description, p.description)   AS description,
+      COALESCE(pt.content,     p.content)       AS content,
       p.image_url,
       p.created_at,
       p.updated_at,
 
-      s.id                                    AS subcategory_id,
-      COALESCE(sct.name, s.name)              AS subcategory_name,
-      s.slug                                  AS subcategory_slug
+      s.id                                      AS subcategory_id,
+      COALESCE(sct.name, s.name)                AS subcategory_name,
+      COALESCE(sct.slug, s.slug)                AS subcategory_slug
     FROM products p
     LEFT JOIN products_translations pt
       ON pt.product_id = p.id AND pt.locale = ?
@@ -5302,10 +5360,10 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
       ON s.id = p.subcategory_id
     LEFT JOIN subcategories_translations sct
       ON sct.sub_id = s.id AND sct.locale = ?
-    WHERE ${isNumericId ? "p.id = ?" : "p.slug = ?"}
+    WHERE ${isNumericId ? "p.id = ?" : "(p.slug = ? OR pt.slug = ?)"}
     LIMIT 1
   `;
-  return db.prepare(sql).bind(locale, locale, isNumericId ? Number(idOrSlug) : idOrSlug).first();
+  return isNumericId ? db.prepare(sql).bind(locale, locale, Number(idOrSlug)).first() : db.prepare(sql).bind(locale, locale, idOrSlug, idOrSlug).first();
 };
 const productsRouter = new Hono2();
 productsRouter.get("/", async (c) => {
@@ -5322,20 +5380,22 @@ productsRouter.get("/", async (c) => {
       params.push(Number(subcategory_id));
     }
     if (sub_slug) {
-      conds.push("s.slug = ?");
-      params.push(String(sub_slug));
+      conds.push("(s.slug = ? OR sct.slug = ?)");
+      params.push(String(sub_slug), String(sub_slug));
     }
     if (q && q.trim()) {
       const kw = `%${q.trim()}%`;
       conds.push(`(
-        (pt.title IS NOT NULL AND pt.title LIKE ?)
+        (pt.title       IS NOT NULL AND pt.title       LIKE ?)
         OR (pt.description IS NOT NULL AND pt.description LIKE ?)
-        OR (pt.content IS NOT NULL AND pt.content LIKE ?)
-        OR (pt.title IS NULL AND p.title LIKE ?)
+        OR (pt.content   IS NOT NULL AND pt.content    LIKE ?)
+        OR (pt.slug      IS NOT NULL AND pt.slug       LIKE ?)
+        OR (pt.title       IS NULL AND p.title       LIKE ?)
         OR (pt.description IS NULL AND p.description LIKE ?)
-        OR (pt.content IS NULL AND p.content LIKE ?)
+        OR (pt.content     IS NULL AND p.content     LIKE ?)
+        OR (pt.slug        IS NULL AND p.slug        LIKE ?)
       )`);
-      params.push(kw, kw, kw, kw, kw, kw);
+      params.push(kw, kw, kw, kw, kw, kw, kw, kw);
     }
     const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
     const hasLimit = Number.isFinite(Number(limit));
@@ -5347,17 +5407,17 @@ productsRouter.get("/", async (c) => {
     const sql = `
       SELECT
         p.id,
-        COALESCE(pt.title, p.title)             AS title,
-        p.slug                                  AS slug,
-        COALESCE(pt.description, p.description) AS description,
-        COALESCE(pt.content, p.content)         AS content,
+        COALESCE(pt.title, p.title)               AS title,
+        COALESCE(pt.slug,  p.slug)                AS slug,
+        COALESCE(pt.description, p.description)   AS description,
+        COALESCE(pt.content,     p.content)       AS content,
         p.image_url,
         p.created_at,
         p.updated_at,
 
-        s.id                                    AS subcategory_id,
-        COALESCE(sct.name, s.name)              AS subcategory_name,
-        s.slug                                  AS subcategory_slug
+        s.id                                      AS subcategory_id,
+        COALESCE(sct.name, s.name)                AS subcategory_name,
+        COALESCE(sct.slug, s.slug)                AS subcategory_slug
       FROM products p
       LEFT JOIN products_translations pt
         ON pt.product_id = p.id AND pt.locale = ?
@@ -5434,19 +5494,23 @@ productsRouter.post("/", async (c) => {
     const newId = runRes.meta?.last_row_id;
     if (translations && typeof translations === "object") {
       const upsertT = `
-        INSERT INTO products_translations(product_id, locale, title, description, content)
-        VALUES (?1, ?2, ?3, ?4, ?5)
+        INSERT INTO products_translations(product_id, locale, title, slug, description, content)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
         ON CONFLICT(product_id, locale) DO UPDATE SET
           title       = COALESCE(excluded.title, title),
+          slug        = COALESCE(excluded.slug, slug),
           description = COALESCE(excluded.description, description),
           content     = COALESCE(excluded.content, content),
           updated_at  = CURRENT_TIMESTAMP
       `;
       for (const [lc, tr] of Object.entries(translations)) {
+        const tTitle = tr?.title ?? null;
+        const tSlug = tr?.slug ? slugify(tr.slug) : tTitle ? slugify(tTitle) : null;
         await c.env.DB.prepare(upsertT).bind(
           newId,
           String(lc).toLowerCase(),
-          tr?.title ?? null,
+          tTitle,
+          tSlug,
           tr?.description ?? null,
           tr?.content ?? null
         ).run();
@@ -5487,7 +5551,7 @@ productsRouter.put("/:id", async (c) => {
     }
     if (slug !== void 0) {
       sets.push("slug = ?");
-      params.push(slug);
+      params.push(slugify(slug));
     }
     if (description !== void 0) {
       sets.push("description = ?");
@@ -5517,19 +5581,23 @@ productsRouter.put("/:id", async (c) => {
     }
     if (translations && typeof translations === "object") {
       const upsertT = `
-        INSERT INTO products_translations(product_id, locale, title, description, content)
-        VALUES (?1, ?2, ?3, ?4, ?5)
+        INSERT INTO products_translations(product_id, locale, title, slug, description, content)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
         ON CONFLICT(product_id, locale) DO UPDATE SET
           title       = COALESCE(excluded.title, title),
+          slug        = COALESCE(excluded.slug, slug),
           description = COALESCE(excluded.description, description),
           content     = COALESCE(excluded.content, content),
           updated_at  = CURRENT_TIMESTAMP
       `;
       for (const [lc, tr] of Object.entries(translations)) {
+        const tTitle = tr?.title ?? null;
+        const tSlug = tr?.slug ? slugify(tr.slug) : tTitle ? slugify(tTitle) : null;
         await c.env.DB.prepare(upsertT).bind(
           id,
           String(lc).toLowerCase(),
-          tr?.title ?? null,
+          tTitle,
+          tSlug,
           tr?.description ?? null,
           tr?.content ?? null
         ).run();
@@ -5554,19 +5622,23 @@ productsRouter.put("/:id/translations", async (c) => {
       return c.json({ error: "Missing translations" }, 400);
     }
     const upsertT = `
-      INSERT INTO products_translations(product_id, locale, title, description, content)
-      VALUES (?1, ?2, ?3, ?4, ?5)
+      INSERT INTO products_translations(product_id, locale, title, slug, description, content)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6)
       ON CONFLICT(product_id, locale) DO UPDATE SET
         title       = COALESCE(excluded.title, title),
+        slug        = COALESCE(excluded.slug, slug),
         description = COALESCE(excluded.description, description),
         content     = COALESCE(excluded.content, content),
         updated_at  = CURRENT_TIMESTAMP
     `;
     for (const [lc, tr] of Object.entries(translations)) {
+      const tTitle = tr?.title ?? null;
+      const tSlug = tr?.slug ? slugify(tr.slug) : tTitle ? slugify(tTitle) : null;
       await c.env.DB.prepare(upsertT).bind(
         id,
         String(lc).toLowerCase(),
-        tr?.title ?? null,
+        tTitle,
+        tSlug,
         tr?.description ?? null,
         tr?.content ?? null
       ).run();
@@ -5582,7 +5654,7 @@ productsRouter.get("/:id/translations", async (c) => {
   try {
     if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
     const sql = `
-      SELECT locale, title, description, content
+      SELECT locale, title, slug, description, content
       FROM products_translations
       WHERE product_id = ?
       ORDER BY locale ASC
@@ -5592,6 +5664,7 @@ productsRouter.get("/:id/translations", async (c) => {
     for (const row of results) {
       translations[row.locale] = {
         title: row.title || "",
+        slug: row.slug || "",
         description: row.description || "",
         content: row.content || ""
       };
