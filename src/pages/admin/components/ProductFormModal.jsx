@@ -27,6 +27,8 @@ const LABELS = {
     autoTranslate: 'Tự dịch từ VI',
     subcat: 'Danh mục con',
     translateContentBtn: 'Dịch nội dung từ VI',
+    slug: 'Slug',
+    slug_ph: 'vd: ao-thun-basic',
   },
   en: {
     title: 'Title',
@@ -38,6 +40,8 @@ const LABELS = {
     autoTranslate: 'Auto-translate from VI',
     subcat: 'Subcategory',
     translateContentBtn: 'Translate content from VI',
+    slug: 'Slug',
+    slug_ph: 'e.g. basic-tee',
   },
   ja: {
     title: 'タイトル',
@@ -49,6 +53,8 @@ const LABELS = {
     autoTranslate: 'VI から自動翻訳',
     subcat: 'サブカテゴリ',
     translateContentBtn: 'VI から内容を翻訳',
+    slug: 'スラッグ',
+    slug_ph: '例: basic-tee',
   },
   ko: {
     title: '제목',
@@ -60,6 +66,8 @@ const LABELS = {
     autoTranslate: '베트남어에서 자동 번역',
     subcat: '하위 카테고리',
     translateContentBtn: 'VI에서 내용 번역',
+    slug: '슬러그',
+    slug_ph: '예: basic-tee',
   },
   zh: {
     title: '标题',
@@ -71,6 +79,8 @@ const LABELS = {
     autoTranslate: '从越南语自动翻译',
     subcat: '子分类',
     translateContentBtn: '从越南语翻译内容',
+    slug: '短链接',
+    slug_ph: '例如: basic-tee',
   },
   fr: {
     title: 'Titre',
@@ -82,6 +92,8 @@ const LABELS = {
     autoTranslate: 'Traduire automatiquement depuis le VI',
     subcat: 'Sous-catégorie',
     translateContentBtn: 'Traduire le contenu depuis le VI',
+    slug: 'Slug',
+    slug_ph: 'ex. basic-tee',
   },
   de: {
     title: 'Titel',
@@ -93,6 +105,8 @@ const LABELS = {
     autoTranslate: 'Automatisch aus VI übersetzen',
     subcat: 'Unterkategorie',
     translateContentBtn: 'Inhalt aus VI übersetzen',
+    slug: 'Slug',
+    slug_ph: 'z. B. basic-tee',
   },
 };
 const L = (lc, key) => LABELS[lc]?.[key] ?? LABELS.en[key] ?? key;
@@ -134,12 +148,12 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     subcategory_id: null,
   });
 
-  // Translations
+  // Translations (kèm slug)
   const [translations, setTranslations] = useState(
-    /** @type {Record<string,{title:string,description:string,content:string}>} */({})
+    /** @type {Record<string,{title:string,slug?:string,description:string,content:string}>} */({})
   );
   const [touched, setTouched] = useState(
-    /** @type {Record<string,{title?:boolean,description?:boolean,content?:boolean}>} */({})
+    /** @type {Record<string,{title?:boolean,slug?:boolean,description?:boolean,content?:boolean}>} */({})
   );
 
   const [activeTab, setActiveTab] = useState('vi');
@@ -149,6 +163,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const [imagePreview, setImagePreview] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [slugErrorVI, setSlugErrorVI] = useState('');
+  const [slugErrorsTr, setSlugErrorsTr] = useState(/** @type {Record<string,string>} */({}));
 
   const [autoTranslate, setAutoTranslate] = useState(true);
   const debounceTimer = useRef(null);
@@ -199,6 +214,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     setImagePreview(initialData.image_url || '');
     setActiveTab('vi');
     setSlugErrorVI('');
+    setSlugErrorsTr({});
     lastSourceTitle.current = initialData.title || '';
     lastSourceDesc.current = viDesc;
 
@@ -210,6 +226,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
           lc,
           {
             title: v?.title || '',
+            slug: v?.slug || '',
             description: v?.description || '',
             content: v?.content || '',
           },
@@ -236,6 +253,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             if (lc === 'vi') continue;
             merged[lc] = {
               title: v?.title || '',
+              slug: v?.slug || '',
               description: v?.description || '',
               content: v?.content || '',
             };
@@ -256,7 +274,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     );
   }, [isUploading]);
 
-  // Auto-translate title + description from VI
+  // Auto-translate title + description from VI (+ tự sinh slug nếu trống/chưa touch)
   useEffect(() => {
     if (!autoTranslate) return;
     const srcTitle = base.title?.trim() || '';
@@ -298,15 +316,13 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
         } catch { /* noop */ }
 
         setTranslations(prev => {
-          const curr = prev[lc] || { title: '', description: '', content: '' };
-          return {
-            ...prev,
-            [lc]: {
-              ...curr,
-              title: !touchedLC.title && newTitle ? newTitle : curr.title,
-              description: !touchedLC.description && newDesc ? newDesc : curr.description,
-            }
-          };
+          const curr = prev[lc] || { title: '', slug: '', description: '', content: '' };
+          const nextTitle = !touchedLC.title && newTitle ? newTitle : curr.title;
+          const nextDesc = !touchedLC.description && newDesc ? newDesc : curr.description;
+          // chỉ tự sinh slug nếu đang trống và chưa touch slug
+          const currSlug = (curr.slug || '').trim();
+          const nextSlug = (currSlug || touchedLC.slug) ? currSlug : (nextTitle ? slugify(nextTitle) : '');
+          return { ...prev, [lc]: { ...curr, title: nextTitle, description: nextDesc, slug: nextSlug } };
         });
       }
     }, 400);
@@ -334,9 +350,10 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const handleTrChange = (lc, key, value) => {
     setTranslations(prev => ({
       ...prev,
-      [lc]: { ...(prev[lc] || { title: '', description: '', content: '' }), [key]: value }
+      [lc]: { ...(prev[lc] || { title: '', slug: '', description: '', content: '' }), [key]: value }
     }));
     setTouched(prev => ({ ...prev, [lc]: { ...(prev[lc] || {}), [key]: true } }));
+    if (key === 'slug') setSlugErrorsTr(prev => ({ ...prev, [lc]: '' }));
   };
 
   const handleSlugBlurVI = () => {
@@ -347,11 +364,27 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       setSlugErrorVI('Slug chỉ gồm a-z, 0-9 và dấu gạch nối (-), không bắt đầu/kết thúc bằng -.');
     }
   };
+  const handleSlugBlurTR = (lc) => {
+    const current = translations[lc]?.slug || '';
+    const normalized = slugify(current);
+    setTranslations(prev => ({ ...prev, [lc]: { ...(prev[lc] || {}), slug: normalized } }));
+    setSlugErrorsTr(prev => ({
+      ...prev,
+      [lc]: normalized && !isValidSlug(normalized)
+        ? 'Slug chỉ gồm a-z, 0-9 và dấu gạch nối (-), không bắt đầu/kết thúc bằng -.'
+        : ''
+    }));
+  };
 
   const generateSlugFromVITitle = () => {
     const s = slugify(base.title || '');
     setBase(prev => ({ ...prev, slug: s }));
     setSlugErrorVI(s && !isValidSlug(s) ? 'Slug không hợp lệ.' : '');
+  };
+  const generateSlugFromTRTitle = (lc) => {
+    const s = slugify(translations[lc]?.title || '');
+    setTranslations(prev => ({ ...prev, [lc]: { ...(prev[lc] || {}), slug: s } }));
+    setSlugErrorsTr(prev => ({ ...prev, [lc]: s && !isValidSlug(s) ? 'Slug không hợp lệ.' : '' }));
   };
 
   const uploadImage = async (file) => {
@@ -383,6 +416,9 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       if (!base.slug) { setSlugErrorVI('Vui lòng nhập slug hoặc dùng “Tạo từ tên”.'); return; }
       if (!isValidSlug(base.slug)) { setSlugErrorVI('Slug không hợp lệ.'); return; }
     }
+    for (const lc of Object.keys(slugErrorsTr)) {
+      if (slugErrorsTr[lc]) { alert(`Slug (${lc.toUpperCase()}) không hợp lệ.`); return; }
+    }
 
     setIsUploading(true);
     try {
@@ -400,18 +436,25 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
       if (!isEditing && payloadBase.slug) {
         const { slug, ...rest } = payloadBase;
-        payloadBase = rest;
+        payloadBase = rest; // tạo mới: để BE tự sinh slug nếu muốn
       }
 
+      // translations payload: { lc: { title?, slug?, description?, content? } }
       const cleanTranslations = {};
       for (const [lc, v] of Object.entries(translations)) {
-        const hasAny = (v?.title || v?.description || v?.content);
+        const hasAny = (v?.title || v?.description || v?.content || v?.slug);
         if (!hasAny) continue;
-        cleanTranslations[lc] = {
-          ...(v.title ? { title: v.title } : {}),
-          ...(v.description ? { description: v.description } : {}),
-          ...(v.content ? { content: v.content } : {}),
-        };
+
+        const tSlugRaw = (v?.slug || '').trim();
+        const tSlug = tSlugRaw ? slugify(tSlugRaw) : '';
+
+        const entry = {};
+        if (v.title) entry.title = v.title;
+        if (v.description) entry.description = v.description;
+        if (v.content) entry.content = v.content;
+        if (tSlug && isValidSlug(tSlug)) entry.slug = tSlug;
+
+        cleanTranslations[lc] = entry;
       }
 
       const finalPayload = {
@@ -431,6 +474,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       setImageFile(null);
       setImagePreview('');
       setSlugErrorVI('');
+      setSlugErrorsTr({});
       lastSourceTitle.current = '';
       lastSourceDesc.current = '';
     } catch (err) {
@@ -476,20 +520,21 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             setActiveTab={setActiveTab}
             addLocale={(lc) => {
               setOpenLocales(prev => prev.includes(lc) ? prev : [...prev, lc]);
-              setTranslations(prev => prev[lc] ? prev : { ...prev, [lc]: { title: '', description: '', content: '' } });
+              setTranslations(prev => prev[lc] ? prev : { ...prev, [lc]: { title: '', slug: '', description: '', content: '' } });
               setActiveTab(lc);
             }}
             removeLocale={(lc) => {
               setOpenLocales(prev => prev.filter(x => x !== lc));
               setTranslations(prev => { const cp = { ...prev }; delete cp[lc]; return cp; });
               setTouched(prev => { const cp = { ...prev }; delete cp[lc]; return cp; });
+              setSlugErrorsTr(prev => { const cp = { ...prev }; delete cp[lc]; return cp; });
               setActiveTab('vi');
             }}
           />
 
           {activeTab === 'vi' && (
             <div className="space-y-6">
-              {/* Subcategory only */}
+              {/* Subcategory */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{L('vi', 'subcat')}</label>
                 <div className="relative">
@@ -531,7 +576,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 {isEditing && (
                   <div>
                     <div className="flex items-center justify-between">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Slug (VI)</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{L('vi', 'slug')} (VI)</label>
                       <button
                         type="button"
                         onClick={generateSlugFromVITitle}
@@ -547,7 +592,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                       value={base.slug}
                       onChange={handleBaseChange}
                       onBlur={handleSlugBlurVI}
-                      placeholder="vd: ao-thun-basic"
+                      placeholder={L('vi', 'slug_ph')}
                       disabled={isUploading}
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 disabled:bg-gray-100 ${slugErrorVI ? 'border-red-400 focus:ring-red-300' : 'border-gray-300 focus:ring-blue-500'}`}
                     />
@@ -606,6 +651,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             activeTab === lc && (
               <div key={lc} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Title */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {L(lc, 'title')} ({lc.toUpperCase()})
@@ -618,21 +664,59 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                     />
                   </div>
+
+                  {/* Slug theo locale */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {L(lc, 'description')} ({lc.toUpperCase()})
-                    </label>
-                    <textarea
-                      value={translations[lc]?.description || ''}
-                      onChange={(e) => handleTrChange(lc, 'description', e.target.value)}
-                      rows={3}
-                      placeholder={`${L(lc, 'description_ph')}`}
+                    <div className="flex items-center justify-between">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {L(lc, 'slug')} ({lc.toUpperCase()})
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => generateSlugFromTRTitle(lc)}
+                        disabled={isUploading}
+                        className="text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
+                        title="Sinh slug từ tiêu đề"
+                      >
+                        <Wand2 size={16} /> Tạo từ tên
+                      </button>
+                    </div>
+                    <input
+                      value={translations[lc]?.slug || ''}
+                      onChange={(e) => handleTrChange(lc, 'slug', e.target.value)}
+                      onBlur={() => handleSlugBlurTR(lc)}
+                      placeholder={LABELS[lc]?.slug_ph || LABELS.vi.slug_ph}
                       disabled={isUploading}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 disabled:bg-gray-100 ${slugErrorsTr[lc] ? 'border-red-400 focus:ring-red-300' : 'border-gray-300 focus:ring-blue-500'}`}
                     />
+                    {slugErrorsTr[lc] ? (
+                      <p className="text-sm text-red-600 mt-1">{slugErrorsTr[lc]}</p>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">
+                        URL: <span className="font-mono">
+                          {(siteURL)}/{lc}/products/{translations[lc]?.slug || '<slug>'}
+                        </span>
+                      </p>
+                    )}
                   </div>
                 </div>
 
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {L(lc, 'description')} ({lc.toUpperCase()})
+                  </label>
+                  <textarea
+                    value={translations[lc]?.description || ''}
+                    onChange={(e) => handleTrChange(lc, 'description', e.target.value)}
+                    rows={3}
+                    placeholder={`${L(lc, 'description_ph')}`}
+                    disabled={isUploading}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                  />
+                </div>
+
+                {/* Content */}
                 <div>
                   <div className="flex items-center justify-between">
                     <label className="block text-sm font-medium text-gray-700 mb-1">

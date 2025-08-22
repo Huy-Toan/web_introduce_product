@@ -28,6 +28,8 @@ const LABELS = {
     name_any_ph: (lc) => `Name (${lc})`,
     desc_any: (lc) => `Mô tả (${lc})`,
     desc_any_ph: (lc) => `Description (${lc})`,
+    slug: 'Slug',
+    slug_ph: 'vd: trai-cay-tuoi',
   },
   en: {
     parent: 'Parent category',
@@ -41,6 +43,8 @@ const LABELS = {
     name_any_ph: (lc) => `Name (${lc})`,
     desc_any: (lc) => `Description (${lc})`,
     desc_any_ph: (lc) => `Description (${lc})`,
+    slug: 'Slug',
+    slug_ph: 'e.g. fresh-fruits',
   },
   ja: {
     parent: '親カテゴリ',
@@ -54,6 +58,8 @@ const LABELS = {
     name_any_ph: (lc) => `名称 (${lc})`,
     desc_any: (lc) => `説明 (${lc})`,
     desc_any_ph: (lc) => `説明 (${lc})`,
+    slug: 'スラッグ',
+    slug_ph: '例: fresh-fruits',
   },
   ko: {
     parent: '상위 카테고리',
@@ -67,6 +73,8 @@ const LABELS = {
     name_any_ph: (lc) => `이름 (${lc})`,
     desc_any: (lc) => `설명 (${lc})`,
     desc_any_ph: (lc) => `설명 (${lc})`,
+    slug: '슬러그',
+    slug_ph: '예: fresh-fruits',
   },
   zh: {
     parent: '父级分类',
@@ -80,6 +88,8 @@ const LABELS = {
     name_any_ph: (lc) => `名称 (${lc})`,
     desc_any: (lc) => `描述 (${lc})`,
     desc_any_ph: (lc) => `描述 (${lc})`,
+    slug: '短链接',
+    slug_ph: '例如: fresh-fruits',
   },
   fr: {
     parent: 'Catégorie parente',
@@ -93,6 +103,8 @@ const LABELS = {
     name_any_ph: (lc) => `Nom (${lc})`,
     desc_any: (lc) => `Description (${lc})`,
     desc_any_ph: (lc) => `Description (${lc})`,
+    slug: 'Slug',
+    slug_ph: 'ex. fresh-fruits',
   },
   de: {
     parent: 'Übergeordnete Kategorie',
@@ -106,6 +118,8 @@ const LABELS = {
     name_any_ph: (lc) => `Name (${lc})`,
     desc_any: (lc) => `Beschreibung (${lc})`,
     desc_any_ph: (lc) => `Beschreibung (${lc})`,
+    slug: 'Slug',
+    slug_ph: 'z. B. fresh-fruits',
   },
 };
 const L = (lc, key, ...args) =>
@@ -125,9 +139,9 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
     image_url: ''
   });
 
-  // Translations -> subcategories_translations (name + description)
+  // Translations -> subcategories_translations (name + description + slug)
   const [translations, setTranslations] = useState(
-    /** @type {Record<string, {name?:string, description?:string}>} */({})
+    /** @type {Record<string, {name?:string, slug?:string, description?:string}>} */({})
   );
 
   const [parents, setParents] = useState([]); // [{id,name,slug,...}]
@@ -136,10 +150,11 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
   const [imagePreview, setImagePreview] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [slugError, setSlugError] = useState('');
+  const [slugErrorsTr, setSlugErrorsTr] = useState(/** @type {Record<string,string>} */({}));
   const [autoTranslate, setAutoTranslate] = useState(true);
   const [activeTab, setActiveTab] = useState('vi');
   const [openLocales, setOpenLocales] = useState(['vi', 'en']);
-  const [touched, setTouched] = useState(/** @type {Record<string,{name?:boolean,description?:boolean}>} */({}));
+  const [touched, setTouched] = useState(/** @type {Record<string,{name?:boolean,slug?:boolean,description?:boolean}>} */({}));
   const debounceRef = useRef(null);
   const lastSnapshotRef = useRef({ name: '', description: '' });
 
@@ -155,9 +170,9 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
     const fetchParents = async () => {
       try {
         setParentsLoading(true);
-        const res = await fetch('/api/parent_categories');
+        const res = await fetch('/api/parent_categories'); // hoặc /api/parents tuỳ router bạn
         const data = await res.json();
-        const list = data.parents || [];
+        const list = data.parents || data.parent_categories || [];
         setParents(list);
       } catch (e) {
         console.error('fetch parents error:', e);
@@ -180,13 +195,18 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
     setImagePreview(initialData.image_url || '');
     setImageFile(null);
     setSlugError('');
+    setSlugErrorsTr({});
 
     // translations nếu BE trả kèm
     const initTr = { ...(initialData.translations || {}) };
     delete initTr.vi;
     setTranslations(
       Object.fromEntries(
-        Object.entries(initTr).map(([lc, v]) => [lc, { name: v?.name || '', description: v?.description || '' }])
+        Object.entries(initTr).map(([lc, v]) => [lc, {
+          name: v?.name || '',
+          slug: v?.slug || '',
+          description: v?.description || ''
+        }])
       )
     );
     const nextOpen = Array.from(new Set(['vi', 'en', ...Object.keys(initTr)]));
@@ -194,14 +214,15 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
     setActiveTab('vi');
     setTouched({});
     lastSnapshotRef.current = { name: initialData.name || '', description: initialData.description || '' };
-  }, [isOpen, initialData?.id]); // key theo id để chắc chắn reload khi đổi bản ghi
+  }, [isOpen, initialData?.id]);
 
   // Khi EDIT: gọi API lấy translations nếu backend không trả kèm
   useEffect(() => {
     const loadTranslationsIfEditing = async () => {
       if (!isOpen || !initialData?.id) return;
       try {
-        const r = await fetch(`/api/sub_categories/${initialData.id}/translations`);
+        // Sửa path đúng router: /api/subcategories/:id/translations
+        const r = await fetch(`/api/subcategories/${initialData.id}/translations`);
         if (!r.ok) return;
         const j = await r.json();
         if (j?.translations && typeof j.translations === 'object') {
@@ -210,6 +231,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
             if (lc === 'vi') continue;
             apiTr[lc] = {
               name: v?.name || '',
+              slug: v?.slug || '',
               description: v?.description || ''
             };
           }
@@ -224,7 +246,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
     loadTranslationsIfEditing();
   }, [isOpen, initialData?.id]);
 
-  // Auto-translate name + description
+  // Auto-translate name + description + auto-gen slug nếu trống
   useEffect(() => {
     if (!autoTranslate) return;
     const srcName = form.name?.trim() || '';
@@ -239,7 +261,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
 
       const targets = openLocales.filter(lc => lc !== 'vi');
       for (const lc of targets) {
-        const isTouched = touched[lc]?.name || touched[lc]?.description;
+        const isTouched = touched[lc]?.name || touched[lc]?.description || touched[lc]?.slug;
         if (isTouched) continue;
 
         let nameTranslated = '';
@@ -263,13 +285,13 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
           }
         } catch { /* noop */ }
 
-        setTranslations(prev => ({
-          ...prev,
-          [lc]: {
-            name: nameTranslated || prev[lc]?.name || srcName,
-            description: descTranslated || prev[lc]?.description || srcDesc
-          }
-        }));
+        setTranslations(prev => {
+          const nextName = nameTranslated || prev[lc]?.name || srcName;
+          const nextDesc = descTranslated || prev[lc]?.description || srcDesc;
+          const currentSlug = (prev[lc]?.slug || '').trim();
+          const nextSlug = currentSlug ? currentSlug : (nextName ? slugify(nextName) : '');
+          return { ...prev, [lc]: { name: nextName, slug: nextSlug, description: nextDesc } };
+        });
       }
     }, 400);
 
@@ -290,9 +312,10 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
   const handleTrChange = (lc, key, value) => {
     setTranslations(prev => ({
       ...prev,
-      [lc]: { ...(prev[lc] || { name: '', description: '' }), [key]: value }
+      [lc]: { ...(prev[lc] || { name: '', slug: '', description: '' }), [key]: value }
     }));
     setTouched(prev => ({ ...prev, [lc]: { ...(prev[lc] || {}), [key]: true } }));
+    if (key === 'slug') setSlugErrorsTr(prev => ({ ...prev, [lc]: '' }));
   };
 
   const handleSlugBlur = () => {
@@ -304,19 +327,36 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
     }
   };
 
+  const handleSlugBlurTR = (lc) => {
+    const current = translations[lc]?.slug || '';
+    const normalized = slugify(current);
+    setTranslations(prev => ({ ...prev, [lc]: { ...(prev[lc] || {}), slug: normalized } }));
+    setSlugErrorsTr(prev => ({
+      ...prev,
+      [lc]: normalized && !isValidSlug(normalized)
+        ? 'Slug chỉ gồm a-z, 0-9 và dấu gạch nối (-), không bắt đầu/kết thúc bằng -.'
+        : ''
+    }));
+  };
+
   const generateSlugFromName = () => {
     const s = slugify(form.name || '');
     setForm(prev => ({ ...prev, slug: s }));
     setSlugError(s && !isValidSlug(s) ? 'Slug không hợp lệ.' : '');
   };
 
+  const generateSlugFromTRName = (lc) => {
+    const name = translations[lc]?.name || '';
+    const s = slugify(name);
+    setTranslations(prev => ({ ...prev, [lc]: { ...(prev[lc] || {}), slug: s } }));
+    setSlugErrorsTr(prev => ({ ...prev, [lc]: s && !isValidSlug(s) ? 'Slug không hợp lệ.' : '' }));
+  };
+
   const handleImageChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (!file.type.startsWith('image/')) { alert('Vui lòng chọn file ảnh hợp lệ!'); return; }
     if (file.size > 5 * 1024 * 1024) { alert('Kích thước ảnh không được vượt quá 5MB!'); return; }
-
     setImageFile(file);
     const reader = new FileReader();
     reader.onload = (evt) => setImagePreview(String(evt.target?.result || ''));
@@ -345,6 +385,11 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
       if (!isValidSlug(form.slug)) { setSlugError('Slug không hợp lệ.'); return; }
     }
 
+    // validate slug translations (nếu có lỗi đang hiển thị)
+    for (const lc of Object.keys(slugErrorsTr)) {
+      if (slugErrorsTr[lc]) { alert(`Slug (${lc.toUpperCase()}) không hợp lệ.`); return; }
+    }
+
     setIsUploading(true);
     try {
       let finalForm = { ...form, parent_id: Number(form.parent_id) };
@@ -353,13 +398,21 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
         finalForm.image_url = await uploadImage(imageFile);
       }
 
-      // translations payload: { lc: { name?, description? } }
+      // translations payload: { lc: { name?, slug?, description? } }
       const cleanTranslations = {};
       for (const [lc, v] of Object.entries(translations)) {
         const tName = (v?.name || '').trim();
         const tDesc = (v?.description || '').trim();
-        if (!tName && !tDesc) continue;
-        cleanTranslations[lc] = { ...(tName ? { name: tName } : {}), ...(tDesc ? { description: tDesc } : {}) };
+        const tSlugRaw = (v?.slug || '').trim();
+        const tSlug = tSlugRaw ? slugify(tSlugRaw) : '';
+        const hasAny = tName || tDesc || tSlug;
+        if (!hasAny) continue;
+
+        const entry = {};
+        if (tName) entry.name = tName;
+        if (tDesc) entry.description = tDesc;
+        if (tSlug && isValidSlug(tSlug)) entry.slug = tSlug;
+        cleanTranslations[lc] = entry;
       }
 
       // thêm mới: không gửi slug → backend tự sinh
@@ -373,7 +426,6 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
       if (Object.keys(cleanTranslations).length) {
         finalForm.translations = cleanTranslations;
       }
-
       if (initialData.id) finalForm.id = initialData.id;
 
       await onSubmit(finalForm);
@@ -384,6 +436,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
       setImageFile(null);
       setImagePreview('');
       setSlugError('');
+      setSlugErrorsTr({});
       setTranslations({});
       setOpenLocales(['vi', 'en']);
       setActiveTab('vi');
@@ -453,12 +506,9 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
                     type="button"
                     onClick={() => {
                       setOpenLocales(prev => prev.filter(x => x !== lc));
-                      setTranslations(prev => {
-                        const copy = { ...prev }; delete copy[lc]; return copy;
-                      });
-                      setTouched(prev => {
-                        const copy = { ...prev }; delete copy[lc]; return copy;
-                      });
+                      setTranslations(prev => { const copy = { ...prev }; delete copy[lc]; return copy; });
+                      setTouched(prev => { const copy = { ...prev }; delete copy[lc]; return copy; });
+                      setSlugErrorsTr(prev => { const copy = { ...prev }; delete copy[lc]; return copy; });
                       setActiveTab('vi');
                     }}
                     className="text-xs text-red-600 mr-2"
@@ -483,7 +533,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
                         type="button"
                         onClick={() => {
                           setOpenLocales(prev => [...prev, lc]);
-                          setTranslations(prev => prev[lc] ? prev : { ...prev, [lc]: { name: '', description: '' } });
+                          setTranslations(prev => prev[lc] ? prev : { ...prev, [lc]: { name: '', slug: '', description: '' } });
                           setActiveTab(lc);
                         }}
                         className="block w-full text-left px-3 py-2 hover:bg-gray-50"
@@ -572,10 +622,9 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
                     value={form.slug}
                     onChange={handleChange}
                     onBlur={handleSlugBlur}
-                    placeholder="vd: trai-cay-tuoi"
+                    placeholder={L('vi', 'slug_ph')}
                     disabled={isUploading}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 disabled:bg-gray-100 ${slugError ? 'border-red-400 focus:ring-red-300' : 'border-gray-300 focus:ring-blue-500'
-                      }`}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 disabled:bg-gray-100 ${slugError ? 'border-red-400 focus:ring-red-300' : 'border-gray-300 focus:ring-blue-500'}`}
                   />
                   {slugError ? (
                     <p className="text-sm text-red-600 mt-1">{slugError}</p>
@@ -622,6 +671,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
             activeTab === lc && (
               <div key={lc} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Name */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {L(lc, 'name_any', lc.toUpperCase())}
@@ -635,22 +685,59 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
                     />
                   </div>
 
+                  {/* Slug theo locale */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {L(lc, 'desc_any', lc.toUpperCase())}
-                    </label>
-                    <textarea
-                      value={translations[lc]?.description || ''}
-                      onChange={(e) => handleTrChange(lc, 'description', e.target.value)}
-                      rows={6}
-                      placeholder={L(lc, 'desc_any_ph', lc.toUpperCase())}
+                    <div className="flex items-center justify-between">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {L(lc, 'slug')} ({lc.toUpperCase()})
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => generateSlugFromTRName(lc)}
+                        disabled={isUploading}
+                        className="text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
+                        title="Sinh slug từ tên"
+                      >
+                        <Wand2 size={16} />
+                        Tạo từ tên
+                      </button>
+                    </div>
+                    <input
+                      value={translations[lc]?.slug || ''}
+                      onChange={(e) => handleTrChange(lc, 'slug', e.target.value)}
+                      onBlur={() => handleSlugBlurTR(lc)}
+                      placeholder={LABELS[lc]?.slug_ph || LABELS.vi.slug_ph}
                       disabled={isUploading}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 disabled:bg-gray-100 ${slugErrorsTr[lc] ? 'border-red-400 focus:ring-red-300' : 'border-gray-300 focus:ring-blue-500'}`}
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Dữ liệu sẽ lưu vào <span className="font-mono">subcategories_translations</span> ({lc.toUpperCase()}).
-                    </p>
+                    {slugErrorsTr[lc] ? (
+                      <p className="text-sm text-red-600 mt-1">{slugErrorsTr[lc]}</p>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">
+                        URL: <span className="font-mono">
+                          {(import.meta?.env?.VITE_SITE_URL || '')}/{lc}/parents/{selectedParent?.slug || '<parent>'}/{translations[lc]?.slug || '<slug>'}
+                        </span>
+                      </p>
+                    )}
                   </div>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {L(lc, 'desc_any', lc.toUpperCase())}
+                  </label>
+                  <textarea
+                    value={translations[lc]?.description || ''}
+                    onChange={(e) => handleTrChange(lc, 'description', e.target.value)}
+                    rows={6}
+                    placeholder={L(lc, 'desc_any_ph', lc.toUpperCase())}
+                    disabled={isUploading}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Dữ liệu sẽ lưu vào <span className="font-mono">subcategories_translations</span> ({lc.toUpperCase()}).
+                  </p>
                 </div>
               </div>
             )
