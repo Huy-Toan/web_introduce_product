@@ -16,6 +16,7 @@ import bannerRouter from "./routes/banner";
 import fieldRouter from "./routes/field";
 import cerPartnerRouter from "./routes/cer-partner";
 import translateRouter from "./routes/translate";
+import { seoRoot, sitemaps } from "./routes/seo-sitemap";
 
 const GRAPH = "https://graph.facebook.com/v20.0";
 const app = new Hono();
@@ -323,6 +324,9 @@ app.get("/wa/history", async (c) => {
 });
 
 /* ========================= 4) Routers hiện có ========================= */
+app.route("/", seoRoot);          
+app.route("/sitemaps", sitemaps); 
+
 app.route("/api/seo", seoApp);
 app.route("/api/auth", authRouter);
 app.route("/api/users", userRouter);

@@ -222,7 +222,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
       if (!isOpen || !initialData?.id) return;
       try {
         // Sửa path đúng router: /api/subcategories/:id/translations
-        const r = await fetch(`/api/subcategories/${initialData.id}/translations`);
+        const r = await fetch(`/api/sub_categories/${initialData.id}/translations`);
         if (!r.ok) return;
         const j = await r.json();
         if (j?.translations && typeof j.translations === 'object') {
