@@ -169,6 +169,11 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const debounceTimer = useRef(null);
   const lastSourceTitle = useRef('');
   const lastSourceDesc = useRef('');
+  const lastSourceContent = useRef('');
+
+  // Import Excel state
+  const [isImporting, setIsImporting] = useState(false);
+  const fileImportRef = useRef(null);
 
   // Subcategories for dropdown
   const [subcats, setSubcats] = useState([]);
@@ -266,13 +271,14 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     loadTr();
   }, [isOpen, initialData?.id]);
 
-  // Lock editors when uploading
+  // Lock editors when uploading or importing
   useEffect(() => {
-    editorVIRef.current?.cm?.setOption('readOnly', isUploading ? 'nocursor' : false);
+    const lock = (isUploading || isImporting) ? 'nocursor' : false;
+    editorVIRef.current?.cm?.setOption('readOnly', lock);
     Object.values(editorRefs.current || {}).forEach((ref) =>
-      ref?.cm?.setOption('readOnly', isUploading ? 'nocursor' : false)
+      ref?.cm?.setOption('readOnly', lock)
     );
-  }, [isUploading]);
+  }, [isUploading, isImporting]);
 
   // Auto-translate title + description from VI (+ tự sinh slug nếu trống/chưa touch)
   useEffect(() => {
@@ -329,6 +335,48 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
     return () => clearTimeout(debounceTimer.current);
   }, [base.title, base.description, autoTranslate, openLocales, touched]);
+  // Auto-translate CONTENT (Markdown) from VI -> other locales
+  useEffect(() => {
+    if (!autoTranslate) return;
+
+    const srcContent = (base.content || '').trim();
+    if (!srcContent) return;
+
+    clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(async () => {
+      // Nếu content không đổi thì bỏ qua
+      if (lastSourceContent.current === srcContent) return;
+      lastSourceContent.current = srcContent;
+
+      const targets = openLocales.filter((lc) => lc !== 'vi');
+
+      for (const lc of targets) {
+        const touchedLC = touched[lc] || {};
+        // Nếu user đã sửa content ở locale đó rồi => không tự động ghi đè
+        if (touchedLC.content) continue;
+
+        // Nếu đã có content sẵn, và bạn không muốn override => có thể skip:
+        // if ((translations[lc]?.content || '').trim()) continue;
+
+        try {
+          const translatedMd = await translateMarkdown(srcContent, 'vi', lc);
+          if (!translatedMd) continue;
+
+          setTranslations((prev) => ({
+            ...prev,
+            [lc]: {
+              ...(prev[lc] || { title: '', slug: '', description: '', content: '' }),
+              content: translatedMd,
+            },
+          }));
+        } catch {
+          // bỏ qua lỗi 1 locale, tiếp tục locale khác
+        }
+      }
+    }, 600); // tăng debounce lên một chút để giảm số lần gọi API khi đang gõ
+
+    return () => clearTimeout(debounceTimer.current);
+  }, [base.content, autoTranslate, openLocales, touched]);
 
   // Derived
   const selectedSub = useMemo(
@@ -405,6 +453,58 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       handleTrChange(lc, 'content', translated);
     } catch { /* noop */ }
   };
+
+  // ===== Import Excel =====
+  async function handleImportSelected(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+
+    if (!/\.(xlsx|xls|csv)$/i.test(f.name)) {
+      alert('Chỉ hỗ trợ file .xlsx, .xls, .csv');
+      e.target.value = '';
+      return;
+    }
+
+    const ok = confirm(
+      'Import sản phẩm từ file Excel.\n' +
+      '- Cột yêu cầu: title, content, subcategory_id.\n' +
+      '- Tùy chọn: description, image_url, slug.\n' +
+      'Tiếp tục?'
+    );
+    if (!ok) { e.target.value = ''; return; }
+
+    setIsImporting(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', f);
+
+      const res = await fetch('/api/products/import?auto=1&targets=en&source=vi', { method: 'POST', body: fd });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.error || 'Import thất bại');
+      }
+
+      alert(
+        `Import thành công!\n` +
+        `- Tạo mới: ${data.created ?? 0}\n` +
+        `- Cập nhật: ${data.updated ?? 0}\n` +
+        `- Bỏ qua: ${data.skipped ?? 0}`
+      );
+
+      // Phát sự kiện để trang danh sách reload (nếu bạn lắng nghe ở ngoài)
+      window.dispatchEvent(new CustomEvent('products:imported'));
+
+      // Nếu muốn đóng modal sau import:
+      // onClose();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Có lỗi khi import!');
+    } finally {
+      setIsImporting(false);
+      e.target.value = '';
+    }
+  }
 
   // Submit
   const handleSubmit = async (e) => {
@@ -501,13 +601,33 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 type="checkbox"
                 checked={autoTranslate}
                 onChange={(e) => setAutoTranslate(e.target.checked)}
-                disabled={isUploading}
+                disabled={isUploading || isImporting}
               />
               <span className="inline-flex items-center gap-1">
                 <Sparkles size={16} /> {L(activeTab, 'autoTranslate')}
               </span>
             </label>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600" disabled={isUploading}>
+
+            {/* Nút Import Excel */}
+            <button
+              type="button"
+              onClick={() => fileImportRef.current?.click()}
+              disabled={isUploading || isImporting}
+              className="text-sm inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+              title="Import sản phẩm từ Excel"
+            >
+              <Upload size={16} />
+              {isImporting ? 'Đang import...' : 'Import Excel'}
+            </button>
+            <input
+              ref={fileImportRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              hidden
+              onChange={handleImportSelected}
+            />
+
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600" disabled={isUploading || isImporting}>
               <X size={20} />
             </button>
           </div>
@@ -542,7 +662,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                     name="subcategory_id"
                     value={base.subcategory_id ?? ''}
                     onChange={handleBaseChange}
-                    disabled={isUploading || subcatsLoading}
+                    disabled={isUploading || subcatsLoading || isImporting}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                   >
                     <option value="">— Không chọn —</option>
@@ -568,7 +688,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                     onChange={handleBaseChange}
                     placeholder={L('vi', 'title_ph')}
                     required
-                    disabled={isUploading}
+                    disabled={isUploading || isImporting}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                   />
                 </div>
@@ -580,7 +700,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                       <button
                         type="button"
                         onClick={generateSlugFromVITitle}
-                        disabled={isUploading}
+                        disabled={isUploading || isImporting}
                         className="text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
                         title="Sinh slug từ tên (VI)"
                       >
@@ -593,7 +713,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                       onChange={handleBaseChange}
                       onBlur={handleSlugBlurVI}
                       placeholder={L('vi', 'slug_ph')}
-                      disabled={isUploading}
+                      disabled={isUploading || isImporting}
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 disabled:bg-gray-100 ${slugErrorVI ? 'border-red-400 focus:ring-red-300' : 'border-gray-300 focus:ring-blue-500'}`}
                     />
                     {slugErrorVI ? (
@@ -616,7 +736,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                   onChange={handleBaseChange}
                   rows={3}
                   placeholder={L('vi', 'description_ph')}
-                  disabled={isUploading}
+                  disabled={isUploading || isImporting}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                 />
               </div>
@@ -641,7 +761,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 setImagePreview={setImagePreview}
                 setImageFile={setImageFile}
                 setBase={setBase}
-                isUploading={isUploading}
+                isUploading={isUploading || isImporting}
               />
             </div>
           )}
@@ -660,7 +780,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                       value={translations[lc]?.title || ''}
                       onChange={(e) => handleTrChange(lc, 'title', e.target.value)}
                       placeholder={`${L(lc, 'title_ph')}`}
-                      disabled={isUploading}
+                      disabled={isUploading || isImporting}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                     />
                   </div>
@@ -674,7 +794,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                       <button
                         type="button"
                         onClick={() => generateSlugFromTRTitle(lc)}
-                        disabled={isUploading}
+                        disabled={isUploading || isImporting}
                         className="text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
                         title="Sinh slug từ tiêu đề"
                       >
@@ -686,7 +806,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                       onChange={(e) => handleTrChange(lc, 'slug', e.target.value)}
                       onBlur={() => handleSlugBlurTR(lc)}
                       placeholder={LABELS[lc]?.slug_ph || LABELS.vi.slug_ph}
-                      disabled={isUploading}
+                      disabled={isUploading || isImporting}
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 disabled:bg-gray-100 ${slugErrorsTr[lc] ? 'border-red-400 focus:ring-red-300' : 'border-gray-300 focus:ring-blue-500'}`}
                     />
                     {slugErrorsTr[lc] ? (
@@ -711,7 +831,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                     onChange={(e) => handleTrChange(lc, 'description', e.target.value)}
                     rows={3}
                     placeholder={`${L(lc, 'description_ph')}`}
-                    disabled={isUploading}
+                    disabled={isUploading || isImporting}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
                   />
                 </div>
@@ -725,7 +845,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                     <button
                       type="button"
                       onClick={() => translateContentFromVI(lc)}
-                      disabled={isUploading || !base.content}
+                      disabled={isUploading || isImporting || !base.content}
                       className="text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
                       title={L(lc, 'translateContentBtn')}
                     >
@@ -751,17 +871,17 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             <button
               type="button"
               onClick={onClose}
-              disabled={isUploading}
+              disabled={isUploading || isImporting}
               className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               Hủy
             </button>
             <button
               type="submit"
-              disabled={isUploading}
+              disabled={isUploading || isImporting}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {isUploading && <Loader2 className="animate-spin" size={16} />}
+              {(isUploading || isImporting) && <Loader2 className="animate-spin" size={16} />}
               {isEditing ? 'Cập nhật' : 'Thêm'}
             </button>
           </div>

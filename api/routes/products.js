@@ -1,5 +1,6 @@
 // src/routes/productsRouter.js
 import { Hono } from "hono";
+import * as XLSX from 'xlsx';
 
 // Helpers
 const DEFAULT_LOCALE = "vi";
@@ -477,3 +478,237 @@ productsRouter.delete("/:id", async (c) => {
 });
 
 export default productsRouter;
+
+// ... giữ nguyên các helper getLocale, hasDB, slugify ... bạn đã có ở trên
+
+// Helper nhỏ: ép chuỗi
+const toStr = (v) => (v == null ? '' : String(v).trim())
+
+// (tuỳ chọn) parse CSV fallback nếu không dùng xlsx
+function csvToJson(text) {
+  const lines = text.split(/\r?\n/).filter(Boolean)
+  if (lines.length < 2) return []
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
+  const rows = []
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',')
+    const obj = {}
+    headers.forEach((h, idx) => obj[h] = cols[idx] != null ? cols[idx].trim() : '')
+    rows.push(obj)
+  }
+  return rows
+}
+
+// gọi lại chính /api/translate đang có (để chạy trong Worker)
+async function translateTextInWorker(c, text, source, target) {
+  if (!text || !text.trim()) return ''
+  try {
+    const base = new URL(c.req.url)
+    const url = new URL('/api/translate', base.origin)
+    const r = await fetch(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, source, target })
+    })
+    if (!r.ok) return ''
+    const j = await r.json()
+    return j?.translated || ''
+  } catch {
+    return ''
+  }
+}
+
+// dịch markdown theo dòng: giữ prefix (#, -, 1., >) như client
+async function translateMarkdownInWorker(c, md, source, target) {
+  const lines = String(md || '').split('\n')
+  const out = []
+  for (const line of lines) {
+    const m = line.match(/^(\s*([#>*\-]|[0-9]+\.)\s*)(.*)$/)
+    const prefix = m ? m[1] : ''
+    const text = m ? m[3] : line
+    if (!text.trim()) {
+      out.push(prefix ? prefix : line)
+      continue
+    }
+    const t = await translateTextInWorker(c, text, source, target)
+    out.push(prefix ? prefix + t : t)
+  }
+  return out.join('\n')
+}
+
+productsRouter.post('/import', async (c) => {
+  try {
+    if (!hasDB(c.env)) return c.json({ error: 'Database not available' }, 503)
+
+    // >>>> 1) đọc query auto-translate
+    const auto = c.req.query('auto') === '1' || c.req.query('auto') === 'true'     // ?auto=1
+    const targets = (c.req.query('targets') || '')
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(lc => lc && lc !== 'vi')  // không dịch sang vi
+    const source = c.req.query('source') || 'vi'                                   // ?source=vi
+    const dryRun = c.req.query('dry_run') === '1'                                  // ?dry_run=1  (optional)
+
+    const form = await c.req.formData()
+    const file = form.get('file')
+    if (!file || !file.arrayBuffer) {
+      return c.json({ error: 'Missing file' }, 400)
+    }
+
+    const buf = await file.arrayBuffer()
+
+    // 2) đọc excel/csv thành rows = array object
+    let rows = []
+    try {
+      const wb = XLSX.read(buf, { type: 'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      rows = XLSX.utils.sheet_to_json(ws, { defval: '' }) // mỗi row object key = header
+    } catch (err) {
+      // fallback csv
+      const text = new TextDecoder('utf-8').decode(buf)
+      rows = csvToJson(text)
+    }
+
+    if (!rows.length) {
+      return c.json({ ok: true, created: 0, updated: 0, skipped: 0, message: 'No data rows found' })
+    }
+
+    // chuẩn hóa key về lowercase
+    rows = rows.map((r) => {
+      const out = {}
+      for (const k of Object.keys(r)) out[String(k).toLowerCase().trim()] = r[k]
+      return out
+    })
+
+    let created = 0, updated = 0, skipped = 0
+    const errors = []
+    const locale = getLocale(c)  // dùng để resolve subcategory theo name/slug (nếu có)
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      const title = toStr(row.title)
+      const content = toStr(row.content)
+      if (!title || !content) { skipped++; continue }
+
+      let slug = toStr(row.slug) || slugify(title)
+      slug = slugify(slug)
+
+      const description = toStr(row.description)
+      const image_url = toStr(row.image_url)
+
+      // Ưu tiên subcategory_id; nếu không có, thử resolve theo name/slug (cột "subcategory")
+      let subcategory_id = null
+      if (row.subcategory_id != null && String(row.subcategory_id).trim() !== '') {
+        const idNum = Number(row.subcategory_id)
+        if (Number.isFinite(idNum)) subcategory_id = idNum
+      } else if (row.subcategory) {
+        const subKey = toStr(row.subcategory)
+        if (subKey) {
+          const rs = await c.env.DB
+            .prepare(`
+              SELECT s.id
+              FROM subcategories s
+              LEFT JOIN subcategories_translations st
+                ON st.sub_id = s.id AND st.locale = ?
+              WHERE s.slug = ? OR st.slug = ? OR s.name = ? OR st.name = ?
+              LIMIT 1
+            `)
+            .bind(locale, slugify(subKey), slugify(subKey), subKey, subKey)
+            .first()
+          if (rs?.id) subcategory_id = rs.id
+        }
+      }
+
+      // Nếu dry_run => không ghi DB, chỉ đếm
+      if (dryRun) { created++; continue }
+
+      // Kiểm tra tồn tại theo slug (sản phẩm gốc)
+      const exists = await c.env.DB
+        .prepare('SELECT id FROM products WHERE slug = ? LIMIT 1')
+        .bind(slug)
+        .first()
+
+      let productId
+      if (exists?.id) {
+        // Update
+        const res = await c.env.DB.prepare(`
+          UPDATE products
+          SET title = ?, description = ?, content = ?, image_url = ?, subcategory_id = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(
+          title,
+          description || null,
+          content,
+          image_url || null,
+          subcategory_id == null ? null : Number(subcategory_id),
+          exists.id
+        ).run()
+        productId = exists.id
+        if ((res.meta?.changes || 0) > 0) updated++
+        else skipped++
+      } else {
+        // Insert mới
+        const res = await c.env.DB.prepare(`
+          INSERT INTO products (title, slug, description, content, image_url, subcategory_id)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).bind(
+          title,
+          slug,
+          description || null,
+          content,
+          image_url || null,
+          subcategory_id == null ? null : Number(subcategory_id)
+        ).run()
+
+        if (res.success) {
+          productId = res.meta?.last_row_id
+          created++
+        } else {
+          skipped++
+          continue
+        }
+      }
+
+      // 3) Nếu bật auto-translate và có targets -> tự dịch & upsert translations
+      if (auto && targets.length > 0 && productId) {
+        const upsertT = `
+          INSERT INTO products_translations (product_id, locale, title, slug, description, content)
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+          ON CONFLICT(product_id, locale) DO UPDATE SET
+            title       = COALESCE(excluded.title, title),
+            slug        = COALESCE(excluded.slug, slug),
+            description = COALESCE(excluded.description, description),
+            content     = COALESCE(excluded.content, content),
+            updated_at  = CURRENT_TIMESTAMP
+        `
+
+        for (const lc of targets) {
+          // Nếu file có sẵn cột en_title / en_description / en_content / en_slug -> ưu tiên dùng
+          const tTitle0 = toStr(row[`${lc}_title`])
+          const tDesc0 = toStr(row[`${lc}_description`])
+          const tCont0 = toStr(row[`${lc}_content`])
+          const tSlug0 = toStr(row[`${lc}_slug`])
+
+          const tTitle = tTitle0 || await translateTextInWorker(c, title, source, lc)
+          const tDesc = tDesc0 || (description ? await translateTextInWorker(c, description, source, lc) : '')
+          const tCont = tCont0 || await translateMarkdownInWorker(c, content, source, lc)
+          const tSlug = slugify(tSlug0 || tTitle)
+
+          await c.env.DB.prepare(upsertT).bind(
+            productId,
+            lc,
+            tTitle || null,
+            tSlug || null,
+            tDesc || null,
+            tCont || null
+          ).run()
+        }
+      }
+    }
+
+    return c.json({ ok: true, created, updated, skipped, errors })
+  } catch (err) {
+    console.error('Import products error:', err)
+    return c.json({ error: 'Failed to import' }, 500)
+  }
+})
