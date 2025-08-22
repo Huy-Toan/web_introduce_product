@@ -22,6 +22,8 @@ const LABELS = {
     description: 'Mô tả',
     description_ph: 'Nhập mô tả danh mục',
     autoTranslate: 'Tự dịch từ VI',
+    slug: 'Slug',
+    slug_ph: 'vd: thuc-pham',
   },
   en: {
     name: 'Category name',
@@ -29,6 +31,8 @@ const LABELS = {
     description: 'Description',
     description_ph: 'Enter category description',
     autoTranslate: 'Auto-translate from VI',
+    slug: 'Slug',
+    slug_ph: 'e.g. food',
   },
   ja: {
     name: 'カテゴリ名',
@@ -36,6 +40,8 @@ const LABELS = {
     description: '説明',
     description_ph: 'カテゴリの説明を入力',
     autoTranslate: 'VI から自動翻訳',
+    slug: 'スラッグ',
+    slug_ph: '例: food',
   },
   ko: {
     name: '카테고리명',
@@ -43,6 +49,8 @@ const LABELS = {
     description: '설명',
     description_ph: '카테고리 설명을 입력하세요',
     autoTranslate: '베트남어에서 자동 번역',
+    slug: '슬러그',
+    slug_ph: '예: food',
   },
   zh: {
     name: '分类名称',
@@ -50,6 +58,8 @@ const LABELS = {
     description: '描述',
     description_ph: '输入分类描述',
     autoTranslate: '从越南语自动翻译',
+    slug: '短链接',
+    slug_ph: '例如: food',
   },
   fr: {
     name: 'Nom de catégorie',
@@ -57,6 +67,8 @@ const LABELS = {
     description: 'Description',
     description_ph: 'Saisir la description de la catégorie',
     autoTranslate: 'Traduire automatiquement depuis le VI',
+    slug: 'Slug',
+    slug_ph: 'ex. food',
   },
   de: {
     name: 'Kategoriename',
@@ -64,6 +76,8 @@ const LABELS = {
     description: 'Beschreibung',
     description_ph: 'Kategorie­beschreibung eingeben',
     autoTranslate: 'Automatisch aus VI übersetzen',
+    slug: 'Slug',
+    slug_ph: 'z. B. food',
   },
 };
 const L = (lc, key) => LABELS[lc]?.[key] ?? LABELS.en[key] ?? key;
@@ -74,18 +88,21 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
   // Base (VI) -> parent_categories
   const [base, setBase] = useState({ name: '', slug: '', description: '', image_url: '' });
 
-  // Translations -> parent_categories_translations (name + description)
+  // Translations -> parent_categories_translations (name + description + slug)
   const [translations, setTranslations] = useState(
-    /** @type {Record<string, {name?:string, description?:string}>} */({})
+    /** @type {Record<string, {name?:string, slug?:string, description?:string}>} */({})
   );
 
-  const [touched, setTouched] = useState(/** @type {Record<string,{name?:boolean,description?:boolean}>} */({}));
+  const [touched, setTouched] = useState(
+    /** @type {Record<string,{name?:boolean,slug?:boolean,description?:boolean}>} */({})
+  );
   const [activeTab, setActiveTab] = useState('vi');
   const [openLocales, setOpenLocales] = useState(['vi', 'en']);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [slugErrorVI, setSlugErrorVI] = useState('');
+  const [slugErrorsTr, setSlugErrorsTr] = useState(/** @type {Record<string,string>} */({}));
   const [autoTranslate, setAutoTranslate] = useState(true);
   const debounceTimer = useRef(null);
   const lastSourceSnapshot = useRef({ name: '', description: '' });
@@ -102,11 +119,13 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
       setImagePreview(initialData.image_url || '');
       setActiveTab('vi');
       setSlugErrorVI('');
+      setSlugErrorsTr({});
       lastSourceSnapshot.current = {
         name: initialData.name || '',
         description: initialData.description || ''
       };
 
+      // Nếu FE có kèm translations sẵn
       const initTr = { ...(initialData.translations || {}) };
       delete initTr.vi;
       const addLocales = Object.keys(initTr);
@@ -115,7 +134,14 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
       setOpenLocales(nextOpen);
       setTranslations(
         Object.fromEntries(
-          Object.entries(initTr).map(([lc, v]) => [lc, { name: v?.name || '', description: v?.description || '' }])
+          Object.entries(initTr).map(([lc, v]) => [
+            lc,
+            {
+              name: v?.name || '',
+              slug: v?.slug || '',
+              description: v?.description || ''
+            }
+          ])
         )
       );
       setTouched({});
@@ -127,6 +153,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     const loadTranslationsIfEditing = async () => {
       if (!isOpen || !initialData?.id) return;
       try {
+        // NOTE: Cập nhật đúng endpoint lấy translations cho parent
         const r = await fetch(`/api/parent_categories/${initialData.id}/translations`);
         if (!r.ok) return;
         const j = await r.json();
@@ -136,6 +163,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
             if (lc === 'vi') continue;
             initTr[lc] = {
               name: v?.name || '',
+              slug: v?.slug || '',
               description: v?.description || ''
             };
           }
@@ -150,7 +178,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     loadTranslationsIfEditing();
   }, [isOpen, initialData?.id]);
 
-  // Auto-translate từ VI sang locale khác (nếu bật) cho name + description
+  // Auto-translate từ VI sang locale khác (nếu bật) cho name + description + auto-gen slug nếu rỗng/chưa touch
   useEffect(() => {
     if (!autoTranslate) return;
     const srcName = base.name?.trim() || '';
@@ -165,7 +193,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
 
       const targets = openLocales.filter(lc => lc !== 'vi');
       for (const lc of targets) {
-        const isTouched = touched[lc]?.name || touched[lc]?.description;
+        const isTouched = touched[lc]?.name || touched[lc]?.description || touched[lc]?.slug;
         if (isTouched) continue;
 
         let nameTranslated = '';
@@ -189,13 +217,17 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
           }
         } catch { /* noop */ }
 
-        setTranslations(prev => ({
-          ...prev,
-          [lc]: {
-            name: nameTranslated || prev[lc]?.name || srcName,
-            description: descTranslated || prev[lc]?.description || srcDesc
-          }
-        }));
+        setTranslations(prev => {
+          const nextName = nameTranslated || prev[lc]?.name || srcName;
+          const nextDesc = descTranslated || prev[lc]?.description || srcDesc;
+          const currentSlug = (prev[lc]?.slug || '').trim();
+          // chỉ tự sinh slug nếu đang trống
+          const nextSlug = currentSlug ? currentSlug : (nextName ? slugify(nextName) : '');
+          return {
+            ...prev,
+            [lc]: { name: nextName, slug: nextSlug, description: nextDesc }
+          };
+        });
       }
     }, 400);
 
@@ -216,15 +248,18 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
   const handleTrChange = (lc, key, value) => {
     setTranslations(prev => ({
       ...prev,
-      [lc]: { ...(prev[lc] || { name: '', description: '' }), [key]: value }
+      [lc]: { ...(prev[lc] || { name: '', slug: '', description: '' }), [key]: value }
     }));
     setTouched(prev => ({ ...prev, [lc]: { ...(prev[lc] || {}), [key]: true } }));
+    if (key === 'slug') {
+      setSlugErrorsTr(prev => ({ ...prev, [lc]: '' }));
+    }
   };
 
   const addLocaleTab = (lc) => {
     if (lc === 'vi') return;
     setOpenLocales(prev => prev.includes(lc) ? prev : [...prev, lc]);
-    setTranslations(prev => prev[lc] ? prev : { ...prev, [lc]: { name: '', description: '' } });
+    setTranslations(prev => prev[lc] ? prev : { ...prev, [lc]: { name: '', slug: '', description: '' } });
     setActiveTab(lc);
   };
 
@@ -235,6 +270,9 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
       const copy = { ...prev }; delete copy[lc]; return copy;
     });
     setTouched(prev => {
+      const copy = { ...prev }; delete copy[lc]; return copy;
+    });
+    setSlugErrorsTr(prev => {
       const copy = { ...prev }; delete copy[lc]; return copy;
     });
     setActiveTab('vi');
@@ -251,6 +289,33 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     const s = slugify(base.name || '');
     setBase(prev => ({ ...prev, slug: s }));
     setSlugErrorVI(s && !isValidSlug(s) ? 'Slug không hợp lệ.' : '');
+  };
+
+  const handleSlugBlurTR = (lc) => {
+    const current = translations[lc]?.slug || '';
+    const normalized = slugify(current);
+    setTranslations(prev => ({
+      ...prev,
+      [lc]: { ...(prev[lc] || {}), slug: normalized }
+    }));
+    setSlugErrorsTr(prev => ({
+      ...prev,
+      [lc]: normalized && !isValidSlug(normalized)
+        ? 'Slug chỉ gồm a-z, 0-9 và dấu gạch nối (-), không bắt đầu/kết thúc bằng -.'
+        : ''
+    }));
+  };
+  const generateSlugFromTRName = (lc) => {
+    const name = translations[lc]?.name || '';
+    const s = slugify(name);
+    setTranslations(prev => ({
+      ...prev,
+      [lc]: { ...(prev[lc] || {}), slug: s }
+    }));
+    setSlugErrorsTr(prev => ({
+      ...prev,
+      [lc]: s && !isValidSlug(s) ? 'Slug không hợp lệ.' : ''
+    }));
   };
 
   const uploadImage = async (file) => {
@@ -274,6 +339,13 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
       setSlugErrorVI('Slug không hợp lệ.');
       return;
     }
+    // validate slug translations nếu có lỗi đang hiển thị
+    for (const lc of Object.keys(slugErrorsTr)) {
+      if (slugErrorsTr[lc]) {
+        alert(`Slug (${lc.toUpperCase()}) không hợp lệ.`);
+        return;
+      }
+    }
 
     setIsUploading(true);
     try {
@@ -289,16 +361,21 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
         payloadBase = rest;
       }
 
-      // Translations payload
+      // Translations payload (kèm slug)
       const cleanTranslations = {};
       for (const [lc, v] of Object.entries(translations)) {
         const tName = (v?.name || '').trim();
         const tDesc = (v?.description || '').trim();
-        if (!tName && !tDesc) continue;
-        cleanTranslations[lc] = {
-          ...(tName ? { name: tName } : {}),
-          ...(tDesc ? { description: tDesc } : {}),
-        };
+        const tSlugRaw = (v?.slug || '').trim();
+        const tSlug = tSlugRaw ? slugify(tSlugRaw) : '';
+        const hasAny = tName || tDesc || tSlug;
+        if (!hasAny) continue;
+
+        const entry = {};
+        if (tName) entry.name = tName;
+        if (tDesc) entry.description = tDesc;
+        if (tSlug && isValidSlug(tSlug)) entry.slug = tSlug;
+        cleanTranslations[lc] = entry;
       }
 
       const finalPayload = {
@@ -319,6 +396,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
       setImageFile(null);
       setImagePreview('');
       setSlugErrorVI('');
+      setSlugErrorsTr({});
       lastSourceSnapshot.current = { name: '', description: '' };
     } catch (error) {
       console.error(error);
@@ -449,7 +527,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
                     value={base.slug}
                     onChange={handleBaseChange}
                     onBlur={handleSlugBlurVI}
-                    placeholder="vd: thuc-pham"
+                    placeholder={L('vi', 'slug_ph')}
                     disabled={isUploading}
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 disabled:bg-gray-100 ${slugErrorVI ? 'border-red-400 focus:ring-red-300' : 'border-gray-300 focus:ring-blue-500'
                       }`}
@@ -511,22 +589,58 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
                     />
                   </div>
 
+                  {/* Slug theo locale */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {L(lc, 'description')} ({lc.toUpperCase()})
-                    </label>
-                    <textarea
-                      value={translations[lc]?.description || ''}
-                      onChange={(e) => handleTrChange(lc, 'description', e.target.value)}
-                      rows={6}
-                      placeholder={`${L(lc, 'description_ph')}`}
+                    <div className="flex items-center justify-between">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {L(lc, 'slug')} ({lc.toUpperCase()})
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => generateSlugFromTRName(lc)}
+                        disabled={isUploading}
+                        className="text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
+                        title="Sinh slug từ tên"
+                      >
+                        <Wand2 size={16} />
+                        Tạo từ tên
+                      </button>
+                    </div>
+                    <input
+                      value={translations[lc]?.slug || ''}
+                      onChange={(e) => handleTrChange(lc, 'slug', e.target.value)}
+                      onBlur={() => handleSlugBlurTR(lc)}
+                      placeholder={L(lc, 'slug_ph')}
                       disabled={isUploading}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 disabled:bg-gray-100 ${slugErrorsTr[lc] ? 'border-red-400 focus:ring-red-300' : 'border-gray-300 focus:ring-blue-500'}`}
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Dữ liệu sẽ lưu vào <span className="font-mono">parent_categories_translations</span> ({lc.toUpperCase()}).
-                    </p>
+                    {slugErrorsTr[lc] ? (
+                      <p className="text-sm text-red-600 mt-1">{slugErrorsTr[lc]}</p>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">
+                        URL: <span className="font-mono">
+                          {(siteURL)}/{lc}/parents/{translations[lc]?.slug || '<slug>'}
+                        </span>
+                      </p>
+                    )}
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {L(lc, 'description')} ({lc.toUpperCase()})
+                  </label>
+                  <textarea
+                    value={translations[lc]?.description || ''}
+                    onChange={(e) => handleTrChange(lc, 'description', e.target.value)}
+                    rows={6}
+                    placeholder={`${L(lc, 'description_ph')}`}
+                    disabled={isUploading}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Dữ liệu sẽ lưu vào <span className="font-mono">parent_categories_translations</span> ({lc.toUpperCase()}).
+                  </p>
                 </div>
               </div>
             )

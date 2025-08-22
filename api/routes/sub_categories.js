@@ -18,13 +18,37 @@ const slugify = (s = "") =>
 
 export const subCategoriesRouter = new Hono();
 
+/* ---------------------------------------------
+ * Helper: resolve subcategory id from idOrSlug
+ * - Hỗ trợ: id số, slug gốc, slug dịch (theo ?locale)
+ * --------------------------------------------- */
+async function resolveSubId(c, idOrSlug) {
+  const isNumeric = /^\d+$/.test(idOrSlug);
+  if (isNumeric) return Number(idOrSlug);
+
+  const locale = getLocale(c);
+  const findSql = `
+    SELECT sc.id
+    FROM subcategories sc
+    LEFT JOIN subcategories_translations sct
+      ON sct.sub_id = sc.id AND sct.locale = ?
+    WHERE sc.slug = ? OR sct.slug = ?
+    LIMIT 1
+  `;
+  const row = await c.env.DB
+    .prepare(findSql)
+    .bind(locale, idOrSlug, idOrSlug)
+    .first();
+  return row?.id ?? null;
+}
+
 /**
  * GET /api/subcategories
  * Query:
  *  - locale=vi|en|...
  *  - parent_id: number
- *  - parent_slug: string
- *  - q: string (search i18n)
+ *  - parent_slug: string (hỗ trợ slug dịch)
+ *  - q: string (search i18n, gồm slug)
  *  - with_counts=1
  *  - limit, offset
  */
@@ -37,7 +61,7 @@ subCategoriesRouter.get("/", async (c) => {
 
     const locale = getLocale(c);
     const conds = [];
-    // 1st param: sct.locale, 2nd: pct.locale
+    // Thứ tự params: sct.locale, pct.locale, ... (theo các bind bên dưới)
     const params = [locale, locale];
 
     if (parent_id) {
@@ -45,18 +69,21 @@ subCategoriesRouter.get("/", async (c) => {
       params.push(Number(parent_id));
     }
     if (parent_slug) {
-      conds.push("pc.slug = ?");
-      params.push(String(parent_slug));
+      // Chấp nhận cả slug gốc & slug dịch của parent
+      conds.push("(pc.slug = ? OR pct.slug = ?)");
+      params.push(String(parent_slug), String(parent_slug));
     }
     if (q && q.trim()) {
       const kw = `%${q.trim()}%`;
       conds.push(`(
         (sct.name IS NOT NULL AND sct.name LIKE ?)
         OR (sct.description IS NOT NULL AND sct.description LIKE ?)
+        OR (sct.slug IS NOT NULL AND sct.slug LIKE ?)
         OR (sct.name IS NULL AND sc.name LIKE ?)
         OR (sct.description IS NULL AND sc.description LIKE ?)
+        OR (sct.slug IS NULL AND sc.slug LIKE ?)
       )`);
-      params.push(kw, kw, kw, kw);
+      params.push(kw, kw, kw, kw, kw, kw);
     }
 
     const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
@@ -72,13 +99,13 @@ subCategoriesRouter.get("/", async (c) => {
       SELECT
         sc.id,
         sc.parent_id,
-        COALESCE(sct.name, sc.name) AS name,
-        sc.slug,
+        COALESCE(sct.name, sc.name)               AS name,
+        COALESCE(sct.slug, sc.slug)               AS slug,
         COALESCE(sct.description, sc.description) AS description,
         sc.image_url,
         sc.created_at,
-        COALESCE(pct.name, pc.name) AS parent_name,
-        pc.slug AS parent_slug
+        COALESCE(pct.name, pc.name)               AS parent_name,
+        COALESCE(pct.slug, pc.slug)               AS parent_slug
       FROM subcategories sc
       LEFT JOIN subcategories_translations sct
         ON sct.sub_id = sc.id AND sct.locale = ?
@@ -127,6 +154,7 @@ subCategoriesRouter.get("/", async (c) => {
 /**
  * GET /api/subcategories/:idOrSlug
  * Query: locale, with_counts
+ * - Hỗ trợ resolve bằng slug dịch
  */
 subCategoriesRouter.get("/:idOrSlug", async (c) => {
   const idOrSlug = c.req.param("idOrSlug");
@@ -135,30 +163,32 @@ subCategoriesRouter.get("/:idOrSlug", async (c) => {
     if (!hasDB(c.env)) return c.json({ error: "Database not available" }, 503);
 
     const locale = getLocale(c);
-    const isNumeric = /^\d+$/.test(idOrSlug);
+    const subId = await resolveSubId(c, idOrSlug);
+    if (!subId) return c.json({ error: "Subcategory not found" }, 404);
 
     const sql = `
       SELECT
         sc.id,
         sc.parent_id,
-        COALESCE(sct.name, sc.name) AS name,
-        sc.slug,
+        COALESCE(sct.name, sc.name)               AS name,
+        COALESCE(sct.slug, sc.slug)               AS slug,
         COALESCE(sct.description, sc.description) AS description,
         sc.image_url,
         sc.created_at,
-        COALESCE(pct.name, pc.name) AS parent_name,
-        pc.slug AS parent_slug
+        COALESCE(pct.name, pc.name)               AS parent_name,
+        COALESCE(pct.slug, pc.slug)               AS parent_slug
       FROM subcategories sc
       LEFT JOIN subcategories_translations sct
         ON sct.sub_id = sc.id AND sct.locale = ?
       JOIN parent_categories pc ON pc.id = sc.parent_id
       LEFT JOIN parent_categories_translations pct
         ON pct.parent_id = pc.id AND pct.locale = ?
-      WHERE ${isNumeric ? "sc.id = ?" : "sc.slug = ?"}
+      WHERE sc.id = ?
       LIMIT 1
     `;
-    const subcat = await c.env.DB.prepare(sql)
-      .bind(locale, locale, isNumeric ? Number(idOrSlug) : idOrSlug)
+    const subcat = await c.env.DB
+      .prepare(sql)
+      .bind(locale, locale, subId)
       .first();
 
     if (!subcat) return c.json({ error: "Subcategory not found" }, 404);
@@ -181,6 +211,7 @@ subCategoriesRouter.get("/:idOrSlug", async (c) => {
 /**
  * POST /api/subcategories
  * body: { parent_id, name, slug?, description?, image_url?, translations? }
+ * translations: { en?: { name?, slug?, description? }, ... }
  */
 subCategoriesRouter.post("/", async (c) => {
   try {
@@ -219,20 +250,23 @@ subCategoriesRouter.post("/", async (c) => {
     if (!res.success) throw new Error("Insert failed");
     const newId = res.meta?.last_row_id;
 
-    // Upsert translations nếu có
+    // Upsert translations (kèm slug)
     if (translations && typeof translations === "object") {
       const upsertT = `
-        INSERT INTO subcategories_translations(sub_id, locale, name, description)
-        VALUES (?1, ?2, ?3, ?4)
+        INSERT INTO subcategories_translations(sub_id, locale, name, slug, description)
+        VALUES (?1, ?2, ?3, ?4, ?5)
         ON CONFLICT(sub_id, locale) DO UPDATE SET
-          name=COALESCE(excluded.name, name),
-          description=COALESCE(excluded.description, description),
-          updated_at=CURRENT_TIMESTAMP
+          name        = COALESCE(excluded.name, name),
+          slug        = COALESCE(excluded.slug, slug),
+          description = COALESCE(excluded.description, description),
+          updated_at  = CURRENT_TIMESTAMP
       `;
       for (const [lc, tr] of Object.entries(translations)) {
+        const tName = tr?.name ?? null;
+        const tSlug = tr?.slug ? slugify(tr.slug) : tName ? slugify(tName) : null;
         await c.env.DB
           .prepare(upsertT)
-          .bind(newId, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null)
+          .bind(newId, String(lc).toLowerCase(), tName, tSlug, tr?.description ?? null)
           .run();
       }
     }
@@ -243,13 +277,13 @@ subCategoriesRouter.post("/", async (c) => {
         `SELECT
            sc.id,
            sc.parent_id,
-           COALESCE(sct.name, sc.name) AS name,
-           sc.slug,
+           COALESCE(sct.name, sc.name)               AS name,
+           COALESCE(sct.slug, sc.slug)               AS slug,
            COALESCE(sct.description, sc.description) AS description,
            sc.image_url,
            sc.created_at,
-           COALESCE(pct.name, pc.name) AS parent_name,
-           pc.slug AS parent_slug
+           COALESCE(pct.name, pc.name)               AS parent_name,
+           COALESCE(pct.slug, pc.slug)               AS parent_slug
          FROM subcategories sc
          LEFT JOIN subcategories_translations sct
            ON sct.sub_id = sc.id AND sct.locale = ?
@@ -276,6 +310,7 @@ subCategoriesRouter.post("/", async (c) => {
 /**
  * PUT /api/subcategories/:id
  * body: { parent_id?, name?, slug?, description?, image_url?, translations? }
+ * translations: { en?: { name?, slug?, description? }, ... }
  */
 subCategoriesRouter.put("/:id", async (c) => {
   const id = Number(c.req.param("id"));
@@ -307,7 +342,7 @@ subCategoriesRouter.put("/:id", async (c) => {
     }
     if (slug !== undefined) {
       sets.push("slug = ?");
-      params.push(slug);
+      params.push(slugify(slug));
     }
     if (description !== undefined) {
       sets.push("description = ?");
@@ -325,20 +360,23 @@ subCategoriesRouter.put("/:id", async (c) => {
       if ((res.meta?.changes || 0) === 0) return c.json({ error: "Subcategory not found" }, 404);
     }
 
-    // Upsert translations nếu có
+    // Upsert translations (kèm slug)
     if (translations && typeof translations === "object") {
       const upsertT = `
-        INSERT INTO subcategories_translations(sub_id, locale, name, description)
-        VALUES (?1, ?2, ?3, ?4)
+        INSERT INTO subcategories_translations(sub_id, locale, name, slug, description)
+        VALUES (?1, ?2, ?3, ?4, ?5)
         ON CONFLICT(sub_id, locale) DO UPDATE SET
-          name=COALESCE(excluded.name, name),
-          description=COALESCE(excluded.description, description),
-          updated_at=CURRENT_TIMESTAMP
+          name        = COALESCE(excluded.name, name),
+          slug        = COALESCE(excluded.slug, slug),
+          description = COALESCE(excluded.description, description),
+          updated_at  = CURRENT_TIMESTAMP
       `;
       for (const [lc, tr] of Object.entries(translations)) {
+        const tName = tr?.name ?? null;
+        const tSlug = tr?.slug ? slugify(tr.slug) : tName ? slugify(tName) : null;
         await c.env.DB
           .prepare(upsertT)
-          .bind(id, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null)
+          .bind(id, String(lc).toLowerCase(), tName, tSlug, tr?.description ?? null)
           .run();
       }
     }
@@ -349,13 +387,13 @@ subCategoriesRouter.put("/:id", async (c) => {
         `SELECT
            sc.id,
            sc.parent_id,
-           COALESCE(sct.name, sc.name) AS name,
-           sc.slug,
+           COALESCE(sct.name, sc.name)               AS name,
+           COALESCE(sct.slug, sc.slug)               AS slug,
            COALESCE(sct.description, sc.description) AS description,
            sc.image_url,
            sc.created_at,
-           COALESCE(pct.name, pc.name) AS parent_name,
-           pc.slug AS parent_slug
+           COALESCE(pct.name, pc.name)               AS parent_name,
+           COALESCE(pct.slug, pc.slug)               AS parent_slug
          FROM subcategories sc
          LEFT JOIN subcategories_translations sct
            ON sct.sub_id = sc.id AND sct.locale = ?
@@ -381,7 +419,7 @@ subCategoriesRouter.put("/:id", async (c) => {
 
 /**
  * PUT /api/subcategories/:id/translations
- * body: { translations: { en:{name?,description?}, ja:{...} } }
+ * body: { translations: { en:{name?,slug?,description?}, ja:{...} } }
  */
 subCategoriesRouter.put("/:id/translations", async (c) => {
   const id = Number(c.req.param("id"));
@@ -394,17 +432,20 @@ subCategoriesRouter.put("/:id/translations", async (c) => {
     }
 
     const upsertT = `
-      INSERT INTO subcategories_translations(sub_id, locale, name, description)
-      VALUES (?1, ?2, ?3, ?4)
+      INSERT INTO subcategories_translations(sub_id, locale, name, slug, description)
+      VALUES (?1, ?2, ?3, ?4, ?5)
       ON CONFLICT(sub_id, locale) DO UPDATE SET
-        name=COALESCE(excluded.name, name),
-        description=COALESCE(excluded.description, description),
-        updated_at=CURRENT_TIMESTAMP
+        name        = COALESCE(excluded.name, name),
+        slug        = COALESCE(excluded.slug, slug),
+        description = COALESCE(excluded.description, description),
+        updated_at  = CURRENT_TIMESTAMP
     `;
     for (const [lc, tr] of Object.entries(translations)) {
+      const tName = tr?.name ?? null;
+      const tSlug = tr?.slug ? slugify(tr.slug) : tName ? slugify(tName) : null;
       await c.env.DB
         .prepare(upsertT)
-        .bind(id, String(lc).toLowerCase(), tr?.name ?? null, tr?.description ?? null)
+        .bind(id, String(lc).toLowerCase(), tName, tSlug, tr?.description ?? null)
         .run();
     }
     return c.json({ ok: true });
@@ -416,7 +457,7 @@ subCategoriesRouter.put("/:id/translations", async (c) => {
 
 /**
  * GET /api/subcategories/:id/translations
- * -> { translations: { locale: { name, description } } }
+ * -> { translations: { locale: { name, slug, description } } }
  */
 subCategoriesRouter.get("/:id/translations", async (c) => {
   const id = Number(c.req.param("id"));
@@ -424,7 +465,7 @@ subCategoriesRouter.get("/:id/translations", async (c) => {
     if (!hasDB(c.env)) return c.json({ error: "Database not available" }, 503);
 
     const sql = `
-      SELECT locale, name, description
+      SELECT locale, name, slug, description
       FROM subcategories_translations
       WHERE sub_id = ?
       ORDER BY locale ASC
@@ -434,6 +475,7 @@ subCategoriesRouter.get("/:id/translations", async (c) => {
     for (const row of results) {
       translations[row.locale] = {
         name: row.name || "",
+        slug: row.slug || "",
         description: row.description || ""
       };
     }
@@ -476,31 +518,35 @@ subCategoriesRouter.delete("/:id", async (c) => {
 /**
  * GET /api/subcategories/:slug/products
  * Query: locale
+ * - Hỗ trợ slug dịch: resolve sub_id trước, rồi lấy sản phẩm theo id
  */
 subCategoriesRouter.get("/:slug/products", async (c) => {
-  const slug = c.req.param("slug");
+  const slugOrId = c.req.param("slug");
   try {
     if (!hasDB(c.env)) {
       return c.json({ products: [], source: "fallback", count: 0 });
     }
     const locale = getLocale(c);
 
+    const subId = await resolveSubId(c, slugOrId);
+    if (!subId) return c.json({ products: [], count: 0, source: "database", locale });
+
     const sql = `
       SELECT
         p.id,
         COALESCE(pt.title, p.title)               AS title,
-        p.slug                                    AS product_slug,
         COALESCE(pt.description, p.description)   AS description,
         COALESCE(pt.content, p.content)           AS content,
+        p.slug                                    AS product_slug,
         p.image_url,
         p.created_at,
         p.updated_at,
         s.id      AS subcategory_id,
-        COALESCE(sct.name, s.name) AS subcategory_name,
-        s.slug    AS subcategory_slug,
+        COALESCE(sct.name, s.name)                AS subcategory_name,
+        COALESCE(sct.slug, s.slug)                AS subcategory_slug,
         pc.id     AS parent_id,
-        COALESCE(pct.name, pc.name) AS parent_name,
-        pc.slug   AS parent_slug
+        COALESCE(pct.name, pc.name)               AS parent_name,
+        COALESCE(pct.slug, pc.slug)               AS parent_slug
       FROM products p
       LEFT JOIN products_translations pt
         ON pt.product_id = p.id AND pt.locale = ?
@@ -512,10 +558,10 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
         ON pc.id = s.parent_id
       LEFT JOIN parent_categories_translations pct
         ON pct.parent_id = pc.id AND pct.locale = ?
-      WHERE s.slug = ?
+      WHERE s.id = ?
       ORDER BY p.created_at DESC
     `;
-    const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, slug).all();
+    const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, subId).all();
     const products = res?.results ?? [];
     return c.json({ products, count: products.length, source: "database", locale });
   } catch (err) {

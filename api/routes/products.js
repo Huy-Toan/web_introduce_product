@@ -17,23 +17,25 @@ const slugify = (s = "") =>
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
 
-// Lấy chi tiết sản phẩm theo id/slug (i18n) — CHỈ JOIN subcategories
+/* ---------------------------------------------------------
+ * Resolve product by id or slug (supports translated slug)
+ * --------------------------------------------------------- */
 const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
   const isNumericId = /^\d+$/.test(idOrSlug);
   const sql = `
     SELECT
       p.id,
-      COALESCE(pt.title, p.title)             AS title,
-      p.slug                                  AS slug,
-      COALESCE(pt.description, p.description) AS description,
-      COALESCE(pt.content, p.content)         AS content,
+      COALESCE(pt.title, p.title)               AS title,
+      COALESCE(pt.slug,  p.slug)                AS slug,
+      COALESCE(pt.description, p.description)   AS description,
+      COALESCE(pt.content,     p.content)       AS content,
       p.image_url,
       p.created_at,
       p.updated_at,
 
-      s.id                                    AS subcategory_id,
-      COALESCE(sct.name, s.name)              AS subcategory_name,
-      s.slug                                  AS subcategory_slug
+      s.id                                      AS subcategory_id,
+      COALESCE(sct.name, s.name)                AS subcategory_name,
+      COALESCE(sct.slug, s.slug)                AS subcategory_slug
     FROM products p
     LEFT JOIN products_translations pt
       ON pt.product_id = p.id AND pt.locale = ?
@@ -41,13 +43,12 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
       ON s.id = p.subcategory_id
     LEFT JOIN subcategories_translations sct
       ON sct.sub_id = s.id AND sct.locale = ?
-    WHERE ${isNumericId ? "p.id = ?" : "p.slug = ?"}
+    WHERE ${isNumericId ? "p.id = ?" : "(p.slug = ? OR pt.slug = ?)"}
     LIMIT 1
   `;
-  return db
-    .prepare(sql)
-    .bind(locale, locale, isNumericId ? Number(idOrSlug) : idOrSlug)
-    .first();
+  return isNumericId
+    ? db.prepare(sql).bind(locale, locale, Number(idOrSlug)).first()
+    : db.prepare(sql).bind(locale, locale, idOrSlug, idOrSlug).first();
 };
 
 export const productsRouter = new Hono();
@@ -56,8 +57,8 @@ export const productsRouter = new Hono();
  * GET /api/products
  * Query:
  *  - locale=vi|en|...
- *  - subcategory_id, sub_slug
- *  - q: tìm theo title/description/content (ưu tiên bản dịch)
+ *  - subcategory_id, sub_slug  (sub_slug hỗ trợ slug dịch)
+ *  - q: tìm theo title/description/content/slug (ưu tiên bản dịch)
  *  - limit, offset
  */
 productsRouter.get("/", async (c) => {
@@ -78,21 +79,24 @@ productsRouter.get("/", async (c) => {
       params.push(Number(subcategory_id));
     }
     if (sub_slug) {
-      conds.push("s.slug = ?");
-      params.push(String(sub_slug));
+      // Chấp nhận slug gốc hoặc slug dịch của subcategory
+      conds.push("(s.slug = ? OR sct.slug = ?)");
+      params.push(String(sub_slug), String(sub_slug));
     }
 
     if (q && q.trim()) {
       const kw = `%${q.trim()}%`;
       conds.push(`(
-        (pt.title IS NOT NULL AND pt.title LIKE ?)
+        (pt.title       IS NOT NULL AND pt.title       LIKE ?)
         OR (pt.description IS NOT NULL AND pt.description LIKE ?)
-        OR (pt.content IS NOT NULL AND pt.content LIKE ?)
-        OR (pt.title IS NULL AND p.title LIKE ?)
+        OR (pt.content   IS NOT NULL AND pt.content    LIKE ?)
+        OR (pt.slug      IS NOT NULL AND pt.slug       LIKE ?)
+        OR (pt.title       IS NULL AND p.title       LIKE ?)
         OR (pt.description IS NULL AND p.description LIKE ?)
-        OR (pt.content IS NULL AND p.content LIKE ?)
+        OR (pt.content     IS NULL AND p.content     LIKE ?)
+        OR (pt.slug        IS NULL AND p.slug        LIKE ?)
       )`);
-      params.push(kw, kw, kw, kw, kw, kw);
+      params.push(kw, kw, kw, kw, kw, kw, kw, kw);
     }
 
     const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
@@ -107,17 +111,17 @@ productsRouter.get("/", async (c) => {
     const sql = `
       SELECT
         p.id,
-        COALESCE(pt.title, p.title)             AS title,
-        p.slug                                  AS slug,
-        COALESCE(pt.description, p.description) AS description,
-        COALESCE(pt.content, p.content)         AS content,
+        COALESCE(pt.title, p.title)               AS title,
+        COALESCE(pt.slug,  p.slug)                AS slug,
+        COALESCE(pt.description, p.description)   AS description,
+        COALESCE(pt.content,     p.content)       AS content,
         p.image_url,
         p.created_at,
         p.updated_at,
 
-        s.id                                    AS subcategory_id,
-        COALESCE(sct.name, s.name)              AS subcategory_name,
-        s.slug                                  AS subcategory_slug
+        s.id                                      AS subcategory_id,
+        COALESCE(sct.name, s.name)                AS subcategory_name,
+        COALESCE(sct.slug, s.slug)                AS subcategory_slug
       FROM products p
       LEFT JOIN products_translations pt
         ON pt.product_id = p.id AND pt.locale = ?
@@ -150,6 +154,7 @@ productsRouter.get("/", async (c) => {
 /**
  * GET /api/products/:idOrSlug
  * Query: locale
+ * - Hỗ trợ resolve bằng slug dịch
  */
 productsRouter.get("/:idOrSlug", async (c) => {
   const idOrSlug = c.req.param("idOrSlug");
@@ -177,8 +182,8 @@ productsRouter.get("/:idOrSlug", async (c) => {
  *   content: string,
  *   image_url?: string,
  *   subcategory_id?: number,     // có thể null
- *   translations?: {             // optional: upsert cùng lúc
- *     en?: { title?, description?, content? },
+ *   translations?: {             // optional upsert cùng lúc
+ *     en?: { title?, slug?, description?, content? },
  *     ja?: { ... },
  *     ...
  *   }
@@ -232,22 +237,26 @@ productsRouter.post("/", async (c) => {
     if (!runRes.success) throw new Error("Insert failed");
     const newId = runRes.meta?.last_row_id;
 
-    // Upsert translations (nếu có)
+    // Upsert translations (kèm slug)
     if (translations && typeof translations === "object") {
       const upsertT = `
-        INSERT INTO products_translations(product_id, locale, title, description, content)
-        VALUES (?1, ?2, ?3, ?4, ?5)
+        INSERT INTO products_translations(product_id, locale, title, slug, description, content)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
         ON CONFLICT(product_id, locale) DO UPDATE SET
           title       = COALESCE(excluded.title, title),
+          slug        = COALESCE(excluded.slug, slug),
           description = COALESCE(excluded.description, description),
           content     = COALESCE(excluded.content, content),
           updated_at  = CURRENT_TIMESTAMP
       `;
       for (const [lc, tr] of Object.entries(translations)) {
+        const tTitle = tr?.title ?? null;
+        const tSlug = tr?.slug ? slugify(tr.slug) : (tTitle ? slugify(tTitle) : null);
         await c.env.DB.prepare(upsertT).bind(
           newId,
           String(lc).toLowerCase(),
-          tr?.title ?? null,
+          tTitle,
+          tSlug,
           tr?.description ?? null,
           tr?.content ?? null
         ).run();
@@ -273,7 +282,7 @@ productsRouter.post("/", async (c) => {
  * Body:
  * {
  *   title?, slug?, description?, content?, image_url?, subcategory_id?,
- *   translations?: { lc: { title?, description?, content? } }
+ *   translations?: { lc: { title?, slug?, description?, content? } }
  * }
  */
 productsRouter.put("/:id", async (c) => {
@@ -303,7 +312,7 @@ productsRouter.put("/:id", async (c) => {
     const sets = [];
     const params = [];
     if (title !== undefined) { sets.push("title = ?"); params.push(title); }
-    if (slug !== undefined) { sets.push("slug = ?"); params.push(slug); }
+    if (slug !== undefined) { sets.push("slug = ?"); params.push(slugify(slug)); }
     if (description !== undefined) { sets.push("description = ?"); params.push(description); }
     if (content !== undefined) { sets.push("content = ?"); params.push(content); }
     if (image_url !== undefined) { sets.push("image_url = ?"); params.push(image_url); }
@@ -325,19 +334,23 @@ productsRouter.put("/:id", async (c) => {
 
     if (translations && typeof translations === "object") {
       const upsertT = `
-        INSERT INTO products_translations(product_id, locale, title, description, content)
-        VALUES (?1, ?2, ?3, ?4, ?5)
+        INSERT INTO products_translations(product_id, locale, title, slug, description, content)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
         ON CONFLICT(product_id, locale) DO UPDATE SET
           title       = COALESCE(excluded.title, title),
+          slug        = COALESCE(excluded.slug, slug),
           description = COALESCE(excluded.description, description),
           content     = COALESCE(excluded.content, content),
           updated_at  = CURRENT_TIMESTAMP
       `;
       for (const [lc, tr] of Object.entries(translations)) {
+        const tTitle = tr?.title ?? null;
+        const tSlug = tr?.slug ? slugify(tr.slug) : (tTitle ? slugify(tTitle) : null);
         await c.env.DB.prepare(upsertT).bind(
           id,
           String(lc).toLowerCase(),
-          tr?.title ?? null,
+          tTitle,
+          tSlug,
           tr?.description ?? null,
           tr?.content ?? null
         ).run();
@@ -360,7 +373,7 @@ productsRouter.put("/:id", async (c) => {
 
 /**
  * PUT /api/products/:id/translations
- * Body: { translations: { en:{title?,description?,content?}, ja:{...} } }
+ * Body: { translations: { en:{title?,slug?,description?,content?}, ja:{...} } }
  */
 productsRouter.put("/:id/translations", async (c) => {
   const id = Number(c.req.param("id"));
@@ -374,19 +387,23 @@ productsRouter.put("/:id/translations", async (c) => {
     }
 
     const upsertT = `
-      INSERT INTO products_translations(product_id, locale, title, description, content)
-      VALUES (?1, ?2, ?3, ?4, ?5)
+      INSERT INTO products_translations(product_id, locale, title, slug, description, content)
+      VALUES (?1, ?2, ?3, ?4, ?5, ?6)
       ON CONFLICT(product_id, locale) DO UPDATE SET
         title       = COALESCE(excluded.title, title),
+        slug        = COALESCE(excluded.slug, slug),
         description = COALESCE(excluded.description, description),
         content     = COALESCE(excluded.content, content),
         updated_at  = CURRENT_TIMESTAMP
     `;
     for (const [lc, tr] of Object.entries(translations)) {
+      const tTitle = tr?.title ?? null;
+      const tSlug = tr?.slug ? slugify(tr.slug) : (tTitle ? slugify(tTitle) : null);
       await c.env.DB.prepare(upsertT).bind(
         id,
         String(lc).toLowerCase(),
-        tr?.title ?? null,
+        tTitle,
+        tSlug,
         tr?.description ?? null,
         tr?.content ?? null
       ).run();
@@ -400,7 +417,7 @@ productsRouter.put("/:id/translations", async (c) => {
 
 /**
  * GET /api/products/:id/translations
- * -> { translations: { locale: { title, description, content } } }
+ * -> { translations: { locale: { title, slug, description, content } } }
  */
 productsRouter.get("/:id/translations", async (c) => {
   const id = Number(c.req.param("id"));
@@ -408,7 +425,7 @@ productsRouter.get("/:id/translations", async (c) => {
     if (!hasDB(c.env)) return c.json({ error: "Database not available" }, 503);
 
     const sql = `
-      SELECT locale, title, description, content
+      SELECT locale, title, slug, description, content
       FROM products_translations
       WHERE product_id = ?
       ORDER BY locale ASC
@@ -418,6 +435,7 @@ productsRouter.get("/:id/translations", async (c) => {
     for (const row of results) {
       translations[row.locale] = {
         title: row.title || "",
+        slug: row.slug || "",
         description: row.description || "",
         content: row.content || ""
       };
