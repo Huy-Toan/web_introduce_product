@@ -1,0 +1,34 @@
+{
+  "navigation": {
+    "home": "Trang chủ",
+    "about": "Giới thiệu",
+    "what_we_do": "Chúng tôi làm gì",
+    "product": "Sản phẩm",
+    "news": "Tin tức",
+    "contact": "Liên hệ"
+  },
+  "footer": {
+    "service": "Dịch vụ",
+    "products": "Sản phẩm",
+    "register": "Đăng ký",
+    "subscribe": "Đăng ký nhận tin",
+    "email_placeholder": "Email...",
+    "loading": "Đang tải...",
+    "address": "140 Nguyễn Xí, Quận Bình Thạnh, Thành phố Hồ Chí Minh, Việt Nam",
+    "contact": "Số liên hệ"
+  },
+  "auto": {
+    "tieng_viet": "Tiếng Việt",
+    "tieng_anh": "Tiếng Anh",
+    "dang_chuyen_doi_ngon_ngu": "Đang chuyển đổi ngôn ngữ",
+    "dang_chuyen_doi": "Đang chuyển đổi...",
+    "chuyen_sang": "Chuyển sang",
+    "vui_long_cho": "Vui lòng chờ",
+    "loading_translations": "Đang tải bản dịch..."
+  },
+  "home": {
+    "welcome": "Chào mừng đến với Công ty TNHH Thương Mại Dịch Vụ Kỹ Thuật Hồng Phát",
+    "intro": "Trái cây cao cấp từ Việt Nam",
+    "learn_more": "Tìm hiểu thêm"
+  }
+}

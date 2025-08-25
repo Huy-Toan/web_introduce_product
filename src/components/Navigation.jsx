@@ -1,6 +1,7 @@
 import { Menu, X, Globe2, ChevronDown } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useT } from "../context/TContext";
 
 const SUPPORTED = ["vi", "en"];
 const DEFAULT_LOCALE = "vi";
@@ -17,9 +18,10 @@ function setLocaleOnDom(lc) {
 }
 
 function TopNavigation() {
+    const { t, i18n } = useT();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [atTop, setAtTop] = useState(true);
-  const [locale, setLocale] = useState(getStoredLocale());
+    const [locale, setLocale] = useState(i18n.language || getStoredLocale());
   const [openLang, setOpenLang] = useState(false);
 
   const navigate = useNavigate();
@@ -36,9 +38,10 @@ function TopNavigation() {
 
   // cập nhật html lang & lưu localStorage khi locale đổi
   useEffect(() => {
+      i18n.changeLanguage(locale);
     localStorage.setItem("locale", locale);
     setLocaleOnDom(locale);
-  }, [locale]);
+  }, [locale, i18n]);
 
   // giữ query ?locale=... khi chuyển trang
   const buildUrl = (path) => {
@@ -60,13 +63,7 @@ function TopNavigation() {
 
   const transparentNav = pathname === "/" && atTop;
 
-  const labelFor = (page) =>
-    page === "home" ? "Home"
-      : page === "about" ? (locale === "vi" ? "Giới thiệu" : "About Us")
-        : page === "what_we_do" ? (locale === "vi" ? "Chúng tôi làm gì" : "What We Do")
-          : page === "contact" ? (locale === "vi" ? "Liên hệ" : "Contact")
-            : page === "news" ? (locale === "vi" ? "Tin tức" : "News")
-              : (locale === "vi" ? "Sản phẩm" : "Products");
+    const labelFor = (page) => t(`navigation.${page}`);
 
   const pages = ["home", "about", "what_we_do", "product", "news", "contact"];
 
@@ -156,7 +153,7 @@ function TopNavigation() {
                         role="option"
                         aria-selected={lc === locale}
                       >
-                        {lc === "vi" ? "Tiếng Việt" : "English"}
+                          {lc === "vi" ? t('auto.tieng_viet') : t('auto.tieng_anh')}
                       </button>
                     </li>
                   ))}
@@ -178,7 +175,7 @@ function TopNavigation() {
               }}
               className={`p-2 rounded-md text-sm font-medium ${transparentNav ? "text-white" : "text-gray-700 hover:bg-gray-50"
                 }`}
-              title="Change language"
+              title={t('auto.dang_chuyen_doi_ngon_ngu')}
             >
               {locale.toUpperCase()}
             </button>
@@ -223,7 +220,7 @@ function TopNavigation() {
                     }}
                     className={`px-3 py-2 border rounded-md ${lc === locale ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 hover:bg-gray-50"}`}
                   >
-                    {lc === "vi" ? "Tiếng Việt" : "English"}
+                      {lc === "vi" ? t('auto.tieng_viet') : t('auto.tieng_anh')}
                   </button>
                 ))}
               </div>
