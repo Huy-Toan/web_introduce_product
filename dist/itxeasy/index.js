@@ -31875,6 +31875,7 @@ productsRouter.delete("/:id", async (c) => {
     return c.json({ error: "Failed to delete product" }, 500);
   }
 });
+const toStr = (v) => v == null ? "" : String(v).trim();
 function csvToJson(text) {
   const lines = text.split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return [];
@@ -31889,40 +31890,76 @@ function csvToJson(text) {
   return rows;
 }
 async function translateTextInWorker(c, text, source, target) {
-  if (!text || !String(text).trim()) return "";
   const out = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
     messages: [
       { role: "system", content: `Translate from ${source} to ${target}. Reply with translation only.` },
-      { role: "user", content: String(text) }
+      { role: "user", content: text }
     ],
     temperature: 0.2
   });
   return out?.response?.trim() || "";
 }
-async function translateMarkdownInWorker(c, md, source, target) {
-  if (!md || !String(md).trim()) return "";
+function cleanLLMOutput(s) {
+  let t = String(s ?? "");
+  t = t.replace(/^\s*```(?:markdown|md|text)?\s*/i, "").replace(/\s*```\s*$/i, "");
+  t = t.replace(/^(?:translation|translated|english|bản dịch|dịch)\s*:\s*/i, "");
+  return t.trim();
+}
+function splitMarkdownByPara(md, maxChars = 2800) {
+  const lines = String(md).split(/\r?\n/);
+  const out = [];
+  let buf = "";
+  for (const line of lines) {
+    const next = buf ? `${buf}
+${line}` : line;
+    if (next.length > maxChars) {
+      if (buf) out.push(buf);
+      buf = line;
+    } else {
+      buf = next;
+    }
+  }
+  if (buf.trim()) out.push(buf);
+  return out;
+}
+async function translateChunk(c, chunk, source, target) {
   const out = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
     messages: [
-      { role: "system", content: `Translate markdown from ${source} to ${target}. Keep markdown structure.` },
-      { role: "user", content: String(md) }
+      { role: "system", content: `Translate ${source}->${target} and PRESERVE MARKDOWN exactly.
+Rules:
+- Keep headings, bold/italics, lists (* or +), line breaks, symbols (°C, %, etc.).
+- Do NOT add explanations, labels, or code fences.
+- Return MARKDOWN ONLY.` },
+      { role: "user", content: String(chunk) }
     ],
-    temperature: 0.2
+    temperature: 0
   });
-  return out?.response?.trim() || "";
+  return cleanLLMOutput(out?.response ?? "");
+}
+async function translateMarkdownInWorker(c, md, source, target) {
+  const text = String(md || "").trim();
+  if (!text) return "";
+  if (text.length <= 2800) {
+    const res = await translateChunk(c, text, source, target);
+    return res;
+  }
+  const parts = splitMarkdownByPara(text, 2800);
+  const outs = [];
+  for (const p of parts) {
+    const res = await translateChunk(c, p, source, target);
+    if (!res) return "";
+    outs.push(res);
+    await sleep(150);
+  }
+  return outs.join("\n");
 }
 productsRouter.post("/import", async (c) => {
   try {
     if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
     const auto = c.req.query("auto") === "1" || c.req.query("auto") === "true";
-    let targets = (c.req.query("targets") || "").split(",").map((s) => s.trim().toLowerCase()).filter((lc) => lc && lc !== "vi");
+    const targets = (c.req.query("targets") || "").split(",").map((s) => s.trim().toLowerCase()).filter((lc) => lc && lc !== "vi");
     const source = c.req.query("source") || "vi";
     const dryRun = c.req.query("dry_run") === "1";
-    const mode = (c.req.query("mode") || "soft").toLowerCase();
-    const requireLocales = (c.req.query("require_locales") || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-    const tries = Number(c.req.query("tries") || 5);
-    const delay0 = Number(c.req.query("delay0") || 400);
-    const backoff = Number(c.req.query("backoff") || 1.5);
-    const waitMs = Number(c.req.query("wait_ms") || 200);
     const form = await c.req.formData();
     const file = form.get("file");
     if (!file || !file.arrayBuffer) {
@@ -31934,7 +31971,7 @@ productsRouter.post("/import", async (c) => {
       const wb = readSync(buf, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
       rows = utils.sheet_to_json(ws, { defval: "" });
-    } catch (_e) {
+    } catch (err) {
       const text = new TextDecoder("utf-8").decode(buf);
       rows = csvToJson(text);
     }
@@ -31946,32 +31983,9 @@ productsRouter.post("/import", async (c) => {
       for (const k of Object.keys(r)) out[String(k).toLowerCase().trim()] = r[k];
       return out;
     });
-    const normKey = (k = "") => String(k).toLowerCase().trim().replace(/[\s\-()]+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
-    const getCell = (row, lc, field) => {
-      const candidates = [
-        `${lc}_${field}`,
-        `${field}_${lc}`,
-        `${lc}${field}`,
-        // entitle (phòng hờ)
-        `${lc} ${field}`,
-        `${field} ${lc}`,
-        `${field} (${lc})`,
-        `(${lc}) ${field}`,
-        `${lc}-${field}`,
-        `${field}-${lc}`
-      ].map(normKey);
-      const index2 = {};
-      for (const k of Object.keys(row)) index2[normKey(k)] = row[k];
-      for (const key of candidates) {
-        const v = index2[key];
-        if (v != null && String(v).trim() !== "") return String(v);
-      }
-      return "";
-    };
-    const toStr = (v) => v == null ? "" : String(v).trim();
-    const locale = getLocale$3(c);
     let created = 0, updated = 0, skipped = 0;
     const errors = [];
+    const locale = getLocale$3(c);
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const title2 = toStr(row.title);
@@ -32044,16 +32058,7 @@ productsRouter.post("/import", async (c) => {
           continue;
         }
       }
-      if (!targets.length) {
-        const keys2 = Object.keys(row);
-        const guessed = /* @__PURE__ */ new Set();
-        for (const k of keys2) {
-          const m = normKey(k).match(/^([a-z]{2})_(title|description|content|slug)$/i);
-          if (m && m[1] && m[1] !== "vi") guessed.add(m[1]);
-        }
-        targets = Array.from(guessed);
-      }
-      if (targets.length > 0 && productId) {
+      if (auto && targets.length > 0 && productId) {
         const upsertT = `
           INSERT INTO products_translations (product_id, locale, title, slug, description, content)
           VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -32064,72 +32069,57 @@ productsRouter.post("/import", async (c) => {
             content     = COALESCE(excluded.content, content),
             updated_at  = CURRENT_TIMESTAMP
         `;
+        const mode = (c.req.query("mode") || "soft").toLowerCase();
+        const requireLocales = (c.req.query("require_locales") || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+        const tries = Number(c.req.query("tries") || 5);
+        const delay0 = Number(c.req.query("delay0") || 400);
+        const backoff = Number(c.req.query("backoff") || 1.5);
+        const waitMs = Number(c.req.query("wait_ms") || 0);
         const trans = {};
         for (const lc of targets) {
           if (waitMs > 0) await sleep(waitMs);
-          const tTitle0 = getCell(row, lc, "title");
-          const tDesc0 = getCell(row, lc, "description");
-          const tCont0 = getCell(row, lc, "content");
-          const tSlug0 = getCell(row, lc, "slug");
-          let tTitle = tTitle0;
-          let tDesc = tDesc0;
-          let tCont = tCont0;
-          if (!tTitle && auto) {
-            try {
-              tTitle = await withRetry(
-                () => translateTextInWorker(c, title2, source, lc),
-                { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }
-              );
-            } catch (_e) {
+          const tTitle0 = toStr(row[`${lc}_title`]);
+          const tDesc0 = toStr(row[`${lc}_description`]);
+          const tCont0 = toStr(row[`${lc}_content`]);
+          const tSlug0 = toStr(row[`${lc}_slug`]);
+          const tTitle = tTitle0 || await withRetry(
+            () => translateTextInWorker(c, title2, source, lc),
+            { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }
+          );
+          const tDesc = tDesc0 || (description ? await withRetry(() => translateTextInWorker(c, description, source, lc), { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }) : "");
+          const tCont = tCont0 || await withRetry(
+            () => translateMarkdownInWorker(c, content, source, lc),
+            {
+              tries: Math.max(tries, 6),
+              delayMs: Math.max(delay0, 600),
+              backoff,
+              timeoutMs: 22e3
             }
-          }
-          if (!tDesc && description && auto) {
-            try {
-              tDesc = await withRetry(
-                () => translateTextInWorker(c, description, source, lc),
-                { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }
-              );
-            } catch (_e) {
-            }
-          }
-          if (!tCont && auto) {
-            try {
-              tCont = await withRetry(
-                () => translateMarkdownInWorker(c, content, source, lc),
-                { tries, delayMs: delay0, backoff, timeoutMs: 1e4 }
-              );
-            } catch (_e) {
-            }
-          }
+          );
           const ok2 = Boolean((tTitle || "").trim());
           trans[lc] = {
             ok: ok2,
             title: tTitle,
             desc: tDesc,
             cont: tCont,
-            slug: slugify(tSlug0 || tTitle || "")
-            // slug theo title dịch (nếu có)
+            slug: slugify(tSlug0 || tTitle)
           };
         }
         const missing = requireLocales.filter((lc) => !trans[lc]?.ok);
         if (mode === "strict" && missing.length) {
           errors.push({ row: i + 1, reason: "strict_missing_required_locales", locales: missing });
         } else {
-          const stmts = [];
           for (const lc of targets) {
             if (!trans[lc]?.ok) continue;
-            stmts.push(
-              c.env.DB.prepare(upsertT).bind(
-                productId,
-                lc,
-                trans[lc].title || null,
-                trans[lc].slug || null,
-                trans[lc].desc || null,
-                trans[lc].cont || null
-              )
-            );
+            await c.env.DB.prepare(upsertT).bind(
+              productId,
+              lc,
+              trans[lc].title || null,
+              trans[lc].slug || null,
+              trans[lc].desc || null,
+              trans[lc].cont || null
+            ).run();
           }
-          if (stmts.length) await c.env.DB.batch(stmts);
         }
       }
     }

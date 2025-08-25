@@ -513,140 +513,152 @@ function csvToJson(text) {
   return rows
 }
 
-// ========== 1) Dịch text bằng Cloudflare Workers AI ==========
+
 async function translateTextInWorker(c, text, source, target) {
-  if (!text || !String(text).trim()) return '';
   const out = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
     messages: [
       { role: 'system', content: `Translate from ${source} to ${target}. Reply with translation only.` },
-      { role: 'user', content: String(text) }
+      { role: 'user', content: text }
     ],
     temperature: 0.2,
   });
   return out?.response?.trim() || '';
 }
 
-// ========== 2) Dịch markdown bằng Cloudflare Workers AI ==========
-async function translateMarkdownInWorker(c, md, source, target) {
-  if (!md || !String(md).trim()) return '';
+function cleanLLMOutput(s) {
+  let t = String(s ?? '');
+  // Bỏ code fences ```...```
+  t = t.replace(/^\s*```(?:markdown|md|text)?\s*/i, '')
+       .replace(/\s*```\s*$/i, '');
+  // Bỏ nhãn kiểu "Translation:", "English:", "Dịch:"
+  t = t.replace(/^(?:translation|translated|english|bản dịch|dịch)\s*:\s*/i, '');
+  return t.trim();
+}
+
+function splitMarkdownByPara(md, maxChars = 2800) {
+  const lines = String(md).split(/\r?\n/);
+  const out = [];
+  let buf = '';
+  for (const line of lines) {
+    const next = buf ? `${buf}\n${line}` : line;
+    if (next.length > maxChars) {
+      if (buf) out.push(buf);
+      buf = line;
+    } else {
+      buf = next;
+    }
+  }
+  if (buf.trim()) out.push(buf);
+  return out;
+}
+
+async function translateChunk(c, chunk, source, target) {
   const out = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
     messages: [
-      { role: 'system', content: `Translate markdown from ${source} to ${target}. Keep markdown structure.` },
-      { role: 'user', content: String(md) }
+      { role: 'system', content:
+`Translate ${source}->${target} and PRESERVE MARKDOWN exactly.
+Rules:
+- Keep headings, bold/italics, lists (* or +), line breaks, symbols (°C, %, etc.).
+- Do NOT add explanations, labels, or code fences.
+- Return MARKDOWN ONLY.` },
+      { role: 'user', content: String(chunk) }
     ],
-    temperature: 0.2,
+    temperature: 0
   });
-  return out?.response?.trim() || '';
+  return cleanLLMOutput(out?.response ?? '');
 }
 
-// ========== 3) Import + auto-translate + upsert translations ==========
+async function translateMarkdownInWorker(c, md, source, target) {
+  const text = String(md || '').trim();
+  if (!text) return '';
+
+  // Nội dung ngắn: dịch 1 phát
+  if (text.length <= 2800) {
+    const res = await translateChunk(c, text, source, target);
+    return res; // '' nếu fail -> để withRetry retry
+  }
+
+  // Nội dung dài: chia mảnh để giảm timeout
+  const parts = splitMarkdownByPara(text, 2800);
+  const outs = [];
+  for (const p of parts) {
+    const res = await translateChunk(c, p, source, target);
+    if (!res) return '';         // buộc retry toàn bộ qua withRetry
+    outs.push(res);
+    await sleep(150);            // giãn nhịp nhẹ tránh throttle
+  }
+  return outs.join('\n');
+}
+
+
+
 productsRouter.post('/import', async (c) => {
   try {
-    if (!hasDB(c.env)) return c.json({ error: 'Database not available' }, 503);
+    if (!hasDB(c.env)) return c.json({ error: 'Database not available' }, 503)
 
-    // --- flags ---
-    const auto   = c.req.query('auto') === '1' || c.req.query('auto') === 'true';
-    let targets  = (c.req.query('targets') || '')
-      .split(',').map(s => s.trim().toLowerCase()).filter(lc => lc && lc !== 'vi');
-    const source = c.req.query('source') || 'vi';
-    const dryRun = c.req.query('dry_run') === '1';
+    // >>>> 1) đọc query auto-translate
+    const auto = c.req.query('auto') === '1' || c.req.query('auto') === 'true'    
+    const targets = (c.req.query('targets') || '')
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(lc => lc && lc !== 'vi')
+    const source = c.req.query('source') || 'vi'                           
+    const dryRun = c.req.query('dry_run') === '1'                               
 
-    // retry/tune
-    const mode   = (c.req.query('mode') || 'soft').toLowerCase(); // soft | strict
-    const requireLocales = (c.req.query('require_locales') || '')
-      .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-    const tries  = Number(c.req.query('tries')  || 5);
-    const delay0 = Number(c.req.query('delay0') || 400);
-    const backoff= Number(c.req.query('backoff')|| 1.5);
-    const waitMs = Number(c.req.query('wait_ms')|| 200); // mặc định giãn nhịp cho Worker
-
-    // --- lấy file ---
-    const form = await c.req.formData();
-    const file = form.get('file');
+    const form = await c.req.formData()
+    const file = form.get('file')
     if (!file || !file.arrayBuffer) {
-      return c.json({ error: 'Missing file' }, 400);
+      return c.json({ error: 'Missing file' }, 400)
     }
-    const buf = await file.arrayBuffer();
 
-    // --- parse Excel/CSV ---
-    let rows = [];
+    const buf = await file.arrayBuffer()
+
+    // 2) đọc excel/csv thành rows = array object
+    let rows = []
     try {
-      const wb = XLSX.read(buf, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-    } catch (_e) {
-      const text = new TextDecoder('utf-8').decode(buf);
-      rows = csvToJson(text);
+      const wb = XLSX.read(buf, { type: 'array' })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      rows = XLSX.utils.sheet_to_json(ws, { defval: '' }) // mỗi row object key = header
+    } catch (err) {
+      // fallback csv
+      const text = new TextDecoder('utf-8').decode(buf)
+      rows = csvToJson(text)
     }
+
     if (!rows.length) {
-      return c.json({ ok: true, created: 0, updated: 0, skipped: 0, message: 'No data rows found' });
+      return c.json({ ok: true, created: 0, updated: 0, skipped: 0, message: 'No data rows found' })
     }
 
-    // --- chuẩn hoá key về lowercase (giữ nguyên khoảng trắng/ký tự để còn bắt biến thể) ---
+    // chuẩn hóa key về lowercase
     rows = rows.map((r) => {
-      const out = {};
-      for (const k of Object.keys(r)) out[String(k).toLowerCase().trim()] = r[k];
-      return out;
-    });
+      const out = {}
+      for (const k of Object.keys(r)) out[String(k).toLowerCase().trim()] = r[k]
+      return out
+    })
 
-    // helper: chuẩn hoá để so khớp các biến thể header
-    const normKey = (k = '') =>
-      String(k).toLowerCase().trim()
-        .replace(/[\s\-()]+/g, '_')
-        .replace(/_+/g, '_')
-        .replace(/^_+|_+$/g, '');
-
-    // đọc cell theo nhiều biến thể: en_title, title_en, "EN Title", "Title (EN)", "en-title"...
-    const getCell = (row, lc, field) => {
-      const candidates = [
-        `${lc}_${field}`,
-        `${field}_${lc}`,
-        `${lc}${field}`,       // entitle (phòng hờ)
-        `${lc} ${field}`,
-        `${field} ${lc}`,
-        `${field} (${lc})`,
-        `(${lc}) ${field}`,
-        `${lc}-${field}`,
-        `${field}-${lc}`,
-      ].map(normKey);
-
-      // build index theo normKey -> value
-      const index = {};
-      for (const k of Object.keys(row)) index[normKey(k)] = row[k];
-
-      for (const key of candidates) {
-        const v = index[key];
-        if (v != null && String(v).trim() !== '') return String(v);
-      }
-      return '';
-    };
-
-    const toStr = (v) => (v == null ? '' : String(v).trim());
-    const locale = getLocale(c);
-
-    let created = 0, updated = 0, skipped = 0;
-    const errors = [];
+    let created = 0, updated = 0, skipped = 0
+    const errors = []
+    const locale = getLocale(c)  // dùng để resolve subcategory theo name/slug (nếu có)
 
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+      const row = rows[i]
+      const title = toStr(row.title)
+      const content = toStr(row.content)
+      if (!title || !content) { skipped++; continue }
 
-      const title   = toStr(row.title);
-      const content = toStr(row.content);
-      if (!title || !content) { skipped++; continue; }
+      let slug = toStr(row.slug) || slugify(title)
+      slug = slugify(slug)
 
-      let slug = toStr(row.slug) || slugify(title);
-      slug = slugify(slug);
+      const description = toStr(row.description)
+      const image_url = toStr(row.image_url)
 
-      const description = toStr(row.description);
-      const image_url   = toStr(row.image_url);
-
-      // resolve subcategory
-      let subcategory_id = null;
+      // Ưu tiên subcategory_id; nếu không có, thử resolve theo name/slug (cột "subcategory")
+      let subcategory_id = null
       if (row.subcategory_id != null && String(row.subcategory_id).trim() !== '') {
-        const idNum = Number(row.subcategory_id);
-        if (Number.isFinite(idNum)) subcategory_id = idNum;
+        const idNum = Number(row.subcategory_id)
+        if (Number.isFinite(idNum)) subcategory_id = idNum
       } else if (row.subcategory) {
-        const subKey = toStr(row.subcategory);
+        const subKey = toStr(row.subcategory)
         if (subKey) {
           const rs = await c.env.DB
             .prepare(`
@@ -658,21 +670,23 @@ productsRouter.post('/import', async (c) => {
               LIMIT 1
             `)
             .bind(locale, slugify(subKey), slugify(subKey), subKey, subKey)
-            .first();
-          if (rs?.id) subcategory_id = rs.id;
+            .first()
+          if (rs?.id) subcategory_id = rs.id
         }
       }
 
-      if (dryRun) { created++; continue; }
+      // Nếu dry_run => không ghi DB, chỉ đếm
+      if (dryRun) { created++; continue }
 
-      // upsert base product
+      // Kiểm tra tồn tại theo slug (sản phẩm gốc)
       const exists = await c.env.DB
         .prepare('SELECT id FROM products WHERE slug = ? LIMIT 1')
         .bind(slug)
-        .first();
+        .first()
 
-      let productId;
+      let productId
       if (exists?.id) {
+        // Update
         const res = await c.env.DB.prepare(`
           UPDATE products
           SET title = ?, description = ?, content = ?, image_url = ?, subcategory_id = ?, updated_at = CURRENT_TIMESTAMP
@@ -684,11 +698,12 @@ productsRouter.post('/import', async (c) => {
           image_url || null,
           subcategory_id == null ? null : Number(subcategory_id),
           exists.id
-        ).run();
-        productId = exists.id;
-        if ((res.meta?.changes || 0) > 0) updated++;
-        else skipped++;
+        ).run()
+        productId = exists.id
+        if ((res.meta?.changes || 0) > 0) updated++
+        else skipped++
       } else {
+        // Insert mới
         const res = await c.env.DB.prepare(`
           INSERT INTO products (title, slug, description, content, image_url, subcategory_id)
           VALUES (?, ?, ?, ?, ?, ?)
@@ -699,30 +714,19 @@ productsRouter.post('/import', async (c) => {
           content,
           image_url || null,
           subcategory_id == null ? null : Number(subcategory_id)
-        ).run();
+        ).run()
+
         if (res.success) {
-          productId = res.meta?.last_row_id;
-          created++;
+          productId = res.meta?.last_row_id
+          created++
         } else {
-          skipped++;
-          continue;
+          skipped++
+          continue
         }
       }
 
-      // ===== translations =====
-      // Nếu không truyền targets, thử suy từ header (VD thấy có en_title -> targets=['en'])
-      if (!targets.length) {
-        const keys = Object.keys(row);
-        const guessed = new Set();
-        for (const k of keys) {
-          const m = normKey(k).match(/^([a-z]{2})_(title|description|content|slug)$/i);
-          if (m && m[1] && m[1] !== 'vi') guessed.add(m[1]);
-        }
-        targets = Array.from(guessed);
-      }
-
-      // LUÔN xử lý upsert khi có targets; AI chỉ chạy khi thiếu và auto=true
-      if (targets.length > 0 && productId) {
+      // 3) Nếu bật auto-translate và có targets -> tự dịch & upsert translations
+      if (auto && targets.length > 0 && productId) {
         const upsertT = `
           INSERT INTO products_translations (product_id, locale, title, slug, description, content)
           VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -734,48 +738,47 @@ productsRouter.post('/import', async (c) => {
             updated_at  = CURRENT_TIMESTAMP
         `;
 
+        // điều khiển hành vi
+        const mode = (c.req.query('mode') || 'soft').toLowerCase(); // soft | strict
+        const requireLocales = (c.req.query('require_locales') || '')
+          .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+        const tries   = Number(c.req.query('tries')   || 5);
+        const delay0  = Number(c.req.query('delay0')  || 400);
+        const backoff = Number(c.req.query('backoff') || 1.5);
+        const waitMs  = Number(c.req.query('wait_ms') || 0);
+
         /** @type {Record<string,{ok:boolean,title:string,desc:string,cont:string,slug:string}>} */
         const trans = {};
 
         for (const lc of targets) {
-          if (waitMs > 0) await sleep(waitMs);
+          if (waitMs > 0) await sleep(waitMs); // tránh dồn request dịch
 
-          const tTitle0 = getCell(row, lc, 'title');
-          const tDesc0  = getCell(row, lc, 'description');
-          const tCont0  = getCell(row, lc, 'content');
-          const tSlug0  = getCell(row, lc, 'slug');
+          const tTitle0 = toStr(row[`${lc}_title`]);
+          const tDesc0  = toStr(row[`${lc}_description`]);
+          const tCont0  = toStr(row[`${lc}_content`]);
+          const tSlug0  = toStr(row[`${lc}_slug`]);
 
-          let tTitle = tTitle0;
-          let tDesc  = tDesc0;
-          let tCont  = tCont0;
+          // DỊCH CÓ RETRY + TIMEOUT — chỉ cần tTitle để tạo slug đúng ngôn ngữ
+          const tTitle = tTitle0 || await withRetry(
+            () => translateTextInWorker(c, title, source, lc),
+            { tries, delayMs: delay0, backoff, timeoutMs: 6000 }
+          );
 
-          // chỉ gọi AI khi thiếu và auto=true
-          if (!tTitle && auto) {
-            try {
-              tTitle = await withRetry(
-                () => translateTextInWorker(c, title, source, lc),
-                { tries, delayMs: delay0, backoff, timeoutMs: 6000 }
-              );
-            } catch (_e) { /* retry sẽ nuốt lỗi, trả '' */ }
-          }
+          const tDesc  = tDesc0 || (description
+            ? await withRetry(() => translateTextInWorker(c, description, source, lc), { tries, delayMs: delay0, backoff, timeoutMs: 6000 })
+            : ""
+          );
 
-          if (!tDesc && description && auto) {
-            try {
-              tDesc = await withRetry(
-                () => translateTextInWorker(c, description, source, lc),
-                { tries, delayMs: delay0, backoff, timeoutMs: 6000 }
-              );
-            } catch (_e) {}
-          }
-
-          if (!tCont && auto) {
-            try {
-              tCont = await withRetry(
-                () => translateMarkdownInWorker(c, content, source, lc),
-                { tries, delayMs: delay0, backoff, timeoutMs: 10000 }
-              );
-            } catch (_e) {}
-          }
+          const tCont  = tCont0 || await withRetry(
+          () => translateMarkdownInWorker(c, content, source, lc), 
+          { 
+            tries: Math.max(tries, 6),              
+            delayMs: Math.max(delay0, 600),       
+            backoff, 
+            timeoutMs: 22000                       
+          } 
+        );
 
           const ok = Boolean((tTitle || '').trim());
           trans[lc] = {
@@ -783,42 +786,36 @@ productsRouter.post('/import', async (c) => {
             title: tTitle,
             desc:  tDesc,
             cont:  tCont,
-            slug:  slugify(tSlug0 || tTitle || '') // slug theo title dịch (nếu có)
+            slug:  slugify(tSlug0 || tTitle)
           };
-
-          // (tuỳ chọn) debug từng dòng/locale
-          // errors.push({ row: i+1, lc, hadProvided: !!tTitle0, calledAI: auto && !tTitle0, gotTitle: ok });
         }
 
-        // strict mode: yêu cầu đủ locale
+        // locale bắt buộc phải có (ví dụ en)
         const missing = requireLocales.filter(lc => !trans[lc]?.ok);
+
         if (mode === 'strict' && missing.length) {
+          // thiếu bản dịch bắt buộc → không insert translations (tuỳ chọn: rollback base)
+          // await c.env.DB.prepare("DELETE FROM products WHERE id = ?").bind(productId).run();
           errors.push({ row: i + 1, reason: 'strict_missing_required_locales', locales: missing });
         } else {
-          // upsert những locale ok
-          const stmts = [];
+          // soft: luôn giữ base; chỉ insert các locale đã dịch xong
           for (const lc of targets) {
             if (!trans[lc]?.ok) continue;
-            stmts.push(
-              c.env.DB.prepare(upsertT).bind(
-                productId,
-                lc,
-                trans[lc].title || null,
-                trans[lc].slug  || null,
-                trans[lc].desc  || null,
-                trans[lc].cont  || null
-              )
-            );
+            await c.env.DB.prepare(upsertT).bind(
+              productId,
+              lc,
+              trans[lc].title || null,
+              trans[lc].slug  || null,
+              trans[lc].desc  || null,
+              trans[lc].cont  || null
+            ).run();
           }
-          if (stmts.length) await c.env.DB.batch(stmts);
         }
       }
     }
-
-    return c.json({ ok: true, created, updated, skipped, errors });
+    return c.json({ ok: true, created, updated, skipped, errors })
   } catch (err) {
-    console.error('Import products error:', err);
-    return c.json({ error: 'Failed to import' }, 500);
+    console.error('Import products error:', err)
+    return c.json({ error: 'Failed to import' }, 500)
   }
-});
-
+})
