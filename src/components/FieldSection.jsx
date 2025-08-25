@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router"; // đổi sang "react-router-dom" nếu dự án bạn dùng lib đó
+// src/components/FieldSection.jsx
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useLocation } from "react-router"; // hoặc "react-router-dom" nếu dự án dùng lib đó
 
 // bỏ markdown cơ bản cho hiển thị plain text
 function stripMarkdown(md = "") {
   return md
     .replace(/!\[[^\]]*\]\([^)]+\)/g, "")          // ![alt](url)
-    .replace(/\[[^\]]*\]\([^)]+\)/g, "$1")         // [text](url) -> text
+    .replace(/\[([^\]]*)\]\([^)]+\)/g, "$1")       // [text](url) -> text (sửa regex để giữ text)
     .replace(/[`*_~>#-]+/g, "")                    // ký tự markdown
     .replace(/\s{2,}/g, " ")                       // nhiều space -> 1 space
     .trim();
@@ -18,28 +19,74 @@ function truncateWords(text = "", maxWords = 130) {
   return words.slice(0, maxWords).join(" ") + " …";
 }
 
-// slug đơn giản để điều hướng theo tên (fallback id)
-function slugify(s = "") {
-  return s
-    .toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
+const SUPPORTED = ["vi", "en"];
+const DEFAULT_LOCALE = "vi";
+
+function resolveLocale(propLocale, search) {
+  const fromProp = (propLocale || "").toLowerCase();
+  const urlLc = new URLSearchParams(search).get("locale")?.toLowerCase() || "";
+  const lsLc = (localStorage.getItem("locale") || "").toLowerCase();
+
+  if (SUPPORTED.includes(fromProp)) return fromProp;
+  if (SUPPORTED.includes(urlLc)) return urlLc;
+  if (SUPPORTED.includes(lsLc)) return lsLc;
+  return DEFAULT_LOCALE;
 }
 
-export default function FieldHighlightsSection() {
+export default function FieldHighlightsSection({ locale: localeProp }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const locale = useMemo(
+    () => resolveLocale(localeProp, location.search),
+    [localeProp, location.search]
+  );
+
+  const t = useMemo(
+    () =>
+      locale === "vi"
+        ? {
+          kicker: "NỘI DUNG MỚI TRONG TUẦN",
+          heading: "LĨNH VỰC & GÓC NHÌN",
+          sub: "Từ chúng tôi đến bạn.",
+          empty: "Không có nội dung nào để hiển thị.",
+          strength: "Thế mạnh của chúng tôi:",
+          cta: "Tìm hiểu thêm →",
+          aria: (name) => `Xem chi tiết ${name}`,
+        }
+        : {
+          kicker: "SEARCH NEWEST CONTENT OF THE WEEK",
+          heading: "FIELDS & INSIGHTS",
+          sub: "From us to you.",
+          empty: "No content to display.",
+          strength: "Our strength:",
+          cta: "Learn more →",
+          aria: (name) => `View details ${name}`,
+        },
+    [locale]
+  );
+
   const [fieldContent, setFieldContent] = useState([]);
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
 
+  // đồng bộ <html lang> + lưu locale
   useEffect(() => {
+    try {
+      document.documentElement.lang = locale;
+      localStorage.setItem("locale", locale);
+    } catch { }
+  }, [locale]);
+
+  // fetch theo locale
+  useEffect(() => {
+    const ac = new AbortController();
     const fetchFieldContent = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/fields");
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        const res = await fetch(`/api/fields?locale=${encodeURIComponent(locale)}`, {
+          signal: ac.signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         const fieldArray = data.items || [];
         setFieldContent(fieldArray);
@@ -51,7 +98,8 @@ export default function FieldHighlightsSection() {
       }
     };
     fetchFieldContent();
-  }, []);
+    return () => ac.abort();
+  }, [locale]);
 
   return (
     <section className="bg-gradient-to-br from-yellow-50/40 via-white to-white py-16 sm:py-20">
@@ -59,12 +107,12 @@ export default function FieldHighlightsSection() {
         {/* Header */}
         <div className="text-center mb-10 sm:mb-14">
           <p className="text-gray-600 text-base sm:text-lg mb-3 font-medium tracking-wide">
-            SEARCH NEWEST CONTENT OF THE WEEK
+            {t.kicker}
           </p>
           <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-yellow-600 mb-4 sm:mb-6 tracking-wider">
-            FIELDS & INSIGHTS
+            {t.heading}
           </h2>
-          <p className="text-gray-700 text-lg sm:text-xl italic">From us to you.</p>
+          <p className="text-gray-700 text-lg sm:text-xl italic">{t.sub}</p>
         </div>
 
         {/* Loading */}
@@ -86,18 +134,16 @@ export default function FieldHighlightsSection() {
             ))}
           </div>
         ) : fieldContent.length === 0 ? (
-          <div className="text-center py-20 text-gray-500">Không có nội dung nào để hiển thị.</div>
+          <div className="text-center py-20 text-gray-500">{t.empty}</div>
         ) : (
           <div className="space-y-8">
             {fieldContent.map((item, idx) => {
-              const name = item?.name || "Untitled";
+              const name = item?.name || (locale === "vi" ? "Không tiêu đề" : "Untitled");
               const content = item?.content || "";
               const plain = stripMarkdown(content);
               const short = truncateWords(plain, 90);
               const img = item?.image_url;
-              const detailPath = item?.slug
-                ? `/what_we_do`
-                : `/what_we_do`;
+              const detailPath = `/what_we_do?locale=${encodeURIComponent(locale)}`;
 
               return (
                 <article
@@ -128,20 +174,18 @@ export default function FieldHighlightsSection() {
                   {/* RIGHT = TEXT */}
                   <div className="order-2 flex flex-col justify-center text-justify">
                     <h3 className="text-2xl sm:text-3xl font-bold text-yellow-600 mb-4 leading-tight">
-                     Thế mạnh của chúng tôi:  {name}
+                      {t.strength} {name}
                     </h3>
-                    <p className="text-gray-700 leading-relaxed mb-6">
-                      {short}
-                    </p>
+                    <p className="text-gray-700 leading-relaxed mb-6">{short}</p>
 
                     <div className="flex flex-wrap gap-3">
                       <button
                         type="button"
                         className="bg-gradient-to-r cursor-pointer from-yellow-500 to-yellow-600 text-white px-6 py-2.5 rounded-full font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all duration-300 transform hover:-translate-y-0.5 shadow-lg hover:shadow-xl"
                         onClick={() => navigate(detailPath)}
-                        aria-label={`Xem chi tiết ${name}`}
+                        aria-label={t.aria(name)}
                       >
-                        Learn more →
+                        {t.cta}
                       </button>
                     </div>
                   </div>

@@ -1,0 +1,262 @@
+{
+  "navigation": {
+    "home": "Trang chủ",
+    "about": "Giới thiệu",
+    "what_we_do": "Lĩnh vực",
+    "product": "Sản phẩm",
+    "news": "Tin tức",
+    "contact": "Liên hệ"
+  },
+  "footer": {
+    "service": "Dịch vụ",
+    "products": "Sản phẩm",
+    "register": "Đăng ký",
+    "subscribe": "Đăng ký nhận tin",
+    "email_placeholder": "Email...",
+    "loading": "Đang tải...",
+    "address": "140 Nguyễn Xí, Quận Bình Thạnh, Thành phố Hồ Chí Minh, Việt Nam",
+    "contact": "Số liên hệ"
+  },
+  "auto": {
+    "tieng_viet": "Tiếng Việt",
+    "tieng_anh": "Tiếng Anh",
+    "dang_chuyen_doi_ngon_ngu": "Đang chuyển đổi ngôn ngữ",
+    "dang_chuyen_doi": "Đang chuyển đổi...",
+    "chuyen_sang": "Chuyển sang",
+    "vui_long_cho": "Vui lòng chờ",
+    "loading_translations": "Đang tải bản dịch...",
+    "nothing_to_show": "Không có gì để hiển thị"
+  },
+  "home": {
+    "tagline": "Chọn chúng tôi — Chọn chất lượng",
+    "page_desc": "Trang chủ {{brand}}: xuất khẩu nông sản Việt Nam, danh mục sản phẩm, lĩnh vực dịch vụ, đối tác chứng nhận quốc tế và tin tức thị trường mới nhất.",
+    "keyword_export": "xuất khẩu",
+    "keyword_vn_export": "xuất khẩu Việt Nam",
+    "keyword_fruit": "trái cây",
+    "keyword_agriculture": "nông nghiệp",
+    "keyword_logistics": "logistics",
+    "keyword_gap": "GAP",
+    "keyword_partners": "đối tác",
+    "keyword_news": "tin tức",
+    "categories": "Danh mục sản phẩm",
+    "featured_products": "Sản phẩm nổi bật",
+    "services": "Dịch vụ",
+    "latest_news": "Tin tức mới nhất"
+  },
+  "news": {
+    "latest_news": "Tin tức mới nhất",
+    "view_all": "Xem tất cả",
+    "posted_on": "Ngày đăng :"
+  },
+  "products": {
+    "product": "Sản phẩm",
+    "all": "Tất cả",
+    "no_products": "Không có sản phẩm.",
+    "product_category": "Danh mục sản phẩm",
+    "export_agri_vn": "Xuất khẩu nông sản Việt Nam chất lượng cao.",
+    "export": "Xuất khẩu",
+    "agriculture": "Nông sản",
+    "fruit": "Trái cây",
+    "vietnam": "Việt Nam"
+  },
+  "banner": {
+    "loading": "Đang tải banner...",
+    "aria_section": "Banner",
+    "prev": "Trước",
+    "next": "Sau",
+    "dot_aria": "Chuyển đến banner {{index}}",
+    "fallback_title": "Chào mừng đến cửa hàng của chúng tôi",
+    "cta_contact": "Liên hệ ngay →"
+  },
+  "about": {
+    "title": "Về Chúng Tôi",
+    "home": "Trang chủ"
+  },
+  "about_section": {
+    "tagline": "Tươi ngon – Giao hàng toàn cầu",
+    "learn_more": "Tìm hiểu thêm →",
+    "cta_aria": "Đi tới trang giới thiệu",
+    "image_alt": "Hình ảnh giới thiệu"
+  },
+  "field": {
+    "title": "Chúng Tôi Làm Gì",
+    "home": "Trang chủ"
+  },
+  "fields_section": {
+    "search_newest": "TÌM NỘI DUNG MỚI NHẤT TRONG TUẦN",
+    "title": "LĨNH VỰC & GÓC NHÌN",
+    "subtitle": "Từ chúng tôi đến bạn.",
+    "empty": "Không có nội dung nào để hiển thị.",
+    "untitled": "Không tiêu đề",
+    "strength_prefix": "Thế mạnh của chúng tôi:",
+    "learn_more": "Tìm hiểu thêm →",
+    "aria_detail": "Xem chi tiết {{name}}"
+  },
+  "categories_section": {
+    "title": "Danh mục sản phẩm",
+    "subtitle": "Chọn một danh mục để xem các sản phẩm liên quan",
+    "empty": "Chưa có danh mục.",
+    "category_fallback": "Danh mục",
+    "prev": "Trước",
+    "next": "Sau",
+    "dot_aria": "Chuyển đến slide {{index}}",
+    "cta_all": "Xem tất cả sản phẩm →",
+    "cta_all_aria": "Đi tới trang tất cả sản phẩm"
+  },
+  "cer_partners": {
+    "title": "Chứng nhận & Đối tác",
+    "carousel_aria": "Băng chuyền logo chứng nhận và đối tác",
+    "logo_alt": "logo",
+    "prev": "Trước",
+    "next": "Sau",
+    "dot_aria": "Chuyển đến nhóm {{index}}",
+    "empty": "Không có dữ liệu để hiển thị."
+  },
+  "news_detail": {
+    "fallback_title": "Bài viết",
+    "toc": "Mục lục",
+    "cover_alt": "Ảnh minh hoạ"
+  },
+  "news_header": {
+    "title": "Tin tức thương mại trái cây",
+    "subtitle": "Cập nhật những tin tức, sự kiện và thông báo quan trọng mới nhất trong lĩnh vực xuất nhập khẩu trái cây tươi."
+  },
+  "product_header": {
+    "title": "Sản phẩm",
+    "home": "Trang chủ"
+  },
+  "sidebar_categories": {
+    "title": "Danh mục",
+    "all": "Tất cả",
+    "expand": "Mở rộng",
+    "collapse": "Thu gọn",
+    "no_subs": "Chưa có danh mục con"
+  },
+  "contact": {
+    "title": "Liên hệ",
+    "page_desc": "Liên hệ {{brand}}: địa chỉ, email, số điện thoại, WhatsApp. Gửi yêu cầu báo giá/đối tác về xuất khẩu nông sản Việt Nam.",
+    "header": "LIÊN HỆ",
+    "company_label": "Công ty",
+    "address_full": "140 Nguyễn Xí, Quận Bình Thạnh, TP. Hồ Chí Minh, Việt Nam",
+    "phone_label": "Di động / WhatsApp",
+    "email_label": "Email",
+    "form_full_name": "Họ và tên",
+    "form_email": "Email",
+    "form_phone": "Số điện thoại",
+    "form_address": "Địa chỉ",
+    "form_message": "Nội dung",
+    "error_required": "Vui lòng nhập Họ tên, Email và Nội dung.",
+    "error_email": "Email không hợp lệ.",
+    "error_submit": "Có lỗi xảy ra khi gửi liên hệ.",
+    "fail_submit": "Gửi liên hệ thất bại.",
+    "success_submit": "Gửi liên hệ thành công!",
+    "send": "Gửi",
+    "sending": "Đang gửi...",
+    "map_title": "Vị trí {{brand}}"
+  },
+  "field_page": {
+    "breadcrumb": {
+      "home": "Trang chủ",
+      "what_we_do": "Chúng tôi làm gì"
+    },
+    "titles": {
+      "page": "Chúng tôi làm gì"
+    },
+    "certifications": {
+      "title": "Chứng nhận"
+    },
+    "partners": {
+      "title": "Đối tác"
+    },
+    "counts": {
+      "items": "{{count}} mục"
+    },
+    "empties": {
+      "certifications": "Chưa có chứng nhận.",
+      "partners": "Chưa có đối tác.",
+      "content": "Không có nội dung nào để hiển thị."
+    },
+    "labels": {
+      "no_image": "Không có hình ảnh",
+      "field_image_alt": "Hình lĩnh vực"
+    },
+    "seo": {
+      "default_desc": "What we do tại {{brand}}: dịch vụ/giải pháp xuất khẩu nông sản Việt Nam – quy trình chuẩn, đối tác chứng nhận quốc tế.",
+      "keywords_base": [
+        "What we do",
+        "dịch vụ",
+        "giải pháp",
+        "xuất khẩu",
+        "nông sản",
+        "Vietnam export"
+      ]
+    }
+  },
+  "news_detail_page": {
+    "breadcrumb": {
+      "detail": "Chi tiết"
+    },
+    "not_found": {
+      "title": "Không tìm thấy bài viết",
+      "desc_with_id": "Bài viết với ID \"{{id}}\" không tồn tại hoặc đã bị xóa."
+    }
+  },
+  "product_detail_page": {
+    "breadcrumb": {
+      "detail": "Chi tiết"
+    },
+    "labels": {
+      "product_image_alt": "Hình sản phẩm",
+      "sections": {
+        "content": "Nội dung"
+      },
+      "related": {
+        "same_subcategory": "Sản phẩm cùng loại: {{name}}",
+        "in_parent": "Sản phẩm thuộc: {{name}}",
+        "maybe_like": "Có thể bạn cũng thích"
+      },
+      "carousel": {
+        "prev": "Trước",
+        "next": "Sau"
+      },
+      "loading": {
+        "related": "Đang tải..."
+      },
+      "empties": {
+        "no_related": "Chưa có sản phẩm liên quan."
+      },
+      "not_found": {
+        "title": "Không tìm thấy sản phẩm",
+        "error_prefix": "Lỗi:",
+        "desc_with_id": "Sản phẩm \"{{id}}\" không tồn tại hoặc đã bị xóa."
+      },
+      "errors": {
+        "load_failed_fallback": "Không tải được sản phẩm"
+      }
+    }
+  },
+  "news_section": {
+    "title": "TIN TỨC",
+    "loading": "Đang tải...",
+    "empty": "Không có tin nào.",
+    "prev": "Trước",
+    "next": "Sau",
+    "dot_aria": "Trang {{index}}",
+    "aria_section": "Khu vực tin tức"
+  },
+  "news_sidebar": {
+    "title": "BÀI VIẾT MỚI",
+    "empty": "Chưa có bài viết nào",
+    "img_alt": "Ảnh minh hoạ",
+    "aria_aside": "Thanh bên bài viết mới",
+    "item_aria": "Mở bài viết: {{title}}"
+  },
+  "contact_header": {
+    "title": "LIÊN HỆ NGAY",
+    "breadcrumb": {
+      "home": "Trang chủ",
+      "contact": "Liên hệ",
+      "aria": "Đường dẫn điều hướng liên hệ"
+    }
+  }
+}

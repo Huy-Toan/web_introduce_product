@@ -1,7 +1,12 @@
 // src/components/SidebarCategoriesTwoLevel.jsx
 import React, { useEffect, useState } from "react";
 import { ChevronRight, ChevronDown, Layers } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+
+const SUPPORTED = ["vi", "en"];
+const DEFAULT_LOCALE = "vi";
+const getLocaleFromSearch = (search) =>
+  new URLSearchParams(search).get("locale")?.toLowerCase() || "";
 
 function SidebarCategoriesTwoLevel({
   activeParentSlug = null,
@@ -9,6 +14,29 @@ function SidebarCategoriesTwoLevel({
   showAll = true,
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Đồng bộ locale theo URL, fallback localStorage, cuối cùng là mặc định
+  const [locale, setLocale] = useState(() => {
+    const urlLc = getLocaleFromSearch(window.location.search);
+    const lsLc = (localStorage.getItem("locale") || "").toLowerCase();
+    return SUPPORTED.includes(urlLc)
+      ? urlLc
+      : SUPPORTED.includes(lsLc)
+        ? lsLc
+        : DEFAULT_LOCALE;
+  });
+
+  useEffect(() => {
+    const urlLc = getLocaleFromSearch(location.search);
+    if (SUPPORTED.includes(urlLc) && urlLc !== locale) {
+      setLocale(urlLc);
+      localStorage.setItem("locale", urlLc);
+      try { document.documentElement.lang = urlLc; } catch { }
+    }
+  }, [location.search, locale]);
+
+  const qs = `?locale=${encodeURIComponent(locale)}`;
 
   const [parents, setParents] = useState([]);
   const [parentsLoading, setParentsLoading] = useState(false);
@@ -19,7 +47,7 @@ function SidebarCategoriesTwoLevel({
   const fetchParents = async () => {
     try {
       setParentsLoading(true);
-      const res = await fetch("/api/parent_categories");
+      const res = await fetch(`/api/parent_categories${qs}`);
       const data = await res.json();
       setParents(data?.parents || []);
     } finally {
@@ -32,7 +60,9 @@ function SidebarCategoriesTwoLevel({
     if (subsByParent[key]) return;
     try {
       setSubsLoadingFor(key);
-      const res = await fetch(`/api/sub_categories?parent_id=${encodeURIComponent(parent.id)}`);
+      const res = await fetch(
+        `/api/sub_categories?parent_id=${encodeURIComponent(parent.id)}&locale=${encodeURIComponent(locale)}`
+      );
       const data = await res.json();
       const list = (data?.subcategories || []).map((s) => ({
         ...s,
@@ -44,7 +74,7 @@ function SidebarCategoriesTwoLevel({
     }
   };
 
-  useEffect(() => { fetchParents(); }, []);
+  useEffect(() => { fetchParents(); /* refetch khi đổi locale */ }, [locale]);
 
   const toggleParent = async (parent) => {
     const id = String(parent.id);
@@ -57,15 +87,20 @@ function SidebarCategoriesTwoLevel({
     setOpenParentIds(next);
   };
 
-  const goAll = () => navigate("/product");
-  const goParent = (parent) => navigate(`/product/${parent.slug}`);
-  const goSub = (sub) => navigate(`/product/${sub.parent_slug}/${sub.slug}`);
+  // Giữ locale trong URL khi điều hướng
+  const goAll = () => navigate(`/product${qs}`);
+  const goParent = (parent) => navigate(`/product/${parent.slug}${qs}`);
+  const goSub = (sub) => navigate(`/product/${sub.parent_slug}/${sub.slug}${qs}`);
+
+  const heading = locale === "vi" ? "Danh mục" : "Categories";
+  const labelAll = locale === "vi" ? "TẤT CẢ" : "ALL";
+  const noSubTxt = locale === "vi" ? "Chưa có danh mục con" : "No subcategories yet";
 
   return (
     <aside className="w-full md:w-72 bg-white p-4 border rounded-md shadow-sm self-start">
       <div className="flex items-center gap-2 mb-4">
         <Layers size={18} className="text-green-600" />
-        <h2 className="text-lg font-bold uppercase tracking-wide">Danh mục</h2>
+        <h2 className="text-lg font-bold uppercase tracking-wide">{heading}</h2>
       </div>
 
       {parentsLoading ? (
@@ -80,11 +115,10 @@ function SidebarCategoriesTwoLevel({
             <li>
               <button
                 onClick={goAll}
-                className={`w-full text-left px-3 py-2 cursor-pointer rounded-md hover:bg-green-100 uppercase tracking-wide ${
-                  !activeParentSlug && !activeSubSlug ? "bg-green-200 font-extrabold" : "font-bold"
-                }`}
+                className={`w-full text-left px-3 py-2 cursor-pointer rounded-md hover:bg-green-100 uppercase tracking-wide ${!activeParentSlug && !activeSubSlug ? "bg-green-200 font-extrabold" : "font-bold"
+                  }`}
               >
-                TẤT CẢ
+                {labelAll}
               </button>
             </li>
           )}
@@ -107,7 +141,6 @@ function SidebarCategoriesTwoLevel({
                     `}
                     title={parent.name}
                   >
-                    {/* TÊN CẤP 1: CHIỀU NGANG CỐ ĐỊNH + XUỐNG DÒNG */}
                     <span className="block w-[180px] md:w-[220px] whitespace-normal break-words leading-tight">
                       {parent.name}
                     </span>
@@ -145,7 +178,6 @@ function SidebarCategoriesTwoLevel({
                                 `}
                                 title={sub.name}
                               >
-                                {/* TÊN CẤP 2: CHIỀU NGANG CỐ ĐỊNH + XUỐNG DÒNG */}
                                 <span className="block w-[180px] md:w-[220px] whitespace-normal break-words leading-tight">
                                   {sub.name}
                                 </span>
@@ -156,7 +188,7 @@ function SidebarCategoriesTwoLevel({
                       </ul>
                     ) : (
                       <div className="text-[11px] text-gray-500 italic px-2 py-1.5 uppercase tracking-wide">
-                        Chưa có danh mục con
+                        {noSubTxt}
                       </div>
                     )}
                   </div>

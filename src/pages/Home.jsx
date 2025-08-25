@@ -33,7 +33,7 @@ export default function HomePage() {
           .map(x => ({ name: x?.name || x?.title, slug: x?.slug || x?.id }))
           .filter(x => x.name && x.slug);
         setCats(items.slice(0, 8));
-      } catch {}
+      } catch { }
     })();
 
     // Tin tức
@@ -53,7 +53,7 @@ export default function HomePage() {
           }))
           .filter(n => n.title && n.slug);
         setNews(items.slice(0, 4));
-      } catch {}
+      } catch { }
     })();
 
     // Lĩnh vực (fields)
@@ -70,7 +70,7 @@ export default function HomePage() {
           }))
           .filter(f => f.name);
         setFields(items.slice(0, 6));
-      } catch {}
+      } catch { }
     })();
 
     // Sản phẩm nổi bật (thử nhiều endpoint cho chắc)
@@ -91,7 +91,7 @@ export default function HomePage() {
           }))
           .filter(p => p.title && p.slug);
         setProducts(items.slice(0, 8));
-      } catch {}
+      } catch { }
     })();
 
     return () => ac.abort();

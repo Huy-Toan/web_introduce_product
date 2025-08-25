@@ -2,13 +2,19 @@
 import TopNavigation from "../components/Navigation";
 import Footer from "../components/Footer";
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import FieldHeaderBanner from "../components/FieldBannerHead";
-import { getSiteOrigin, getCanonicalBase, isNonCanonicalHost } from "../lib/siteUrl";
+import { getSiteOrigin, getCanonicalBase } from "../lib/siteUrl";
 import MarkdownOnly from "../components/MarkdownOnly";
 import Breadcrumbs from "../components/Breadcrumbs";
 import SEO, { stripMd } from "../components/SEOhead";
 
-function CerPartnerLogoCard({ item }) {
+const SUPPORTED = ["vi", "en"];
+const DEFAULT_LOCALE = "vi";
+const getLocaleFromSearch = (search) =>
+  new URLSearchParams(search).get("locale")?.toLowerCase() || "";
+
+function CerPartnerLogoCard({ item, t }) {
   return (
     <div className="flex flex-col items-center gap-3 p-3 rounded-lg bg-white hover:shadow-sm transition h-full">
       <div className="w-full h-40 sm:h-48 rounded-md bg-white flex items-center justify-center overflow-hidden">
@@ -23,7 +29,7 @@ function CerPartnerLogoCard({ item }) {
             }}
           />
         ) : (
-          <div className="text-xs text-gray-400">No image</div>
+          <div className="text-xs text-gray-400">{t.noImage}</div>
         )}
       </div>
       <div className="w-full text-sm sm:text-base font-medium text-gray-800 text-center line-clamp-2">
@@ -34,6 +40,45 @@ function CerPartnerLogoCard({ item }) {
 }
 
 function FieldPage() {
+  // ===== locale: URL -> localStorage -> default
+  const location = useLocation();
+  const [locale, setLocale] = useState(() => {
+    const urlLc = getLocaleFromSearch(window.location.search);
+    const lsLc = (localStorage.getItem("locale") || "").toLowerCase();
+    return SUPPORTED.includes(urlLc)
+      ? urlLc
+      : SUPPORTED.includes(lsLc)
+        ? lsLc
+        : DEFAULT_LOCALE;
+  });
+
+  useEffect(() => {
+    const urlLc = getLocaleFromSearch(location.search);
+    if (SUPPORTED.includes(urlLc) && urlLc !== locale) {
+      setLocale(urlLc);
+      localStorage.setItem("locale", urlLc);
+      try { document.documentElement.lang = urlLc; } catch { }
+    }
+  }, [location.search, locale]);
+
+  const qs = `?locale=${encodeURIComponent(locale)}`;
+
+  // i18n labels
+  const t = {
+    breadcrumb: locale === "vi" ? "Lĩnh vực hoạt động" : "What we do",
+    pageFallbackDesc:
+      locale === "vi"
+        ? "What we do tại ITXEASY: dịch vụ/giải pháp xuất khẩu nông sản Việt Nam – quy trình chuẩn, đối tác chứng nhận quốc tế."
+        : "What we do at ITXEASY: Vietnamese agri export services & solutions – standardized processes, global certification partners.",
+    certifications: locale === "vi" ? "Chứng nhận" : "Certifications",
+    partners: locale === "vi" ? "Đối tác" : "Partners",
+    items: locale === "vi" ? "mục" : "items",
+    noCerts: locale === "vi" ? "Chưa có chứng nhận." : "No certifications yet.",
+    noPartners: locale === "vi" ? "Chưa có đối tác." : "No partners yet.",
+    empty: locale === "vi" ? "Không có nội dung nào để hiển thị." : "No content to display.",
+    noImage: locale === "vi" ? "Không có ảnh" : "No image",
+  };
+
   const [fieldContent, setFieldContent] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -41,14 +86,14 @@ function FieldPage() {
   const [cpItems, setCpItems] = useState([]);
   const [loadingCp, setLoadingCp] = useState(false);
 
-  const items = useMemo(() => [{ label: "What we do", to: "/what_we_do" }], []);
+  const items = useMemo(() => [{ label: t.breadcrumb, to: `/what_we_do${qs}` }], [t.breadcrumb, qs]);
 
-  // fetch Fields
+  // fetch Fields (kèm locale)
   useEffect(() => {
     const fetchFieldContent = async () => {
       setLoading(true);
       try {
-        const res = await fetch("/api/fields");
+        const res = await fetch(`/api/fields${qs}`);
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         const data = await res.json();
         const fieldArray = data.items || [];
@@ -61,14 +106,14 @@ function FieldPage() {
       }
     };
     fetchFieldContent();
-  }, []);
+  }, [qs]);
 
-  // fetch Cer/Partner once
+  // fetch Cer/Partner once (kèm locale nếu BE hỗ trợ, không ảnh hưởng nếu BE bỏ qua)
   useEffect(() => {
     const fetchAllCp = async () => {
       setLoadingCp(true);
       try {
-        const res = await fetch("/api/cer-partners");
+        const res = await fetch(`/api/cer-partners${qs}`);
         const data = await res.json();
         if (!res.ok || data.ok === false) throw new Error(data.error || "Failed to load cp");
         setCpItems(data.items || []);
@@ -80,7 +125,7 @@ function FieldPage() {
       }
     };
     fetchAllCp();
-  }, []);
+  }, [qs]);
 
   // tách thành 2 nhóm theo type
   const { certifications, partners } = useMemo(() => {
@@ -93,21 +138,21 @@ function FieldPage() {
   /* =================== SEO cho What we do =================== */
   const SITE_URL = getSiteOrigin();
   const BRAND = import.meta.env.VITE_BRAND_NAME || "ITXEASY";
-  const canonical = `${getCanonicalBase()}/what_we_do`;
+  const canonical = `${getCanonicalBase()}/what_we_do`; // hoặc `${...}/what_we_do?locale=${locale}` nếu muốn canonical theo ngôn ngữ
 
   // Title: ưu tiên field đầu tiên
   const pageTitle = useMemo(() => {
     const first = fieldContent?.[0]?.name?.trim();
-    return first ? `${first} | What we do | ${BRAND}` : `What we do | ${BRAND}`;
-  }, [fieldContent, BRAND]);
+    return first ? `${first} | ${t.breadcrumb} | ${BRAND}` : `${t.breadcrumb} | ${BRAND}`;
+  }, [fieldContent, t.breadcrumb, BRAND]);
 
   // Description: gộp 1–2 field đầu (strip markdown)
   const pageDesc = useMemo(() => {
     const a = fieldContent?.[0]?.content || "";
     const b = fieldContent?.[1]?.content || "";
     const raw = [a, b].filter(Boolean).map(stripMd).join(" ");
-    return raw ? raw.slice(0, 300) : `What we do tại ${BRAND}: dịch vụ/giải pháp xuất khẩu nông sản Việt Nam – quy trình chuẩn, đối tác chứng nhận quốc tế.`;
-  }, [fieldContent, BRAND]);
+    return raw ? raw.slice(0, 300) : t.pageFallbackDesc.replace("ITXEASY", BRAND);
+  }, [fieldContent, t.pageFallbackDesc, BRAND]);
 
   // Ảnh OG: ưu tiên ảnh field đầu
   const ogImage = fieldContent?.[0]?.image_url || undefined;
@@ -117,9 +162,12 @@ function FieldPage() {
     const fieldNames = (fieldContent || []).map((x) => x?.name);
     const certNames = (certifications || []).map((x) => x?.name);
     const partnerNames = (partners || []).map((x) => x?.name);
-    const base = ["What we do", "dịch vụ", "giải pháp", "xuất khẩu", "nông sản", "Vietnam export"];
+    const base =
+      locale === "vi"
+        ? ["Lĩnh vực hoạt động", "dịch vụ", "giải pháp", "xuất khẩu", "nông sản", "Vietnam export", BRAND]
+        : ["What we do", "services", "solutions", "export", "agriculture", "Vietnam export", BRAND];
     return Array.from(new Set([...base, ...fieldNames, ...certNames, ...partnerNames].filter(Boolean)));
-  }, [fieldContent, certifications, partners]);
+  }, [fieldContent, certifications, partners, locale, BRAND]);
 
   // Thời gian xuất bản/chỉnh sửa từ field + cpItems
   const publishedTime = useMemo(() => {
@@ -139,7 +187,7 @@ function FieldPage() {
   }, [fieldContent, cpItems, publishedTime]);
 
   // noindex nếu không có nội dung gì
-  const noindex = !loading && (fieldContent.length === 0 && certifications.length === 0 && partners.length === 0);
+  const noindex = !loading && fieldContent.length === 0 && certifications.length === 0 && partners.length === 0;
 
   // JSON-LD
   const breadcrumbLd = useMemo(
@@ -148,10 +196,10 @@ function FieldPage() {
       "@type": "BreadcrumbList",
       itemListElement: [
         { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
-        { "@type": "ListItem", position: 2, name: "What we do", item: canonical },
+        { "@type": "ListItem", position: 2, name: t.breadcrumb, item: canonical },
       ],
     }),
-    [SITE_URL, canonical]
+    [SITE_URL, canonical, t.breadcrumb]
   );
 
   const collectionPageLd = useMemo(
@@ -166,7 +214,6 @@ function FieldPage() {
     [pageTitle, pageDesc, canonical, BRAND, SITE_URL]
   );
 
-  // ItemList các dịch vụ (dựa trên fieldContent)
   const servicesLd = useMemo(
     () => ({
       "@context": "https://schema.org",
@@ -186,7 +233,6 @@ function FieldPage() {
     [fieldContent, BRAND, SITE_URL]
   );
 
-  // ItemList certificates
   const certificationsLd = useMemo(
     () => ({
       "@context": "https://schema.org",
@@ -195,17 +241,12 @@ function FieldPage() {
       itemListElement: (certifications || []).map((c, i) => ({
         "@type": "ListItem",
         position: i + 1,
-        item: {
-          "@type": "Thing", // có thể đổi sang Credential nếu bạn có issuer/validity
-          name: c?.name,
-          image: c?.image_url || undefined,
-        },
+        item: { "@type": "Thing", name: c?.name, image: c?.image_url || undefined },
       })),
     }),
     [certifications]
   );
 
-  // ItemList partners (Organization)
   const partnersLd = useMemo(
     () => ({
       "@context": "https://schema.org",
@@ -214,11 +255,7 @@ function FieldPage() {
       itemListElement: (partners || []).map((p, i) => ({
         "@type": "ListItem",
         position: i + 1,
-        item: {
-          "@type": "Organization",
-          name: p?.name,
-          logo: p?.image_url || undefined,
-        },
+        item: { "@type": "Organization", name: p?.name, logo: p?.image_url || undefined },
       })),
     }),
     [partners]
@@ -286,8 +323,12 @@ function FieldPage() {
                     {(loadingCp || certifications.length > 0) && (
                       <div>
                         <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-xl font-semibold text-gray-900">Chứng nhận</h3>
-                          {!loadingCp && <span className="text-sm text-gray-500">{certifications.length} mục</span>}
+                          <h3 className="text-xl font-semibold text-gray-900">{t.certifications}</h3>
+                          {!loadingCp && (
+                            <span className="text-sm text-gray-500">
+                              {certifications.length} {t.items}
+                            </span>
+                          )}
                         </div>
 
                         {loadingCp ? (
@@ -303,7 +344,7 @@ function FieldPage() {
                               <div className="flex gap-4">
                                 {certifications.map((cp) => (
                                   <div key={`cert-${cp.id}`} className="snap-center shrink-0 w-[92vw]">
-                                    <CerPartnerLogoCard item={cp} />
+                                    <CerPartnerLogoCard item={cp} t={t} />
                                   </div>
                                 ))}
                               </div>
@@ -311,12 +352,12 @@ function FieldPage() {
                             {/* DESKTOP */}
                             <div className="hidden sm:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                               {certifications.map((cp) => (
-                                <CerPartnerLogoCard key={`cert-grid-${cp.id}`} item={cp} />
+                                <CerPartnerLogoCard key={`cert-grid-${cp.id}`} item={cp} t={t} />
                               ))}
                             </div>
                           </>
                         ) : (
-                          <p className="text-gray-500 text-sm">Chưa có chứng nhận.</p>
+                          <p className="text-gray-500 text-sm">{t.noCerts}</p>
                         )}
                       </div>
                     )}
@@ -325,8 +366,12 @@ function FieldPage() {
                     {(loadingCp || partners.length > 0) && (
                       <div>
                         <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-xl font-semibold text-gray-900">Đối tác</h3>
-                          {!loadingCp && <span className="text-sm text-gray-500">{partners.length} mục</span>}
+                          <h3 className="text-xl font-semibold text-gray-900">{t.partners}</h3>
+                          {!loadingCp && (
+                            <span className="text-sm text-gray-500">
+                              {partners.length} {t.items}
+                            </span>
+                          )}
                         </div>
 
                         {loadingCp ? (
@@ -342,7 +387,7 @@ function FieldPage() {
                               <div className="flex gap-4">
                                 {partners.map((cp) => (
                                   <div key={`partner-${cp.id}`} className="snap-center shrink-0 w-[92vw]">
-                                    <CerPartnerLogoCard item={cp} />
+                                    <CerPartnerLogoCard item={cp} t={t} />
                                   </div>
                                 ))}
                               </div>
@@ -350,12 +395,12 @@ function FieldPage() {
                             {/* DESKTOP */}
                             <div className="hidden sm:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                               {partners.map((cp) => (
-                                <CerPartnerLogoCard key={`partner-grid-${cp.id}`} item={cp} />
+                                <CerPartnerLogoCard key={`partner-grid-${cp.id}`} item={cp} t={t} />
                               ))}
                             </div>
                           </>
                         ) : (
-                          <p className="text-gray-500 text-sm">Chưa có đối tác.</p>
+                          <p className="text-gray-500 text-sm">{t.noPartners}</p>
                         )}
                       </div>
                     )}
@@ -365,7 +410,7 @@ function FieldPage() {
             ))
           ) : (
             <div className="text-center py-20 text-gray-500">
-              <p>Không có nội dung nào để hiển thị.</p>
+              <p>{t.empty}</p>
             </div>
           )}
         </main>
