@@ -1,3 +1,4 @@
+// src/components/Footer.jsx
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { FaFacebook, FaInstagram, FaYoutube } from "react-icons/fa";
@@ -17,7 +18,6 @@ function pickLocale(search) {
       : DEFAULT_LOCALE;
 }
 
-// Chuẩn hoá payload danh mục từ API
 function normalizeParentsPayload(data) {
   const list =
     data?.parents ??
@@ -36,7 +36,6 @@ export default function Footer() {
   const [categories, setCategories] = useState([]);
   const [loadingCats, setLoadingCats] = useState(false);
 
-  // Lấy danh mục (kèm locale)
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
@@ -56,9 +55,7 @@ export default function Footer() {
           }))
         );
       } catch (err) {
-        if (err.name !== "AbortError") {
-          console.error("Failed to fetch categories:", err);
-        }
+        if (err.name !== "AbortError") console.error(err);
         setCategories([]);
       } finally {
         setLoadingCats(false);
@@ -67,7 +64,6 @@ export default function Footer() {
     return () => ac.abort();
   }, [locale]);
 
-  // Điều hướng & GIỮ locale
   const handleNavigation = (path) => {
     const u = new URL(path, window.location.origin);
     u.searchParams.set("locale", locale);
@@ -76,179 +72,230 @@ export default function Footer() {
   };
 
   return (
-    <footer className="bg-white border-t border-gray-200 mt-12 text-[15px] text-gray-700 leading-relaxed">
-      {/* GRID: mobile = 2 cột (để Dịch vụ & Sản phẩm cùng hàng), desktop = 4 cột */}
-      <div className="max-w-7xl mx-auto px-4 py-12 grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-12">
-        {/* Company Info: span 2 cột ở mobile */}
-        <div className="col-span-2 md:col-span-1">
-          <button
-            type="button"
-            className="flex items-center space-x-2 cursor-pointer mb-4"
-            onClick={() => handleNavigation("/")}
-            aria-label="Go to homepage"
-          >
-            <img
-              src="https://allxone.vn/wp-content/uploads/2022/08/cropped-logo1-150x31.png"
-              alt="AllXone Logo"
-              className="h-9 w-auto"
-              loading="lazy"
-            />
-          </button>
+    <footer className="relative mt-16 text-[15px] leading-relaxed">
+      {/* NỀN: xanh nhạt → trắng → vàng nhạt */}
+      <div className="absolute inset-0 bg-gradient-to-r from-green-50 via-white to-yellow-50" />
 
-          <div className="space-y-2 text-[15px]">
-            <p>{t("footer.address")}</p>
-            <p>
-              {t("footer.contact")}: <span className="font-medium">+84 383 655 628</span>
+      {/* HÌNH TRÒN TRANG TRÍ GÓC */}
+      <div className="pointer-events-none absolute -top-10 -left-10 h-40 w-40 rounded-full bg-green-100/40 blur-2xl" />
+      <div className="pointer-events-none absolute -bottom-10 -right-10 h-44 w-44 rounded-full bg-yellow-100/50 blur-2xl" />
+
+      {/* CONTENT */}
+      <div className="relative max-w-7xl mx-auto px-4 py-12 md:py-16 text-gray-700">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-12">
+          {/* COMPANY (span 2 trên mobile) */}
+          <div className="col-span-2 md:col-span-1">
+            <button
+              type="button"
+              className="flex items-center space-x-2 cursor-pointer mb-4"
+              onClick={() => handleNavigation("/")}
+              aria-label="AllXone"
+            >
+              <img
+                src="https://allxone.vn/wp-content/uploads/2022/08/cropped-logo1-150x31.png"
+                alt="AllXone Logo"
+                className="h-9 w-auto"
+                loading="lazy"
+              />
+            </button>
+
+            <p className="text-gray-600 mb-4">
+              ALLXONE – {t("footer.company_desc", {
+                defaultValue:
+                  "Công ty chuyên cung cấp các sản phẩm nông nghiệp chất lượng cao.",
+              })}
             </p>
-            <p>
-              Email:{" "}
-              <a
-                href="mailto:support@allxone.com"
-                className="hover:text-blue-600 underline underline-offset-2"
-              >
-                support@allxone.com
-              </a>
-            </p>
+
+            {/* CONTACT BOXES */}
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 rounded-xl bg-white shadow-sm border border-gray-100 p-3 hover:shadow-md transition-shadow">
+                <span className="mt-1 h-2.5 w-2.5 rounded-full bg-green-700" />
+                <p className="text-gray-700">
+                  140 Nguyen Xi Street, Binh Thanh District, Ho Chi Minh City
+                </p>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl bg-white shadow-sm border border-gray-100 p-3 hover:shadow-md transition-shadow">
+                <span className="h-2.5 w-2.5 rounded-full bg-green-700" />
+                <a
+                  href="tel:+84383655628"
+                  className="hover:underline underline-offset-4"
+                >
+                  Tel: +84 383 655 628
+                </a>
+              </div>
+              <div className="flex items-center gap-3 rounded-xl bg-white shadow-sm border border-gray-100 p-3 hover:shadow-md transition-shadow">
+                <span className="h-2.5 w-2.5 rounded-full bg-green-700" />
+                <a
+                  href="mailto:support@allxone.com"
+                  className="hover:underline underline-offset-4"
+                >
+                  Email: support@allxone.com
+                </a>
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* Services */}
-        <div>
-          <h4 className="text-[13px] md:text-sm font-semibold tracking-wide text-yellow-700 uppercase mb-3">
-            {t("footer.service")}
-          </h4>
-          <ul className="space-y-2">
-            <li>
-              <button
-                onClick={() => handleNavigation("/")}
-                className="hover:text-blue-600 cursor-pointer"
-              >
-                {t("navigation.home")}
-              </button>
-            </li>
-            <li>
-              <button
-                onClick={() => handleNavigation("/about")}
-                className="hover:text-blue-600 cursor-pointer"
-              >
-                {t("navigation.about")}
-              </button>
-            </li>
-            <li>
-              <button
-                onClick={() => handleNavigation("/product")}
-                className="hover:text-blue-600 cursor-pointer"
-              >
-                {t("navigation.product")}
-              </button>
-            </li>
-            <li>
-              <button
-                onClick={() => handleNavigation("/news")}
-                className="hover:text-blue-600 cursor-pointer"
-              >
-                {t("navigation.news")}
-              </button>
-            </li>
-            <li>
-              <button
-                onClick={() => handleNavigation("/contact")}
-                className="hover:text-blue-600 cursor-pointer"
-              >
-                {t("navigation.contact")}
-              </button>
-            </li>
-          </ul>
-        </div>
+          {/* SERVICES */}
+          <div>
+            {/* HEADING: xanh đậm + gạch chân gradient */}
+            <h4 className="text-sm font-semibold tracking-wide text-green-700 uppercase mb-3">
+              {t("footer.service")}
+              <span className="block h-1 mt-2 w-16 rounded-full bg-gradient-to-r from-green-400 to-yellow-400" />
+            </h4>
 
-        {/* Products (đứng cùng hàng với Services ở mobile) */}
-        <div>
-          <h4 className="text-[13px] md:text-sm font-semibold tracking-wide text-yellow-700 uppercase mb-3">
-            {t("footer.products")}
-          </h4>
-          <ul className="space-y-2">
-            {loadingCats ? (
-              <li className="text-gray-500 italic">{t("footer.loading")}</li>
-            ) : categories.length > 0 ? (
-              categories.map((cat) => (
-                <li key={cat.id || cat.slug}>
+            <ul className="space-y-2">
+              {[
+                { label: t("navigation.home"), to: "/" },
+                { label: t("navigation.about"), to: "/about" },
+                { label: t("navigation.product"), to: "/product" },
+                { label: t("navigation.news"), to: "/news" },
+                { label: t("navigation.contact"), to: "/contact" },
+              ].map((item) => (
+                <li key={item.to}>
                   <button
-                    onClick={() =>
-                      handleNavigation(`/product/${encodeURIComponent(cat.slug)}`)
-                    }
-                    className="hover:text-blue-600 cursor-pointer line-clamp-1 text-left"
-                    title={cat.name}
+                    onClick={() => handleNavigation(item.to)}
+                    className="group w-full text-left cursor-pointer rounded-md px-2 py-1 transition-colors hover:bg-green-50"
                   >
-                    {cat.name}
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-600 transform transition-transform group-hover:scale-125" />
+                      <span className="text-gray-700 group-hover:text-green-700">
+                        {item.label}
+                      </span>
+                    </span>
                   </button>
                 </li>
-              ))
-            ) : (
-              <li className="text-gray-500 italic">{t("footer.loading")}</li>
-            )}
-          </ul>
-        </div>
-
-        {/* Register: span 2 cột ở mobile */}
-        <div className="col-span-2 md:col-span-1">
-          <h4 className="text-[13px] md:text-sm font-semibold tracking-wide text-yellow-700 uppercase mb-3">
-            {t("footer.register")}
-          </h4>
-          <p className="mb-3">{t("footer.subscribe")}</p>
-
-          <div className="flex items-stretch border rounded overflow-hidden mb-4">
-            <input
-              type="email"
-              placeholder={t("footer.email_placeholder")}
-              className="px-3 py-3 w-full outline-none text-[15px]"
-              aria-label="Email"
-            />
-            <button
-              className="bg-yellow-600 cursor-pointer text-white px-4 py-3 hover:bg-yellow-700"
-              aria-label="Subscribe"
-              type="button"
-            >
-              ➤
-            </button>
+              ))}
+            </ul>
           </div>
 
-          <div className="flex space-x-4 text-xl text-gray-600">
-            <a
-              href="https://facebook.com"
-              className="hover:text-blue-600"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Facebook"
+          {/* PRODUCTS */}
+          <div>
+            <h4 className="text-sm font-semibold tracking-wide text-green-700 uppercase mb-3">
+              {t("footer.products")}
+              <span className="block h-1 mt-2 w-16 rounded-full bg-gradient-to-r from-green-400 to-yellow-400" />
+            </h4>
+
+            <ul className="space-y-2">
+              {loadingCats ? (
+                <li className="italic text-gray-500">{t("footer.loading")}</li>
+              ) : categories.length ? (
+                categories.map((cat) => (
+                  <li key={cat.id || cat.slug}>
+                    <button
+                      onClick={() =>
+                        handleNavigation(`/product/${encodeURIComponent(cat.slug)}`)
+                      }
+                      className="group w-full text-left cursor-pointer rounded-md px-2 py-1 transition-colors hover:bg-green-50"
+                      title={cat.name}
+                    >
+                      <span className="inline-flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-green-600 transform transition-transform group-hover:scale-125" />
+                        <span className="line-clamp-1 text-gray-700 group-hover:text-green-700">
+                          {cat.name}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))
+              ) : (
+                <li className="italic text-gray-500">{t("footer.loading")}</li>
+              )}
+            </ul>
+          </div>
+
+          {/* REGISTER */}
+          <div className="col-span-2 md:col-span-1">
+            <h4 className="text-sm font-semibold tracking-wide text-green-700 uppercase mb-3">
+              {t("footer.register")}
+              <span className="block h-1 mt-2 w-16 rounded-full bg-gradient-to-r from-green-400 to-yellow-400" />
+            </h4>
+
+            <p className="mb-3 text-gray-600">{t("footer.subscribe")}</p>
+
+            {/* FORM: nền trắng, shadow, border + focus xanh */}
+            <form
+              className="mb-5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                // TODO: handle submit
+              }}
             >
-              <FaFacebook />
-            </a>
-            <a
-              href="https://instagram.com"
-              className="hover:text-pink-500"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Instagram"
-            >
-              <FaInstagram />
-            </a>
-            <a
-              href="https://youtube.com"
-              className="hover:text-red-600"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="YouTube"
-            >
-              <FaYoutube />
-            </a>
+              <div className="flex items-stretch rounded-xl bg-white shadow-sm border border-gray-200 overflow-hidden focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-100 transition">
+                <input
+                  type="email"
+                  placeholder={t("footer.email_placeholder")}
+                  className="px-4 py-3 w-full outline-none text-[15px] placeholder:text-gray-400"
+                  aria-label="Email"
+                  required
+                />
+                <button
+                  type="submit"
+                  className="bg-gradient-to-r from-green-500 to-green-600 text-white px-5 py-3 font-semibold cursor-pointer hover:from-green-600 hover:to-green-700 transition"
+                  aria-label="Subscribe"
+                >
+                  Gửi ▲
+                </button>
+              </div>
+            </form>
+
+            {/* SOCIAL: gradient + shadow + transform */}
+            <div className="flex items-center gap-3">
+              <a
+                href="https://facebook.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Facebook"
+                className="grid place-items-center h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5 transition"
+              >
+                <FaFacebook />
+              </a>
+              <a
+                href="https://instagram.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Instagram"
+                className="grid place-items-center h-10 w-10 rounded-full bg-gradient-to-br from-pink-500 to-fuchsia-600 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5 transition"
+              >
+                <FaInstagram />
+              </a>
+              <a
+                href="https://youtube.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="YouTube"
+                className="grid place-items-center h-10 w-10 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white shadow-md hover:shadow-lg hover:-translate-y-0.5 transition"
+              >
+                <FaYoutube />
+              </a>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Bottom bar nhỏ cho sạch sẽ */}
-      <div className="border-t border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 py-5 text-xs text-gray-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>© {new Date().getFullYear()} AllXone. All rights reserved.</span>
-          <span className="hidden sm:inline">Made with ❤️</span>
+      {/* BOTTOM BAR: trắng trong suốt + blur */}
+      <div className="relative border-t border-white/60 backdrop-blur bg-white/60">
+        <div className="max-w-7xl mx-auto px-4 py-5 text-xs text-gray-600 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>© {new Date().getFullYear()} ALLXONE. {t("footer.rights_reserved", { defaultValue: "Tất cả quyền được bảo lưu." })}</span>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => handleNavigation("/privacy")}
+              className="hover:text-green-700"
+            >
+              {t("footer.privacy", { defaultValue: "Chính sách bảo mật" })}
+            </button>
+            <button
+              onClick={() => handleNavigation("/terms")}
+              className="hover:text-green-700"
+            >
+              {t("footer.terms", { defaultValue: "Điều khoản sử dụng" })}
+            </button>
+            <button
+              onClick={() => handleNavigation("/sitemap")}
+              className="hover:text-green-700"
+            >
+              Sitemap
+            </button>
+          </div>
         </div>
       </div>
     </footer>

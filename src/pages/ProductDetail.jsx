@@ -1,5 +1,5 @@
 // src/pages/ProductDetailPage.jsx
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import TopNavigation from "../components/Navigation";
 import MarkdownOnly from "../components/MarkdownOnly";
@@ -17,11 +17,6 @@ export default function ProductDetailPage() {
   const location = useLocation();
   const trackRef = useRef(null);
 
-  // Lưu id của sản phẩm đã load thành công gần nhất để dùng lại khi đổi locale
-  const lastGoodIdRef = useRef(null);
-  const prevLocaleRef = useRef(null);
-
-  // ==== locale: URL -> localStorage -> default
   const [locale, setLocale] = useState(() => {
     const urlLc = getLocaleFromSearch(window.location.search);
     const lsLc = (localStorage.getItem("locale") || "").toLowerCase();
@@ -50,13 +45,11 @@ export default function ProductDetailPage() {
   const [error, setError] = useState("");
 
   const fetchParentBySub = async (subSlug, signal) => {
-    // Ưu tiên route bạn đang mount: /api/sub_categories
     let res = await fetch(
       `/api/sub_categories/${encodeURIComponent(subSlug)}${qs}`,
       { signal }
     );
     if (!res.ok) {
-      // fallback nếu BE dùng tên khác
       res = await fetch(
         `/api/subcategories/${encodeURIComponent(subSlug)}${qs}`,
         { signal }
@@ -77,7 +70,6 @@ export default function ProductDetailPage() {
     el.scrollBy({ left: dir * el.clientWidth, behavior: "smooth" });
   };
 
-  // i18n labels
   const t = {
     product: locale === "vi" ? "Sản phẩm" : "Products",
     detail: locale === "vi" ? "Chi tiết" : "Details",
@@ -96,7 +88,6 @@ export default function ProductDetailPage() {
     next: locale === "vi" ? "Sau" : "Next",
   };
 
-  // Breadcrumbs
   const items = [
     { label: t.product, to: `/product${qs}` },
     ...(product?.parent_name && product?.parent_slug
@@ -125,139 +116,116 @@ export default function ProductDetailPage() {
     return product.image_url;
   }, [product]);
 
+  // ===== Helpers để resolve slug -> id và chuẩn hoá URL theo locale =====
+  const isNumeric = (s) => /^\d+$/.test(String(s || "").trim());
+
+  const fetchBy = async (key, lc, signal) => {
+    const url = `/api/products/${encodeURIComponent(key)}?locale=${lc}`;
+    const r = await fetch(url, { cache: "no-store", signal });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d?.product || null;
+  };
+
   useEffect(() => {
     if (!idOrSlug) return;
-
     const ac = new AbortController();
-    const safeJson = async (res) => {
-      try {
-        return await res.json();
-      } catch {
-        return {};
-      }
-    };
 
     (async () => {
       try {
         setLoading(true);
         setError("");
 
-        // Nếu người dùng vừa đổi locale nhưng param chưa đổi,
-        // ưu tiên fetch bằng ID đã biết để tránh 404 do slug khác nhau theo ngôn ngữ
-        const preferId =
-          prevLocaleRef.current &&
-          prevLocaleRef.current !== locale &&
-          lastGoodIdRef.current != null;
+        let baseProduct = null;
 
-        const key = preferId ? String(lastGoodIdRef.current) : idOrSlug;
-
-        // 1) Fetch chi tiết (kèm locale)
-        const res = await fetch(
-          `/api/products/${encodeURIComponent(key)}${qs}`,
-          { cache: "no-store", signal: ac.signal }
-        );
-
-        // Nếu fetch theo id/slug "không hợp lệ", thử một lần fallback: nếu đang ưu tiên id mà fail thì thử lại bằng param gốc
-        if (!res.ok && preferId && key !== idOrSlug) {
-          const res2 = await fetch(
-            `/api/products/${encodeURIComponent(idOrSlug)}${qs}`,
-            { cache: "no-store", signal: ac.signal }
-          );
-          if (res2.ok) {
-            const data2 = await res2.json();
-            const p2 = data2?.product || null;
-            setProduct(p2);
-            if (p2?.id != null) lastGoodIdRef.current = p2.id;
-            // canonicalize slug theo locale mới
-            if (p2?.slug && p2.slug !== idOrSlug) {
-              navigate(
-                `/product/product-detail/${encodeURIComponent(p2.slug)}${qs}`,
-                { replace: true }
-              );
-            }
-          } else {
-            let msg = `HTTP ${res2.status}`;
-            try { msg = (await res2.json())?.error || msg; } catch { }
-            throw new Error(msg);
-          }
-        } else if (!res.ok) {
-          let msg = `HTTP ${res.status}`;
-          try { msg = (await res.json())?.error || msg; } catch { }
-          throw new Error(msg);
+        // 1) Nếu là id thuần số -> fetch thẳng theo id + locale hiện tại
+        if (isNumeric(idOrSlug)) {
+          baseProduct = await fetchBy(idOrSlug, locale, ac.signal);
         } else {
-          const data = await res.json();
-          const p = data?.product || null;
-          setProduct(p);
-          if (p?.id != null) lastGoodIdRef.current = p.id;
-          // canonicalize slug theo locale mới
-          if (p?.slug && p.slug !== idOrSlug) {
-            navigate(
-              `/product/product-detail/${encodeURIComponent(p.slug)}${qs}`,
-              { replace: true }
-            );
+          // 2) Thử fetch theo slug với locale hiện tại
+          baseProduct = await fetchBy(idOrSlug, locale, ac.signal);
+
+          // 3) Nếu không thấy, thử các locale khác để lấy ra product.id
+          if (!baseProduct) {
+            for (const lc of SUPPORTED) {
+              if (lc === locale) continue;
+              const p = await fetchBy(idOrSlug, lc, ac.signal);
+              if (p) {
+                // Đã tìm thấy theo slug của ngôn ngữ khác -> fetch lại theo ID + locale hiện tại
+                baseProduct = await fetchBy(p.id, locale, ac.signal);
+                break;
+              }
+            }
           }
         }
 
-        // Ghi lại locale hiện tại (để nhận biết lần sau có đổi không)
-        prevLocaleRef.current = locale;
+        if (!baseProduct) throw new Error("Not found");
 
-        // Bổ sung parent nếu thiếu
-        const pNow = (prev) => prev; // just for readability
-        if (!pNow?.parent_slug && (pNow?.subcategory_slug || product?.subcategory_slug)) {
-          const subSlug = pNow?.subcategory_slug || product?.subcategory_slug;
-          const parent = await fetchParentBySub(subSlug, ac.signal);
+        // 4) Chuẩn hoá URL sang slug của locale hiện tại (nhưng giữ ?locale)
+        const routeSlug = decodeURIComponent(String(idOrSlug)).toLowerCase();
+        const canonicalSlug = (
+          baseProduct.slug || baseProduct.product_slug || baseProduct.id
+        )
+          ?.toString()
+          .toLowerCase();
+
+        if (canonicalSlug && canonicalSlug !== routeSlug) {
+          navigate(
+            `/product/product-detail/${encodeURIComponent(
+              baseProduct.slug || baseProduct.product_slug || baseProduct.id
+            )}${qs}`,
+            { replace: true }
+          );
+          // return ở đây để đợi mount lại với slug mới, tránh nháy nội dung
+          return;
+        }
+
+        setProduct(baseProduct);
+
+        // 5) Bổ sung parent nếu thiếu
+        if (!baseProduct?.parent_slug && baseProduct?.subcategory_slug) {
+          const parent = await fetchParentBySub(baseProduct.subcategory_slug, ac.signal);
           if (parent?.parent_slug) {
             setProduct((prev) => ({ ...prev, ...parent }));
           }
         }
 
-        // 2) Related theo sub -> parent (kèm locale)
+        // 6) Related theo sub/parent (theo locale hiện tại)
         setRelLoading(true);
         let relatedList = [];
 
         const subSlug =
-          (product?.subcategory_slug ?? product?.subcategory?.slug) ||
-          undefined;
-        const parentSlug = (product?.parent_slug ?? product?.parent?.slug) || undefined;
+          baseProduct?.subcategory_slug ?? baseProduct?.subcategory?.slug ?? null;
+        const parentSlug =
+          baseProduct?.parent_slug ?? baseProduct?.parent?.slug ?? null;
 
-        // Lấy lại từ state mới nhất sau khi setProduct
-        const pFinal = (prev) => prev;
-        const sub = pFinal?.subcategory_slug ?? pFinal?.subcategory?.slug ?? subSlug;
-        const parent = pFinal?.parent_slug ?? pFinal?.parent?.slug ?? parentSlug;
-
-        if (sub) {
-          // Ưu tiên route có join translations
+        if (subSlug) {
           let relRes = await fetch(
-            `/api/sub_categories/${encodeURIComponent(sub)}/products${qs}`,
+            `/api/sub_categories/${encodeURIComponent(subSlug)}/products${qs}`,
             { cache: "no-store", signal: ac.signal }
           );
-
-          // Fallback tên khác
           if (!relRes.ok) {
             relRes = await fetch(
-              `/api/subcategories/${encodeURIComponent(sub)}/products${qs}`,
+              `/api/subcategories/${encodeURIComponent(subSlug)}/products${qs}`,
               { cache: "no-store", signal: ac.signal }
             );
           }
-
           if (relRes.ok) {
-            const relData = await safeJson(relRes);
+            const relData = await relRes.json().catch(() => ({}));
             relatedList = Array.isArray(relData?.products) ? relData.products : [];
           }
-        } else if (parent) {
+        } else if (parentSlug) {
           const relRes = await fetch(
-            `/api/parent_categories/${encodeURIComponent(parent)}/products${qs}`,
+            `/api/parent_categories/${encodeURIComponent(parentSlug)}/products${qs}`,
             { cache: "no-store", signal: ac.signal }
           );
           if (relRes.ok) {
-            const relData = await safeJson(relRes);
+            const relData = await relRes.json().catch(() => ({}));
             relatedList = Array.isArray(relData?.products) ? relData.products : [];
           }
         }
 
-        // loại chính nó + giới hạn
-        const curId = lastGoodIdRef.current;
-        relatedList = relatedList.filter((x) => x.id !== curId).slice(0, 12);
+        relatedList = relatedList.filter((x) => x.id !== baseProduct?.id).slice(0, 12);
         setRelated(relatedList);
       } catch (e) {
         if (e.name !== "AbortError") {
@@ -275,8 +243,7 @@ export default function ProductDetailPage() {
     })();
 
     return () => ac.abort();
-    // Re-fetch khi đổi locale để lấy bản dịch
-  }, [idOrSlug, locale, navigate]);
+  }, [idOrSlug, locale]); // re-run khi đổi slug hoặc locale
 
   const handleCategoryClick = () => {
     const subSlug = product?.subcategory_slug ?? product?.subcategory?.slug ?? null;
@@ -291,9 +258,9 @@ export default function ProductDetailPage() {
   };
 
   const handleRelatedClick = (item) => {
-    const slug = item?.slug || item?.product_slug || item?.id;
-    if (!slug) return;
-    navigate(`/product/product-detail/${encodeURIComponent(String(slug))}${qs}`);
+    const target = item.slug || item.product_slug || item.id || item.product_id;
+    if (!target) return;
+    navigate(`/product/product-detail/${encodeURIComponent(target)}${qs}`);
   };
 
   if (loading) {
@@ -320,9 +287,9 @@ export default function ProductDetailPage() {
             <p>
               {error
                 ? `${locale === "vi" ? "Lỗi" : "Error"}: ${error}`
-                : (locale === "vi"
+                : locale === "vi"
                   ? `Sản phẩm "${idOrSlug}" không tồn tại hoặc đã bị xóa.`
-                  : `Product "${idOrSlug}" does not exist or was removed.`)}
+                  : `Product "${idOrSlug}" does not exist or was removed.`}
             </p>
           </div>
         </div>
@@ -340,7 +307,6 @@ export default function ProductDetailPage() {
         <div className="card p-4 space-y-6">
           <div className="md:flex gap-10">
             <div className="md:w-1/2 flex-shrink-0 mb-6 md:mb-0">
-              {/* Khung cố định chiều cao, full chiều ngang */}
               <div className="w-full h-[520px] md:h-[560px] rounded-md border border-gray-200 bg-white overflow-hidden">
                 <img
                   src={imageSrc}
@@ -357,14 +323,12 @@ export default function ProductDetailPage() {
             <div className="md:w-2/3 lg:w-3/4">
               <h1 className="text-2xl font-semibold mb-3">{product.title}</h1>
 
-              {/* Badge danh mục */}
               {product.subcategory_name && (
                 <div className="mb-5">
                   <button
                     type="button"
                     onClick={handleCategoryClick}
-                    className="inline-flex items-center px-4 py-1 rounded-full text-xl bg-gray-100 text-gray-800 
-                               hover:bg-green-100 hover:text-green-800 transition-colors cursor-pointer"
+                    className="inline-flex items-center px-4 py-1 rounded-full text-xl bg-gray-100 text-gray-800 hover:bg-green-100 hover:text-green-800 transition-colors cursor-pointer"
                     title={t.seeIn(product.subcategory_name)}
                   >
                     <span className="block truncate font-medium">
@@ -427,30 +391,34 @@ export default function ProductDetailPage() {
             <p className="text-gray-600">{t.noRelated}</p>
           ) : (
             <div className="relative">
-              {/* Track */}
               <div
                 ref={trackRef}
                 className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar"
               >
-                {related.map((rel) => (
-                  <div
-                    key={rel.id}
-                    onClick={() => handleRelatedClick(rel)}
-                    className="shrink-0 w-1/2 md:w-1/4 snap-start cursor-pointer rounded-md border border-gray-200 overflow-hidden hover:shadow group transition"
-                  >
-                    <div className="w-full aspect-[3/4] overflow-hidden bg-white">
-                      <img
-                        src={!rel.image_url || rel.image_url === "null" ? "/banner.jpg" : rel.image_url}
-                        alt={rel.title}
-                        className="block w-full h-full object-cover transform transition-transform duration-300 ease-in-out group-hover:scale-110"
-                        loading="lazy"
-                      />
+                {related.map((rel) => {
+                  const relImg =
+                    !rel.image_url || rel.image_url === "null" ? "/banner.jpg" : rel.image_url;
+                  const relTitle = rel.title || rel.name;
+                  return (
+                    <div
+                      key={rel.id}
+                      onClick={() => handleRelatedClick(rel)}
+                      className="shrink-0 w-1/2 md:w-1/4 snap-start cursor-pointer rounded-md border border-gray-200 overflow-hidden hover:shadow group transition"
+                    >
+                      <div className="w-full aspect-[3/4] overflow-hidden bg-white">
+                        <img
+                          src={relImg}
+                          alt={relTitle}
+                          className="block w-full h-full object-cover transform transition-transform duration-300 ease-in-out group-hover:scale-110"
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="px-3 py-2 text-center">
+                        <div className="font-medium text-gray-900 line-clamp-2">{relTitle}</div>
+                      </div>
                     </div>
-                    <div className="px-3 py-2 text-center">
-                      <div className="font-medium text-gray-900 line-clamp-2">{rel.title}</div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Nút điều hướng nổi (mobile) */}

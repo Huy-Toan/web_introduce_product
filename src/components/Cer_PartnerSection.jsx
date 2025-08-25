@@ -186,9 +186,10 @@ export default function CerPartnersSection({ locale: localeProp }) {
   return (
     <section className="bg-gray-50 py-12 px-4 relative">
       <div className="max-w-7xl mx-auto">
-        <h2 className="text-2xl sm:text-3xl font-bold text-yellow-600 text-center">
+        <h2 className="text-2xl sm:text-3xl font-bold !text-green-600 text-center not-prose">
           {t.title}
         </h2>
+
 
         {loading ? (
           <div className="mt-6 flex gap-4 overflow-x-auto no-scrollbar">
@@ -244,8 +245,8 @@ export default function CerPartnersSection({ locale: localeProp }) {
                   key={i}
                   onClick={() => scrollToIndex(i)}
                   className={`w-3 h-3 rounded-full transition ${i === activeIndex
-                      ? "bg-yellow-600"
-                      : "bg-gray-300 hover:bg-gray-400"
+                    ? "bg-yellow-600"
+                    : "bg-gray-300 hover:bg-gray-400"
                     }`}
                   aria-label={`Slide ${i + 1}`}
                 />

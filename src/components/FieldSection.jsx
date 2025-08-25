@@ -46,7 +46,6 @@ export default function FieldHighlightsSection({ locale: localeProp }) {
     () =>
       locale === "vi"
         ? {
-          kicker: "NỘI DUNG MỚI TRONG TUẦN",
           heading: "LĨNH VỰC & GÓC NHÌN",
           sub: "Từ chúng tôi đến bạn.",
           empty: "Không có nội dung nào để hiển thị.",
@@ -55,7 +54,6 @@ export default function FieldHighlightsSection({ locale: localeProp }) {
           aria: (name) => `Xem chi tiết ${name}`,
         }
         : {
-          kicker: "SEARCH NEWEST CONTENT OF THE WEEK",
           heading: "FIELDS & INSIGHTS",
           sub: "From us to you.",
           empty: "No content to display.",
@@ -106,12 +104,10 @@ export default function FieldHighlightsSection({ locale: localeProp }) {
       <div className="container mx-auto px-4 max-w-7xl">
         {/* Header */}
         <div className="text-center mb-10 sm:mb-14">
-          <p className="text-gray-600 text-base sm:text-lg mb-3 font-medium tracking-wide">
-            {t.kicker}
-          </p>
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-yellow-600 mb-4 sm:mb-6 tracking-wider">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold !text-green-600 mb-4 sm:mb-6 tracking-wider">
             {t.heading}
           </h2>
+
           <p className="text-gray-700 text-lg sm:text-xl italic">{t.sub}</p>
         </div>
 

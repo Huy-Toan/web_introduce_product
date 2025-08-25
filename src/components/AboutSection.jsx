@@ -105,9 +105,13 @@ const AboutSection = ({ locale: localeProp }) => {
           <div className="space-y-6">
             {first ? (
               <>
-                <h1 className="text-xl font-semibold text-green-800 mb-6 tracking-wide">
+                <h1
+                  className="text-xl font-semibold mb-6 tracking-wide"
+                  style={{ color: '#16a34a' }} // Tailwind green-600
+                >
                   {t.tagline}
                 </h1>
+
 
                 <h2 className="text-4xl lg:text-5xl font-bold text-yellow-600 mb-4 tracking-wider">
                   {first.title}
@@ -135,9 +139,14 @@ const AboutSection = ({ locale: localeProp }) => {
               </>
             ) : (
               <>
-                <h1 className="text-xl font-semibold text-green-800 mb-6 tracking-wide">
+                <h1
+                  className="text-xl font-semibold mb-6 tracking-wide"
+                  style={{ color: '#16a34a' }} // Tailwind green-600
+                >
                   {t.tagline}
                 </h1>
+
+
                 <p className="text-gray-600">
                   {locale === "vi"
                     ? "Chưa có nội dung giới thiệu."

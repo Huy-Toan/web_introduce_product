@@ -240,14 +240,16 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
     <section className="py-16 bg-gray-50 overflow-hidden">
       <div className="container mx-auto px-4">
         {/* Header */}
-        <div className="text-center mb-8 sm:mb-12">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-3 sm:mb-4">
+        <div className="text-center mb-8 sm:mb-12 not-prose">
+          {/* ép màu xanh lá */}
+          <h2 className="text-2xl sm:text-3xl font-bold !text-green-600 mb-3 sm:mb-4">
             {t.heading}
           </h2>
           <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto px-4">
             {t.sub}
           </p>
         </div>
+
 
         {/* Slider Container */}
         <div
@@ -361,7 +363,7 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
         <div className="text-center mt-8 sm:mt-12">
           <button
             onClick={() => navigate(`/product?locale=${locale}`)}
-            className="bg-green-600 hover:bg-green-700 cursor-pointer text-white px-6 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors duration-300 shadow-lg hover:shadow-xl text-sm sm:text-base"
+            className="bg-gradient-to-r cursor-pointer from-yellow-500 to-yellow-600 text-white px-8 py-3 rounded-full font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all duration-300 transform hover:-translate-y-1 shadow-lg hover:shadow-xl"
           >
             {t.ctaAll}
           </button>

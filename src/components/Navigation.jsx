@@ -18,10 +18,10 @@ function setLocaleOnDom(lc) {
 }
 
 function TopNavigation() {
-    const { t, i18n } = useT();
+  const { t, i18n } = useT();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [atTop, setAtTop] = useState(true);
-    const [locale, setLocale] = useState(i18n.language || getStoredLocale());
+  const [locale, setLocale] = useState(i18n.language || getStoredLocale());
   const [openLang, setOpenLang] = useState(false);
 
   const navigate = useNavigate();
@@ -38,7 +38,7 @@ function TopNavigation() {
 
   // cập nhật html lang & lưu localStorage khi locale đổi
   useEffect(() => {
-      i18n.changeLanguage(locale);
+    i18n.changeLanguage(locale);
     localStorage.setItem("locale", locale);
     setLocaleOnDom(locale);
   }, [locale, i18n]);
@@ -63,7 +63,7 @@ function TopNavigation() {
 
   const transparentNav = pathname === "/" && atTop;
 
-    const labelFor = (page) => t(`navigation.${page}`);
+  const labelFor = (page) => t(`navigation.${page}`);
 
   const pages = ["home", "about", "what_we_do", "product", "news", "contact"];
 
@@ -153,7 +153,7 @@ function TopNavigation() {
                         role="option"
                         aria-selected={lc === locale}
                       >
-                          {lc === "vi" ? t('auto.tieng_viet') : t('auto.tieng_anh')}
+                        {lc === "vi" ? t('auto.tieng_viet') : t('auto.tieng_anh')}
                       </button>
                     </li>
                   ))}
@@ -220,7 +220,7 @@ function TopNavigation() {
                     }}
                     className={`px-3 py-2 border rounded-md ${lc === locale ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 hover:bg-gray-50"}`}
                   >
-                      {lc === "vi" ? t('auto.tieng_viet') : t('auto.tieng_anh')}
+                    {lc === "vi" ? t('auto.tieng_viet') : t('auto.tieng_anh')}
                   </button>
                 ))}
               </div>
