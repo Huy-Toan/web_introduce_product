@@ -1,33 +1,65 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from "react-router";
+// src/components/AboutSection.jsx
+import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router";
 
-const AboutSection = () => {
+const SUPPORTED = ["vi", "en"];
+const DEFAULT_LOCALE = "vi";
+
+function pickLocale(propLocale, search) {
+  const urlLc =
+    new URLSearchParams(search).get("locale")?.toLowerCase() || "";
+  const lsLc = (localStorage.getItem("locale") || "").toLowerCase();
+  const fromProp = (propLocale || "").toLowerCase();
+
+  if (SUPPORTED.includes(fromProp)) return fromProp;
+  if (SUPPORTED.includes(urlLc)) return urlLc;
+  if (SUPPORTED.includes(lsLc)) return lsLc;
+  return DEFAULT_LOCALE;
+}
+
+// Cắt text không đứt từ
+function truncateText(text, maxLength = 120) {
+  if (!text) return "";
+  if (text.length <= maxLength) return text;
+  const truncated = text.substring(0, maxLength);
+  const lastSpaceIndex = truncated.lastIndexOf(" ");
+  if (lastSpaceIndex > maxLength * 0.8) {
+    return truncated.substring(0, lastSpaceIndex) + "...";
+  }
+  return truncated + "...";
+}
+
+const AboutSection = ({ locale: localeProp }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const locale = useMemo(
+    () => pickLocale(localeProp, location.search),
+    [localeProp, location.search]
+  );
+
   const [aboutData, setAboutData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
-  
-  // Function để cắt text
-  const truncateText = (text, maxLength = 120) => {
-    if (!text) return '';
-    if (text.length <= maxLength) return text;
-    
-    // Tìm vị trí space gần nhất để không cắt giữa từ
-    const truncated = text.substring(0, maxLength);
-    const lastSpaceIndex = truncated.lastIndexOf(' ');
-    
-    if (lastSpaceIndex > maxLength * 0.8) {
-      return truncated.substring(0, lastSpaceIndex) + '...';
-    }
-    
-    return truncated + '...';
-  };
-  
+
+  // Đồng bộ <html lang> và localStorage
   useEffect(() => {
-    const fetchAboutData = async () => {
+    try {
+      document.documentElement.lang = locale;
+      localStorage.setItem("locale", locale);
+    } catch { }
+  }, [locale]);
+
+  // Fetch theo locale
+  useEffect(() => {
+    const ac = new AbortController();
+    (async () => {
+      setLoading(true);
       try {
-        const res = await fetch("/api/about");
+        const res = await fetch(`/api/about?locale=${encodeURIComponent(locale)}`, {
+          signal: ac.signal,
+        });
         const data = await res.json();
-        const aboutArray = data.about || [];
+        const aboutArray = Array.isArray(data.about) ? data.about : [];
         setAboutData(aboutArray);
       } catch (err) {
         console.error("Failed to load about data:", err);
@@ -35,10 +67,23 @@ const AboutSection = () => {
       } finally {
         setLoading(false);
       }
-    };
+    })();
+    return () => ac.abort();
+  }, [locale]);
 
-    fetchAboutData();
-  }, []);
+  const t = useMemo(
+    () =>
+      locale === "vi"
+        ? {
+          tagline: "CHẤT LƯỢNG TƯƠI – GIAO HÀNG TOÀN CẦU",
+          learnMore: "Tìm hiểu thêm →",
+        }
+        : {
+          tagline: "FRESH QUALITY – GLOBAL DELIVERY",
+          learnMore: "Learn more →",
+        },
+    [locale]
+  );
 
   if (loading) {
     return (
@@ -50,51 +95,74 @@ const AboutSection = () => {
     );
   }
 
+  const first = aboutData?.[0];
+  const second = aboutData?.[1];
+
   return (
     <section className="bg-white py-20">
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
-            {aboutData.length > 0 && (
+            {first ? (
               <>
                 <h1 className="text-xl font-semibold text-green-800 mb-6 tracking-wide">
-                  FRESH QUALITY – GLOBAL DELIVERY
+                  {t.tagline}
                 </h1>
+
                 <h2 className="text-4xl lg:text-5xl font-bold text-yellow-600 mb-4 tracking-wider">
-                  {aboutData[0].title}
+                  {first.title}
                 </h2>
 
                 <div className="space-y-4 text-gray-700 leading-relaxed">
-                  <p>
-                    {truncateText(aboutData[0].content, 150)}
-                  </p>
-                  
-                  {aboutData[1] && (
+                  <p>{truncateText(first.content, 150)}</p>
+
+                  {second && (
                     <div className="mt-6">
-                      <p className="font-semibold italic text-green-800 mb-2">{aboutData[1].title}:</p>
-                      <p>
-                        {truncateText(aboutData[1].content, 100)}
+                      <p className="font-semibold italic text-green-800 mb-2">
+                        {second.title}:
                       </p>
+                      <p>{truncateText(second.content, 100)}</p>
                     </div>
                   )}
                 </div>
-                
+
                 <button
                   className="bg-gradient-to-r cursor-pointer from-yellow-500 to-yellow-600 text-white px-8 py-3 rounded-full font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all duration-300 transform hover:-translate-y-1 shadow-lg hover:shadow-xl"
-                  onClick={() => navigate("/about")}
+                  onClick={() => navigate(`/about?locale=${locale}`)}
                 >
-                  Learn more →
+                  {t.learnMore}
+                </button>
+              </>
+            ) : (
+              <>
+                <h1 className="text-xl font-semibold text-green-800 mb-6 tracking-wide">
+                  {t.tagline}
+                </h1>
+                <p className="text-gray-600">
+                  {locale === "vi"
+                    ? "Chưa có nội dung giới thiệu."
+                    : "No about content yet."}
+                </p>
+                <button
+                  className="bg-gradient-to-r cursor-pointer from-yellow-500 to-yellow-600 text-white px-8 py-3 rounded-full font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all duration-300 transform hover:-translate-y-1 shadow-lg hover:shadow-xl"
+                  onClick={() => navigate(`/about?locale=${locale}`)}
+                >
+                  {t.learnMore}
                 </button>
               </>
             )}
           </div>
-          
+
           <div className="relative">
             <div className="rounded-xl overflow-hidden shadow-2xl transform hover:-translate-y-2 transition-transform duration-300">
-              <img 
-                src={aboutData[0]?.image_url} 
-                alt={aboutData[0]?.title || "About Image"}
+              <img
+                src={first?.image_url || "/banner.jpg"}
+                alt={first?.title || "About Image"}
                 className="w-full h-[500px] object-cover"
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = "/banner.jpg";
+                }}
               />
             </div>
           </div>

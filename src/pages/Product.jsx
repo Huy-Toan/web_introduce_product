@@ -1,6 +1,6 @@
 // src/pages/Products.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import TopNavigation from "../components/Navigation";
 import Footer from "../components/Footer";
 import ProductCard from "../components/ProductCard";
@@ -9,44 +9,67 @@ import SidebarCategoriesTwoLevel from "../components/SidebarCategories";
 import useProducts from "./admin/hook/Useproduct";
 import Pagination from "../components/Pagination";
 import Breadcrumbs from "../components/Breadcrumbs";
-import { getSiteOrigin, getCanonicalBase, isNonCanonicalHost } from "../lib/siteUrl";
-
+import { getSiteOrigin } from "../lib/siteUrl";
 import SEO from "../components/SEOhead";
 
 const PAGE_SIZE = 9;
+const SUPPORTED = ["vi", "en"];
+const DEFAULT_LOCALE = "vi";
+
+// lấy locale tương tự News.jsx
+function getInitialLocale() {
+  const urlLc = new URLSearchParams(window.location.search).get("locale")?.toLowerCase() || "";
+  const lsLc = (localStorage.getItem("locale") || "").toLowerCase();
+  return SUPPORTED.includes(urlLc) ? urlLc : (SUPPORTED.includes(lsLc) ? lsLc : DEFAULT_LOCALE);
+}
 
 export default function Products() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { parentSlug, subSlug } = useParams();
+
+  const [locale, setLocale] = useState(getInitialLocale());
+
+  // sync khi user đổi ngôn ngữ ở TopNavigation (nó đổi URL ?locale=..)
+  useEffect(() => {
+    const urlLc = new URLSearchParams(location.search).get("locale")?.toLowerCase() || "";
+    if (SUPPORTED.includes(urlLc) && urlLc !== locale) {
+      setLocale(urlLc);
+      localStorage.setItem("locale", urlLc);
+      try { document.documentElement.lang = urlLc; } catch { }
+    }
+  }, [location.search, locale]);
 
   const [parentMeta, setParentMeta] = useState(null);
   const [subMeta, setSubMeta] = useState(null);
 
-  // fetch tên parent theo slug
+  // fetch tên parent theo slug (CÓ locale)
   useEffect(() => {
     let ac = new AbortController();
     (async () => {
       setParentMeta(null);
       if (!parentSlug) return;
       try {
-        const res = await fetch(`/api/parent_categories/${encodeURIComponent(parentSlug)}`, { signal: ac.signal });
+        const res = await fetch(`/api/parent_categories/${encodeURIComponent(parentSlug)}?locale=${encodeURIComponent(locale)}`, { signal: ac.signal });
         if (!res.ok) return;
         const data = await res.json();
         setParentMeta(data.parent || data);
-      } catch {}
+      } catch { }
     })();
     return () => ac.abort();
-  }, [parentSlug]);
+  }, [parentSlug, locale]);
 
-  // fetch tên sub theo slug (đã FIX kèm AbortController)
+  // fetch tên sub theo slug (CÓ locale, giữ fallback alias cũ)
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
       setSubMeta(null);
       if (!subSlug) return;
       try {
-        let res = await fetch(`/api/sub_categories/${encodeURIComponent(subSlug)}`, { signal: ac.signal });
-        if (!res.ok) res = await fetch(`/api/subcategories/${encodeURIComponent(subSlug)}`, { signal: ac.signal });
+        let res = await fetch(`/api/sub_categories/${encodeURIComponent(subSlug)}?locale=${encodeURIComponent(locale)}`, { signal: ac.signal });
+        if (!res.ok) {
+          res = await fetch(`/api/subcategories/${encodeURIComponent(subSlug)}?locale=${encodeURIComponent(locale)}`, { signal: ac.signal });
+        }
         if (!res.ok) return;
         const data = await res.json();
         setSubMeta(data.subcategory || data);
@@ -55,11 +78,12 @@ export default function Products() {
       }
     })();
     return () => ac.abort();
-  }, [subSlug]);
+  }, [subSlug, locale]);
 
-  // --- Breadcrumbs dựa theo URL + meta ---
+  // --- Breadcrumbs dựa theo URL + meta, GIỮ locale trong link ---
   const items = useMemo(() => {
-    const arr = [{ label: "Product", to: "/product" }];
+    const qs = `?locale=${locale}`;
+    const arr = [{ label: "Product", to: "/product" + qs }];
     if (!parentSlug && !subSlug) {
       arr.push({ label: "All" });
       return arr;
@@ -70,17 +94,20 @@ export default function Products() {
     }
     arr.push({
       label: parentMeta?.name || decodeURIComponent(parentSlug),
-      to: `/product/${encodeURIComponent(parentSlug)}`,
+      to: `/product/${encodeURIComponent(parentSlug)}${qs}`,
     });
     arr.push({ label: subMeta?.name || decodeURIComponent(subSlug) });
     return arr;
-  }, [parentSlug, subSlug, parentMeta, subMeta]);
+  }, [parentSlug, subSlug, parentMeta, subMeta, locale]);
 
-  const {
-    products,
-    productsLoading,
-    setSelectedSubcategorySlug,
-  } = useProducts({ initialSubSlug: subSlug || "" });
+  // Hook cũ vẫn dùng, nhưng để đảm bảo có bản dịch, ta tự fetch theo locale cho 3 chế độ:
+  //  - All
+  //  - Theo parent
+  //  - Theo sub
+  const { products: hookProducts, productsLoading, setSelectedSubcategorySlug } =
+    useProducts({ initialSubSlug: subSlug || "" });
+
+  useEffect(() => setSelectedSubcategorySlug(subSlug || ""), [subSlug, setSelectedSubcategorySlug]);
 
   const [activeParentSlug, setActiveParentSlug] = useState(parentSlug || null);
   const [activeSubSlug, setActiveSubSlug] = useState(subSlug || null);
@@ -88,29 +115,62 @@ export default function Products() {
   useEffect(() => {
     setActiveParentSlug(parentSlug || null);
     setActiveSubSlug(subSlug || null);
-    setSelectedSubcategorySlug(subSlug || "");
-  }, [parentSlug, subSlug, setSelectedSubcategorySlug]);
+  }, [parentSlug, subSlug]);
+
+  // ====== Local fetch để đảm bảo locale ======
+  const [allProducts, setAllProducts] = useState([]);
+  const [allLoading, setAllLoading] = useState(false);
 
   const [parentProducts, setParentProducts] = useState([]);
   const [parentLoading, setParentLoading] = useState(false);
-  const parentControllerRef = useRef(null);
 
+  const [subProducts, setSubProducts] = useState([]);
+  const [subLoading, setSubLoading] = useState(false);
+
+  const parentControllerRef = useRef(null);
+  const subControllerRef = useRef(null);
+
+  // All products
+  useEffect(() => {
+    if (parentSlug || subSlug) {
+      setAllProducts([]);
+      setAllLoading(false);
+      return;
+    }
+    let ac = new AbortController();
+    (async () => {
+      try {
+        setAllLoading(true);
+        const res = await fetch(`/api/products?locale=${encodeURIComponent(locale)}`, { signal: ac.signal });
+        const data = await res.json();
+        setAllProducts(Array.isArray(data?.products) ? data.products : []);
+      } catch (e) {
+        if (e?.name !== "AbortError") console.error(e);
+        setAllProducts([]);
+      } finally {
+        setAllLoading(false);
+      }
+    })();
+    return () => { try { ac.abort(); } catch { } };
+  }, [parentSlug, subSlug, locale]);
+
+  // Products theo parent
   useEffect(() => {
     const onlyParent = !!parentSlug && !subSlug;
     if (!onlyParent) {
       setParentProducts([]);
       setParentLoading(false);
-      try { parentControllerRef.current?.abort?.(); } catch {}
+      try { parentControllerRef.current?.abort?.(); } catch { }
       return;
     }
-    try { parentControllerRef.current?.abort?.(); } catch {}
+    try { parentControllerRef.current?.abort?.(); } catch { }
     const controller = new AbortController();
     parentControllerRef.current = controller;
 
     (async () => {
       try {
         setParentLoading(true);
-        const url = `/api/parent_categories/${encodeURIComponent(parentSlug)}/products`;
+        const url = `/api/parent_categories/${encodeURIComponent(parentSlug)}/products?locale=${encodeURIComponent(locale)}`;
         const res = await fetch(url, { signal: controller.signal });
         const data = await res.json();
         setParentProducts(Array.isArray(data?.products) ? data.products : []);
@@ -124,17 +184,60 @@ export default function Products() {
       }
     })();
 
-    return () => { try { controller.abort(); } catch {} };
-  }, [parentSlug, subSlug]);
+    return () => { try { controller.abort(); } catch { } };
+  }, [parentSlug, subSlug, locale]);
+
+  // Products theo sub (chú ý BE trả product_slug → chuẩn hóa thành slug)
+  useEffect(() => {
+    if (!subSlug) {
+      setSubProducts([]);
+      setSubLoading(false);
+      try { subControllerRef.current?.abort?.(); } catch { }
+      return;
+    }
+    try { subControllerRef.current?.abort?.(); } catch { }
+    const controller = new AbortController();
+    subControllerRef.current = controller;
+
+    (async () => {
+      try {
+        setSubLoading(true);
+        const url = `/api/sub_categories/${encodeURIComponent(subSlug)}/products?locale=${encodeURIComponent(locale)}`;
+        const res = await fetch(url, { signal: controller.signal });
+        const data = await res.json();
+        const list = Array.isArray(data?.products) ? data.products : [];
+        // map product_slug -> slug để UI hoạt động thống nhất
+        setSubProducts(list.map(p => ({ ...p, slug: p.slug || p.product_slug })));
+      } catch (e) {
+        if (e?.name !== "AbortError") {
+          console.error("fetch by sub error:", e);
+          setSubProducts([]);
+        }
+      } finally {
+        setSubLoading(false);
+      }
+    })();
+
+    return () => { try { controller.abort(); } catch { } };
+  }, [subSlug, locale]);
 
   const isFilteringBySub = !!subSlug;
-  const displayedLoading = isFilteringBySub ? productsLoading : (parentLoading || productsLoading);
+  const isFilteringByParentOnly = !!parentSlug && !subSlug;
+
+  const displayedLoading = isFilteringBySub
+    ? (subLoading || productsLoading) // vẫn OR hook để giữ skeleton nếu hook đang bận
+    : isFilteringByParentOnly
+      ? (parentLoading || productsLoading)
+      : (allLoading || productsLoading);
+
   const displayedProducts = isFilteringBySub
-    ? (products || [])
-    : (parentSlug ? (parentProducts || []) : (products || []));
+    ? (subProducts || [])
+    : isFilteringByParentOnly
+      ? (parentProducts || [])
+      : (allProducts.length ? allProducts : (hookProducts || []));
 
   const [currentPage, setCurrentPage] = useState(1);
-  useEffect(() => setCurrentPage(1), [parentSlug, subSlug]);
+  useEffect(() => setCurrentPage(1), [parentSlug, subSlug, locale]);
 
   const totalPages = useMemo(() => {
     const total = displayedProducts?.length || 0;
@@ -151,22 +254,22 @@ export default function Products() {
     return (displayedProducts || []).slice(start, start + PAGE_SIZE);
   }, [displayedProducts, currentPage]);
 
-  const openDetail = (p) => navigate(`/product/product-detail/${p.slug || p.id}`);
+  const openDetail = (p) =>
+    navigate(`/product/product-detail/${encodeURIComponent(p.slug || p.id)}?locale=${locale}`);
 
   /* ====================== SEO for Products ====================== */
   const SITE_URL = getSiteOrigin();
   const BRAND = import.meta.env.VITE_BRAND_NAME || "ITXEASY";
 
-  // Canonical theo slug hiện tại
   const canonicalPath = useMemo(() => {
     let p = "/product";
     if (parentSlug) p += `/${encodeURIComponent(parentSlug)}`;
     if (subSlug) p += `/${encodeURIComponent(subSlug)}`;
-    return p;
-  }, [parentSlug, subSlug]);
+    // có thể thêm ?locale vào canonical nếu muốn tách theo ngôn ngữ
+    return p; // hoặc `${p}?locale=${locale}`
+  }, [parentSlug, subSlug /*, locale*/]);
   const canonical = `${SITE_URL}${canonicalPath}`;
 
-  // Title/Description/Keywords
   const pageTitle = useMemo(() => {
     if (subMeta?.name) return `${subMeta.name} | Sản phẩm | ${BRAND}`;
     if (parentMeta?.name) return `${parentMeta.name} | Sản phẩm | ${BRAND}`;
@@ -200,11 +303,8 @@ export default function Products() {
     return Array.from(new Set(arr));
   }, [subMeta, parentMeta]);
 
-  // JSON-LD: BreadcrumbList + CollectionPage + ItemList (sản phẩm trang hiện tại)
   const breadcrumbLd = useMemo(() => {
-    const base = [
-      { name: "Product", url: `${SITE_URL}/product` }
-    ];
+    const base = [{ name: "Product", url: `${SITE_URL}/product` }]; // có thể thêm ?locale
     if (parentSlug) base.push({
       name: parentMeta?.name || decodeURIComponent(parentSlug),
       url: `${SITE_URL}/product/${encodeURIComponent(parentSlug)}`
@@ -281,7 +381,9 @@ export default function Products() {
 
       <main className="container mx-auto px-4 py-6 max-w-7xl">
         <div className="flex flex-col md:flex-row gap-6">
+          {/* thêm key để Sidebar re-mount khi đổi locale */}
           <SidebarCategoriesTwoLevel
+            key={locale}
             activeParentSlug={activeParentSlug}
             activeSubSlug={activeSubSlug}
             showAll

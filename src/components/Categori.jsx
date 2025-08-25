@@ -1,9 +1,64 @@
-import React, { useState, useRef, useEffect } from "react";
+// src/components/Categori.jsx  (ProductCategories)
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
-function ProductCategories({ categories = [], onSelectCategory }) {
+const SUPPORTED = ["vi", "en"];
+const DEFAULT_LOCALE = "vi";
+
+function resolveLocale(propLocale, search) {
+  const fromProp = (propLocale || "").toLowerCase();
+  const urlLc = new URLSearchParams(search).get("locale")?.toLowerCase() || "";
+  const lsLc = (localStorage.getItem("locale") || "").toLowerCase();
+
+  if (SUPPORTED.includes(fromProp)) return fromProp;
+  if (SUPPORTED.includes(urlLc)) return urlLc;
+  if (SUPPORTED.includes(lsLc)) return lsLc;
+  return DEFAULT_LOCALE;
+}
+
+function normalizeParentsPayload(data) {
+  // Hỗ trợ nhiều kiểu payload khác nhau từ BE
+  const list =
+    data?.parents ??
+    data?.parent_categories ??
+    data?.items ??
+    (Array.isArray(data) ? data : []);
+  return Array.isArray(list) ? list : [];
+}
+
+function ProductCategories({ categories = [], onSelectCategory, locale: localeProp }) {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // locale
+  const locale = useMemo(
+    () => resolveLocale(localeProp, location.search),
+    [localeProp, location.search]
+  );
+
+  // i18n text
+  const t = useMemo(
+    () =>
+      locale === "vi"
+        ? {
+          heading: "Danh mục sản phẩm",
+          sub: "Chọn một danh mục để xem các sản phẩm liên quan",
+          empty: "Chưa có danh mục.",
+          ctaAll: "Xem tất cả sản phẩm",
+          prev: "Trước",
+          next: "Sau",
+        }
+        : {
+          heading: "Product Categories",
+          sub: "Select a category to view related products",
+          empty: "No categories yet.",
+          ctaAll: "Browse all products",
+          prev: "Prev",
+          next: "Next",
+        },
+    [locale]
+  );
 
   // data từ API (khi không truyền props)
   const [cats, setCats] = useState([]);
@@ -20,16 +75,26 @@ function ProductCategories({ categories = [], onSelectCategory }) {
   const containerRef = useRef(null);
   const intervalRef = useRef(null);
 
-  // Fetch categories 1 lần khi load trang
+  // đồng bộ <html lang> + lưu
+  useEffect(() => {
+    try {
+      document.documentElement.lang = locale;
+      localStorage.setItem("locale", locale);
+    } catch { }
+  }, [locale]);
+
+  // Fetch categories theo locale
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch("/api/parent_categories", { cache: "no-store", signal: ac.signal });
+        const res = await fetch(`/api/parent_categories?locale=${encodeURIComponent(locale)}`, {
+          cache: "no-store",
+          signal: ac.signal,
+        });
         const data = await res.json();
-        const list = Array.isArray(data?.parents) ? data.parents : [];
-        // Chuẩn hóa nhẹ
+        const list = normalizeParentsPayload(data);
         setCats(
           list.map((c) => ({
             id: c.id,
@@ -48,7 +113,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
       }
     })();
     return () => ac.abort();
-  }, []);
+  }, [locale]);
 
   // Responsive items per view
   useEffect(() => {
@@ -69,7 +134,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
   const goToNext = () => {
     setCurrentIndex((prev) => {
       if (displayCategories.length <= itemsPerView) {
-        return (prev + 1) % displayCategories.length;
+        return displayCategories.length ? (prev + 1) % displayCategories.length : 0;
       }
       return prev >= displayCategories.length - itemsPerView ? 0 : prev + 1;
     });
@@ -77,7 +142,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
   const goToPrev = () => {
     setCurrentIndex((prev) => {
       if (displayCategories.length <= itemsPerView) {
-        return prev <= 0 ? displayCategories.length - 1 : prev - 1;
+        return prev <= 0 ? Math.max(0, displayCategories.length - 1) : prev - 1;
       }
       return prev <= 0 ? Math.max(0, displayCategories.length - itemsPerView) : prev - 1;
     });
@@ -135,8 +200,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
 
   const handleCategoryClick = (category) => {
     const slug = category.slug || category.id;
-    // Điều hướng SPA tới trang products kèm filter bằng slug
-    navigate(`/product/${encodeURIComponent(slug)}`);
+    navigate(`/product/${encodeURIComponent(slug)}?locale=${locale}`);
     onSelectCategory?.(category);
   };
 
@@ -156,7 +220,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
     return (
       <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-4">
-          <p className="text-center text-gray-600">Chưa có danh mục.</p>
+          <p className="text-center text-gray-600">{t.empty}</p>
         </div>
       </section>
     );
@@ -178,19 +242,18 @@ function ProductCategories({ categories = [], onSelectCategory }) {
         {/* Header */}
         <div className="text-center mb-8 sm:mb-12">
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-3 sm:mb-4">
-            Product Categories
+            {t.heading}
           </h2>
           <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto px-4">
-            Select a category to view related products
+            {t.sub}
           </p>
         </div>
 
         {/* Slider Container */}
         <div
           ref={containerRef}
-          className={`relative max-w-6xl mx-auto select-none ${
-            isDragging ? "cursor-grabbing" : "cursor-grab"
-          }`}
+          className={`relative max-w-6xl mx-auto select-none ${isDragging ? "cursor-grabbing" : "cursor-grab"
+            }`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
           onMouseDown={(e) => {
@@ -208,6 +271,8 @@ function ProductCategories({ categories = [], onSelectCategory }) {
           <button
             onClick={goToPrev}
             className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white cursor-pointer hover:bg-gray-50 shadow-lg rounded-full p-3 transition-all duration-300 hover:shadow-xl pointer-events-auto"
+            aria-label={t.prev}
+            title={t.prev}
           >
             <ChevronLeft className="h-6 w-6 text-gray-600" />
           </button>
@@ -215,6 +280,8 @@ function ProductCategories({ categories = [], onSelectCategory }) {
           <button
             onClick={goToNext}
             className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white cursor-pointer hover:bg-gray-50 shadow-lg rounded-full p-3 transition-all duration-300 hover:shadow-xl pointer-events-auto"
+            aria-label={t.next}
+            title={t.next}
           >
             <ChevronRight className="h-6 w-6 text-gray-600" />
           </button>
@@ -225,9 +292,7 @@ function ProductCategories({ categories = [], onSelectCategory }) {
               ref={sliderRef}
               className="flex transition-transform duration-500 ease-in-out pointer-events-none"
               style={{
-                transform: `${baseTranslate} ${
-                  isDragging ? `translateX(${translateX * 0.3}px)` : ""
-                }`,
+                transform: `${baseTranslate} ${isDragging ? `translateX(${translateX * 0.3}px)` : ""}`,
                 transition: isDragging ? "none" : "transform 0.5s ease-in-out",
               }}
             >
@@ -237,38 +302,43 @@ function ProductCategories({ categories = [], onSelectCategory }) {
                   category.image_url && category.image_url !== "null"
                     ? category.image_url
                     : "/banner.jpg";
-                  return (
+                return (
+                  <div
+                    key={category.id || category.slug || name || index}
+                    className="flex-shrink-0 px-2"
+                    style={{ width: `${100 / itemsPerView}%` }}
+                  >
                     <div
-                      key={category.id || category.slug || name || index}
-                      className="flex-shrink-0 px-2"
-                      style={{ width: `${100 / itemsPerView}%` }}
+                      onClick={() => handleCategoryClick(category)}
+                      className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2 group h-full pointer-events-auto overflow-hidden"
+                      title={name}
+                      aria-label={name}
                     >
-                      <div
-                        onClick={() => handleCategoryClick(category)}
-                        className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2 group h-full pointer-events-auto overflow-hidden"
-                      >
-                        {/* Image - chiếm toàn bộ phần trên */}
-                        <div className="w-full aspect-[4/5] sm:aspect-[3/4] overflow-hidden">
-                          <img
-                            src={img}
-                            alt={name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            loading="lazy"
-                          />
-                        </div>
-                        
-                        {/* Content - phần dưới chứa tiêu đề, gần sát dưới */}
-                        <div className="p-3 text-center">
-                          <h3 className="text-sm font-semibold text-gray-800 group-hover:text-green-600 transition-colors line-clamp-2">
-                            {name}
-                          </h3>
-                        </div>
-
-                        {/* Hover border */}
-                        <div className="h-1 bg-gradient-to-r from-green-400 to-green-600 rounded-b-2xl transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
+                      {/* Image */}
+                      <div className="w-full aspect-[4/5] sm:aspect-[3/4] overflow-hidden">
+                        <img
+                          src={img}
+                          alt={name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = "/banner.jpg";
+                          }}
+                        />
                       </div>
+
+                      {/* Content */}
+                      <div className="p-3 text-center">
+                        <h3 className="text-sm font-semibold text-gray-800 group-hover:text-green-600 transition-colors line-clamp-2">
+                          {name}
+                        </h3>
+                      </div>
+
+                      <div className="h-1 bg-gradient-to-r from-green-400 to-green-600 rounded-b-2xl transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
                     </div>
-                  );
+                  </div>
+                );
               })}
             </div>
           </div>
@@ -279,9 +349,9 @@ function ProductCategories({ categories = [], onSelectCategory }) {
               <button
                 key={index}
                 onClick={() => goToSlide(index)}
-                className={`w-3 h-3 rounded-full transition-all duration-300 pointer-events-auto ${
-                  index === currentIndex ? "bg-green-600 w-8" : "bg-gray-300 hover:bg-gray-400"
-                }`}
+                className={`w-3 h-3 rounded-full transition-all duration-300 pointer-events-auto ${index === currentIndex ? "bg-green-600 w-8" : "bg-gray-300 hover:bg-gray-400"
+                  }`}
+                aria-label={(locale === "vi" ? "Trang " : "Page ") + (index + 1)}
               />
             ))}
           </div>
@@ -290,10 +360,10 @@ function ProductCategories({ categories = [], onSelectCategory }) {
         {/* CTA */}
         <div className="text-center mt-8 sm:mt-12">
           <button
-            onClick={() => navigate("/product")}
+            onClick={() => navigate(`/product?locale=${locale}`)}
             className="bg-green-600 hover:bg-green-700 cursor-pointer text-white px-6 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors duration-300 shadow-lg hover:shadow-xl text-sm sm:text-base"
           >
-           Brown all products
+            {t.ctaAll}
           </button>
         </div>
       </div>

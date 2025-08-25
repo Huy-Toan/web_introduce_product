@@ -1,13 +1,51 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router";
+// src/components/NewsSection.jsx
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useLocation } from "react-router"; // hoặc "react-router-dom" tùy dự án
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { NewsCard } from "./NewsCard";
 
-export default function NewsSection() {
+const SUPPORTED = ["vi", "en"];
+const DEFAULT_LOCALE = "vi";
+
+function resolveLocale(propLocale, search) {
+  const fromProp = (propLocale || "").toLowerCase();
+  const urlLc = new URLSearchParams(search).get("locale")?.toLowerCase() || "";
+  const lsLc = (localStorage.getItem("locale") || "").toLowerCase();
+
+  if (SUPPORTED.includes(fromProp)) return fromProp;
+  if (SUPPORTED.includes(urlLc)) return urlLc;
+  if (SUPPORTED.includes(lsLc)) return lsLc;
+  return DEFAULT_LOCALE;
+}
+
+export default function NewsSection({ locale: localeProp }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const locale = useMemo(
+    () => resolveLocale(localeProp, location.search),
+    [localeProp, location.search]
+  );
+
+  const t = useMemo(
+    () =>
+      locale === "vi"
+        ? {
+          title: "TIN TỨC",
+          empty: "Hiện tại chưa có tin nào.",
+          pageAria: (i) => `Trang ${i}`,
+        }
+        : {
+          title: "NEWS",
+          empty: "No news yet.",
+          pageAria: (i) => `Page ${i}`,
+        },
+    [locale]
+  );
+
   const [newsData, setNewsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
-  const navigate = useNavigate();
   const scrollRef = useRef(null);
 
   // drag state
@@ -15,20 +53,35 @@ export default function NewsSection() {
   const startX = useRef(0);
   const startLeft = useRef(0);
 
+  // đồng bộ <html lang> + lưu
   useEffect(() => {
+    try {
+      document.documentElement.lang = locale;
+      localStorage.setItem("locale", locale);
+    } catch { }
+  }, [locale]);
+
+  // fetch theo locale
+  useEffect(() => {
+    const ac = new AbortController();
     const fetchNewsData = async () => {
+      setLoading(true);
       try {
-        const res = await fetch("/api/news");
+        const res = await fetch(`/api/news?locale=${encodeURIComponent(locale)}`, {
+          signal: ac.signal,
+        });
         const data = await res.json();
         setNewsData(data.news || []);
       } catch (err) {
         console.error("Failed to load news data:", err);
+        setNewsData([]);
       } finally {
         setLoading(false);
       }
     };
     fetchNewsData();
-  }, []);
+    return () => ac.abort();
+  }, [locale]);
 
   // items per slide: mobile 1, desktop (lg) 2
   const getItemsPerSlide = () =>
@@ -103,7 +156,7 @@ export default function NewsSection() {
   }, [newsData]);
 
   const handleNewsSelect = (item) => {
-    navigate(`/news/news-detail/${item.slug}`);
+    navigate(`/news/news-detail/${encodeURIComponent(item.slug)}?locale=${locale}`);
   };
 
   return (
@@ -111,7 +164,7 @@ export default function NewsSection() {
       <div className="container mx-auto px-4 max-w-7xl">
         <div className="text-center mb-10">
           <h2 className="text-4xl lg:text-5xl font-bold !text-yellow-600 tracking-wider">
-            NEWS
+            {t.title}
           </h2>
         </div>
 
@@ -120,7 +173,7 @@ export default function NewsSection() {
             <div className="h-10 w-10 border-2 border-yellow-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
           </div>
         ) : newsData.length === 0 ? (
-          <p className="text-center text-gray-500">Không có tin nào.</p>
+          <p className="text-center text-gray-500">{t.empty}</p>
         ) : (
           <div className="relative">
             {/* track */}
@@ -131,10 +184,7 @@ export default function NewsSection() {
             >
               {/* mỗi item: mobile full width, desktop 1/2 width (hiện 2 cái/khung) */}
               {newsData.map((item) => (
-                <div
-                  key={item.id}
-                  className="shrink-0 w-full lg:w-1/2 snap-start"
-                >
+                <div key={item.id} className="shrink-0 w-full lg:w-1/2 snap-start">
                   <NewsCard news={item} onClick={() => handleNewsSelect(item)} />
                 </div>
               ))}
@@ -158,16 +208,15 @@ export default function NewsSection() {
               <ChevronRight className="w-6 h-6 text-yellow-600" />
             </button>
 
-            {/* dots (optional, gọn) */}
+            {/* dots */}
             <div className="flex justify-center mt-6 gap-2">
               {Array.from({ length: totalSlides }).map((_, i) => (
                 <button
                   key={i}
                   onClick={() => scrollToIndex(i)}
-                  className={`w-2.5 h-2.5 rounded-full transition ${
-                    i === activeIndex ? "bg-yellow-600" : "bg-gray-300 hover:bg-gray-400"
-                  }`}
-                  aria-label={`Trang ${i + 1}`}
+                  className={`w-2.5 h-2.5 rounded-full transition ${i === activeIndex ? "bg-yellow-600" : "bg-gray-300 hover:bg-gray-400"
+                    }`}
+                  aria-label={t.pageAria(i + 1)}
                 />
               ))}
             </div>

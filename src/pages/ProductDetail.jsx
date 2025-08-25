@@ -1,15 +1,43 @@
 // src/pages/ProductDetailPage.jsx
 import { useEffect, useMemo, useState, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import TopNavigation from "../components/Navigation";
 import MarkdownOnly from "../components/MarkdownOnly";
 import Footer from "../components/Footer";
 import Breadcrumbs from "../components/Breadcrumbs";
 
+const SUPPORTED = ["vi", "en"];
+const DEFAULT_LOCALE = "vi";
+const getLocaleFromSearch = (search) =>
+  new URLSearchParams(search).get("locale")?.toLowerCase() || "";
+
 export default function ProductDetailPage() {
   const { idOrSlug } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const trackRef = useRef(null);
+
+  // ==== locale: URL -> localStorage -> default
+  const [locale, setLocale] = useState(() => {
+    const urlLc = getLocaleFromSearch(window.location.search);
+    const lsLc = (localStorage.getItem("locale") || "").toLowerCase();
+    return SUPPORTED.includes(urlLc)
+      ? urlLc
+      : SUPPORTED.includes(lsLc)
+        ? lsLc
+        : DEFAULT_LOCALE;
+  });
+
+  useEffect(() => {
+    const urlLc = getLocaleFromSearch(location.search);
+    if (SUPPORTED.includes(urlLc) && urlLc !== locale) {
+      setLocale(urlLc);
+      localStorage.setItem("locale", urlLc);
+      try { document.documentElement.lang = urlLc; } catch { }
+    }
+  }, [location.search, locale]);
+
+  const qs = `?locale=${encodeURIComponent(locale)}`;
 
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
@@ -18,18 +46,26 @@ export default function ProductDetailPage() {
   const [error, setError] = useState("");
 
   const fetchParentBySub = async (subSlug, signal) => {
-    let res = await fetch(`/api/sub_categories/${encodeURIComponent(subSlug)}`, { signal });
-    if (!res.ok) return null;
-
+    // Ưu tiên route bạn đang mount: /api/sub_categories
+    let res = await fetch(
+      `/api/sub_categories/${encodeURIComponent(subSlug)}${qs}`,
+      { signal }
+    );
+    if (!res.ok) {
+      // fallback nếu BE dùng tên khác
+      res = await fetch(
+        `/api/subcategories/${encodeURIComponent(subSlug)}${qs}`,
+        { signal }
+      );
+      if (!res.ok) return null;
+    }
     const data = await res.json();
-    const sub = data.subcategory || data; 
+    const sub = data.subcategory || data;
     return {
       parent_slug: sub.parent_slug || sub.parent?.slug || null,
       parent_name: sub.parent_name || sub.parent?.name || null,
     };
   };
-
-
 
   const scrollRelated = (dir = 1) => {
     const el = trackRef.current;
@@ -37,15 +73,47 @@ export default function ProductDetailPage() {
     el.scrollBy({ left: dir * el.clientWidth, behavior: "smooth" });
   };
 
+  // i18n labels
+  const t = {
+    product: locale === "vi" ? "Sản phẩm" : "Products",
+    detail: locale === "vi" ? "Chi tiết" : "Details",
+    notFound: locale === "vi" ? "Không tìm thấy sản phẩm" : "Product not found",
+    loading: locale === "vi" ? "Đang tải..." : "Loading...",
+    content: locale === "vi" ? "Nội dung" : "Content",
+    seeIn: (name) =>
+      locale === "vi" ? `Xem sản phẩm trong ${name}` : `See products in ${name}`,
+    relatedSameSub: (name) =>
+      locale === "vi" ? `Sản phẩm cùng loại: ${name}` : `More from: ${name}`,
+    relatedUnderParent: (name) =>
+      locale === "vi" ? `Sản phẩm thuộc: ${name}` : `Products under: ${name}`,
+    relatedMaybe: locale === "vi" ? "Có thể bạn cũng thích" : "You might also like",
+    noRelated: locale === "vi" ? "Chưa có sản phẩm liên quan." : "No related products.",
+    prev: locale === "vi" ? "Trước" : "Prev",
+    next: locale === "vi" ? "Sau" : "Next",
+  };
+
+  // Breadcrumbs
   const items = [
-    { label: "Product", to: "/product" },
+    { label: t.product, to: `/product${qs}` },
     ...(product?.parent_name && product?.parent_slug
-      ? [{ label: product.parent_name, to: `/product/${encodeURIComponent(product.parent_slug)}` }]
+      ? [
+        {
+          label: product.parent_name,
+          to: `/product/${encodeURIComponent(product.parent_slug)}${qs}`,
+        },
+      ]
       : []),
     ...(product?.subcategory_name && product?.subcategory_slug
-      ? [{ label: product.subcategory_name, to: `/product/${encodeURIComponent(product.parent_slug)}/${encodeURIComponent(product.subcategory_slug)}` }]
+      ? [
+        {
+          label: product.subcategory_name,
+          to: `/product/${encodeURIComponent(product.parent_slug)}/${encodeURIComponent(
+            product.subcategory_slug
+          )}${qs}`,
+        },
+      ]
       : []),
-    { label: product?.title || "Chi tiết" },
+    { label: product?.title || t.detail },
   ];
 
   const imageSrc = useMemo(() => {
@@ -57,35 +125,44 @@ export default function ProductDetailPage() {
     if (!idOrSlug) return;
 
     const ac = new AbortController();
-    const safeJson = async (res) => { try { return await res.json(); } catch { return {}; } };
+    const safeJson = async (res) => {
+      try {
+        return await res.json();
+      } catch {
+        return {};
+      }
+    };
 
     (async () => {
       try {
         setLoading(true);
         setError("");
 
-        // 1) Fetch chi tiết
-        const res = await fetch(`/api/products/${encodeURIComponent(idOrSlug)}`, {
-          cache: "no-store",
-          signal: ac.signal,
-        });
+        // 1) Fetch chi tiết (kèm locale)
+        const res = await fetch(
+          `/api/products/${encodeURIComponent(idOrSlug)}${qs}`,
+          { cache: "no-store", signal: ac.signal }
+        );
         if (!res.ok) {
           let msg = `HTTP ${res.status}`;
-          try { msg = (await res.json())?.error || msg; } catch {}
+          try {
+            msg = (await res.json())?.error || msg;
+          } catch { }
           throw new Error(msg);
         }
         const data = await res.json();
         const p = data?.product || null;
         setProduct(p);
 
+        // Bổ sung parent nếu thiếu
         if (!p?.parent_slug && p?.subcategory_slug) {
           const parent = await fetchParentBySub(p.subcategory_slug, ac.signal);
           if (parent?.parent_slug) {
-            setProduct(prev => ({ ...prev, ...parent }));
+            setProduct((prev) => ({ ...prev, ...parent }));
           }
         }
 
-        // 2) Related theo sub -> parent
+        // 2) Related theo sub -> parent (kèm locale)
         setRelLoading(true);
         let relatedList = [];
 
@@ -93,18 +170,18 @@ export default function ProductDetailPage() {
         const parentSlug = p?.parent_slug ?? p?.parent?.slug ?? null;
 
         if (subSlug) {
-          // ưu tiên endpoint theo sidebar: /api/sub_categories/:slug/products
-          let relRes = await fetch(`/api/sub_categories/${encodeURIComponent(subSlug)}/products`, {
-            cache: "no-store",
-            signal: ac.signal,
-          });
+          // Ưu tiên route có join translations
+          let relRes = await fetch(
+            `/api/sub_categories/${encodeURIComponent(subSlug)}/products${qs}`,
+            { cache: "no-store", signal: ac.signal }
+          );
 
-          // fallback sang /api/subcategories nếu BE dùng tên này
+          // Fallback tên khác
           if (!relRes.ok) {
-            relRes = await fetch(`/api/subcategories/${encodeURIComponent(subSlug)}/products`, {
-              cache: "no-store",
-              signal: ac.signal,
-            });
+            relRes = await fetch(
+              `/api/subcategories/${encodeURIComponent(subSlug)}/products${qs}`,
+              { cache: "no-store", signal: ac.signal }
+            );
           }
 
           if (relRes.ok) {
@@ -112,10 +189,10 @@ export default function ProductDetailPage() {
             relatedList = Array.isArray(relData?.products) ? relData.products : [];
           }
         } else if (parentSlug) {
-          const relRes = await fetch(`/api/parent_categories/${encodeURIComponent(parentSlug)}/products`, {
-            cache: "no-store",
-            signal: ac.signal,
-          });
+          const relRes = await fetch(
+            `/api/parent_categories/${encodeURIComponent(parentSlug)}/products${qs}`,
+            { cache: "no-store", signal: ac.signal }
+          );
           if (relRes.ok) {
             const relData = await safeJson(relRes);
             relatedList = Array.isArray(relData?.products) ? relData.products : [];
@@ -123,12 +200,12 @@ export default function ProductDetailPage() {
         }
 
         // loại chính nó + giới hạn
-        relatedList = relatedList.filter(x => x.id !== p?.id).slice(0, 12);
+        relatedList = relatedList.filter((x) => x.id !== p?.id).slice(0, 12);
         setRelated(relatedList);
       } catch (e) {
         if (e.name !== "AbortError") {
           console.error("Load product error:", e);
-          setError(e.message || "Không tải được sản phẩm");
+          setError(e.message || (locale === "vi" ? "Không tải được sản phẩm" : "Failed to load product"));
           setProduct(null);
           setRelated([]);
         }
@@ -139,18 +216,23 @@ export default function ProductDetailPage() {
     })();
 
     return () => ac.abort();
-  }, [idOrSlug]);
+    // Re-fetch khi đổi locale để lấy bản dịch
+  }, [idOrSlug, locale]);
 
   const handleCategoryClick = () => {
     const subSlug = product?.subcategory_slug ?? product?.subcategory?.slug ?? null;
     const parentSlug = product?.parent_slug ?? product?.parent?.slug ?? null;
-
-    navigate(`/product/${encodeURIComponent(parentSlug)}/${encodeURIComponent(subSlug)}`);
-
+    if (parentSlug && subSlug) {
+      navigate(`/product/${encodeURIComponent(parentSlug)}/${encodeURIComponent(subSlug)}${qs}`);
+    } else if (parentSlug) {
+      navigate(`/product/${encodeURIComponent(parentSlug)}${qs}`);
+    } else {
+      navigate(`/product${qs}`);
+    }
   };
 
   const handleRelatedClick = (item) => {
-    navigate(`/product/product-detail/${item.product_slug}`);
+    navigate(`/product/product-detail/${encodeURIComponent(item.product_slug)}${qs}`);
   };
 
   if (loading) {
@@ -173,8 +255,14 @@ export default function ProductDetailPage() {
         <Breadcrumbs items={items} className="mb-4" />
         <div className="container mx-auto px-4 py-20">
           <div className="text-center text-gray-600">
-            <h2 className="text-2xl font-semibold mb-4">Không tìm thấy sản phẩm</h2>
-            <p>{error ? `Lỗi: ${error}` : `Sản phẩm "${idOrSlug}" không tồn tại hoặc đã bị xóa.`}</p>
+            <h2 className="text-2xl font-semibold mb-4">{t.notFound}</h2>
+            <p>
+              {error
+                ? `${locale === "vi" ? "Lỗi" : "Error"}: ${error}`
+                : (locale === "vi"
+                  ? `Sản phẩm "${idOrSlug}" không tồn tại hoặc đã bị xóa.`
+                  : `Product "${idOrSlug}" does not exist or was removed.`)}
+            </p>
           </div>
         </div>
         <Footer />
@@ -190,26 +278,25 @@ export default function ProductDetailPage() {
       <main className="container mx-auto px-4 py-6 max-w-7xl">
         <div className="card p-4 space-y-6">
           <div className="md:flex gap-10">
-          <div className="md:w-1/2 flex-shrink-0 mb-6 md:mb-0">
-            {/* Khung cố định chiều cao, full chiều ngang */}
-            <div className="w-full h-[520px] md:h-[560px] rounded-md border border-gray-200 bg-white overflow-hidden">
-              <img
-                src={imageSrc}            
-                alt={product.title}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.currentTarget.onerror = null;
-                  e.currentTarget.src = "/banner.jpg"; 
-                }}
-              />
+            <div className="md:w-1/2 flex-shrink-0 mb-6 md:mb-0">
+              {/* Khung cố định chiều cao, full chiều ngang */}
+              <div className="w-full h-[520px] md:h-[560px] rounded-md border border-gray-200 bg-white overflow-hidden">
+                <img
+                  src={imageSrc}
+                  alt={product.title}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = "/banner.jpg";
+                  }}
+                />
+              </div>
             </div>
-          </div>
-
 
             <div className="md:w-2/3 lg:w-3/4">
               <h1 className="text-2xl font-semibold mb-3">{product.title}</h1>
 
-              {/* Badge danh mục (ưu tiên parent/sub mới) */}
+              {/* Badge danh mục */}
               {product.subcategory_name && (
                 <div className="mb-5">
                   <button
@@ -217,9 +304,11 @@ export default function ProductDetailPage() {
                     onClick={handleCategoryClick}
                     className="inline-flex items-center px-4 py-1 rounded-full text-xl bg-gray-100 text-gray-800 
                                hover:bg-green-100 hover:text-green-800 transition-colors cursor-pointer"
-                    title={`Xem sản phẩm trong ${product.subcategory_name}`}
+                    title={t.seeIn(product.subcategory_name)}
                   >
-                    {product.subcategory_name && <span className="block truncate font-medium">{product.subcategory_name}</span>}
+                    <span className="block truncate font-medium">
+                      {product.subcategory_name}
+                    </span>
                   </button>
                 </div>
               )}
@@ -231,106 +320,104 @@ export default function ProductDetailPage() {
           </div>
 
           <section className="prose max-w-none">
-            <h2 className="text-xl font-semibold mb-3">Nội dung</h2>
+            <h2 className="text-xl font-semibold mb-3">{t.content}</h2>
             <MarkdownOnly value={product.content || ""} />
           </section>
         </div>
 
-{/* Related */}
-      <section className="mt-10">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">
-            {product.subcategory_name
-              ? `Sản phẩm cùng loại: ${product.subcategory_name}`
-              : product.parent_name
-              ? `Sản phẩm thuộc: ${product.parent_name}`
-              : "Có thể bạn cũng thích"}
-          </h3>
+        {/* Related */}
+        <section className="mt-10">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">
+              {product.subcategory_name
+                ? t.relatedSameSub(product.subcategory_name)
+                : product.parent_name
+                  ? t.relatedUnderParent(product.parent_name)
+                  : t.relatedMaybe}
+            </h3>
 
-          {/* Nút điều hướng (ẩn trên mobile nếu muốn) */}
-          {related.length > 0 && (
-            <div className="hidden md:flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => scrollRelated(-1)}
-                className="cursor-pointer px-3 py-1.5 rounded-md border hover:bg-gray-50"
-                aria-label="Prev"
-                title="Prev"
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollRelated(1)}
-                className="cursor-pointer px-3 py-1.5 rounded-md border hover:bg-gray-50"
-                aria-label="Next"
-                title="Next"
-              >
-                ›
-              </button>
-            </div>
-          )}
-        </div>
-
-        {relLoading ? (
-          <p>Đang tải...</p>
-        ) : related.length === 0 ? (
-          <p className="text-gray-600">Chưa có sản phẩm liên quan.</p>
-        ) : (
-          <div className="relative">
-            {/* Track */}
-            <div
-              ref={trackRef}
-              className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar"
-            >
-              {related.map((rel) => (
-                <div
-                  key={rel.id}
-                  onClick={() => handleRelatedClick(rel)}
-                  className="shrink-0 w-1/2 md:w-1/4 snap-start cursor-pointer rounded-md border border-gray-200 overflow-hidden hover:shadow group transition"
-                >
-                  <div className="w-full aspect-[3/4] overflow-hidden bg-white">
-                    <img
-                      src={!rel.image_url || rel.image_url === "null" ? "/banner.jpg" : rel.image_url}
-                      alt={rel.title}
-                      className="block w-full h-full object-cover transform transition-transform duration-300 ease-in-out group-hover:scale-110"
-                      loading="lazy"
-                    />
-                  </div>
-                  <div className="px-3 py-2 text-center">
-                    <div className="font-medium text-gray-900 line-clamp-2">{rel.title}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Nút điều hướng nổi (hiện cả mobile nếu muốn) */}
             {related.length > 0 && (
-              <>
+              <div className="hidden md:flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => scrollRelated(-1)}
-                  className="md:hidden absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 bg-white cursor-pointer hover:bg-gray-50 shadow rounded-full w-9 h-9 flex items-center justify-center"
+                  className="cursor-pointer px-3 py-1.5 rounded-md border hover:bg-gray-50"
                   aria-label="Prev"
-                  title="Prev"
+                  title={t.prev}
                 >
                   ‹
                 </button>
                 <button
                   type="button"
                   onClick={() => scrollRelated(1)}
-                  className="md:hidden absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10 bg-white cursor-pointer hover:bg-gray-50 shadow rounded-full w-9 h-9 flex items-center justify-center"
+                  className="cursor-pointer px-3 py-1.5 rounded-md border hover:bg-gray-50"
                   aria-label="Next"
-                  title="Next"
+                  title={t.next}
                 >
                   ›
                 </button>
-              </>
+              </div>
             )}
           </div>
-        )}
-      </section>
 
+          {relLoading ? (
+            <p>{t.loading}</p>
+          ) : related.length === 0 ? (
+            <p className="text-gray-600">{t.noRelated}</p>
+          ) : (
+            <div className="relative">
+              {/* Track */}
+              <div
+                ref={trackRef}
+                className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar"
+              >
+                {related.map((rel) => (
+                  <div
+                    key={rel.id}
+                    onClick={() => handleRelatedClick(rel)}
+                    className="shrink-0 w-1/2 md:w-1/4 snap-start cursor-pointer rounded-md border border-gray-200 overflow-hidden hover:shadow group transition"
+                  >
+                    <div className="w-full aspect-[3/4] overflow-hidden bg-white">
+                      <img
+                        src={!rel.image_url || rel.image_url === "null" ? "/banner.jpg" : rel.image_url}
+                        alt={rel.title}
+                        className="block w-full h-full object-cover transform transition-transform duration-300 ease-in-out group-hover:scale-110"
+                        loading="lazy"
+                      />
+                    </div>
+                    <div className="px-3 py-2 text-center">
+                      <div className="font-medium text-gray-900 line-clamp-2">{rel.title}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Nút điều hướng nổi (mobile) */}
+              {related.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => scrollRelated(-1)}
+                    className="md:hidden absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 z-10 bg-white cursor-pointer hover:bg-gray-50 shadow rounded-full w-9 h-9 flex items-center justify-center"
+                    aria-label="Prev"
+                    title={t.prev}
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => scrollRelated(1)}
+                    className="md:hidden absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10 bg-white cursor-pointer hover:bg-gray-50 shadow rounded-full w-9 h-9 flex items-center justify-center"
+                    aria-label="Next"
+                    title={t.next}
+                  >
+                    ›
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </section>
       </main>
 
       <Footer />
