@@ -31525,20 +31525,6 @@ const DEFAULT_LOCALE$3 = "vi";
 const getLocale$3 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$3).toLowerCase();
 const hasDB$3 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const slugify = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function withRetry(fn, { tries = 5, delayMs = 400, backoff = 1.5, timeoutMs = 5e3 } = {}) {
-  let d = delayMs;
-  for (let i = 0; i < tries; i++) {
-    const v = await Promise.race([
-      fn(),
-      new Promise((res) => setTimeout(() => res(""), timeoutMs))
-    ]);
-    if (v && String(v).trim()) return v;
-    if (i < tries - 1) await sleep(d);
-    d = Math.round(d * backoff);
-  }
-  return "";
-}
 const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
   const isNumericId = /^\d+$/.test(idOrSlug);
   const sql = `
@@ -31907,24 +31893,47 @@ function csvToJson(text) {
   }
   return rows;
 }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function withRetry(fn, { tries = 5, delayMs = 400, backoff = 1.5, timeoutMs = 5e3 } = {}) {
+  let d = delayMs;
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const v = await Promise.race([
+        Promise.resolve(fn()),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), timeoutMs))
+      ]);
+      if (v && String(v).trim()) return v;
+      lastErr = new Error("empty result");
+    } catch (e) {
+      lastErr = e;
+    }
+    if (i < tries - 1) {
+      await sleep(d);
+      d = Math.round(d * backoff);
+    }
+  }
+  throw lastErr || new Error("withRetry exhausted");
+}
 async function translateTextInWorker(c, text, source, target) {
   if (!text || !text.trim()) return "";
-  try {
-    const base = new URL(c.req.url);
-    const url = new URL("/api/translate", base.origin);
-    const r = await fetch(url.toString(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, source, target })
-    });
-    if (!r.ok) return "";
-    const j = await r.json();
-    return j?.translated || "";
-  } catch {
-    return "";
+  const base = new URL(c.req.url);
+  const url = new URL("/api/translate", base.origin);
+  const r = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, source, target })
+  });
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    throw new Error(`translate HTTP ${r.status}: ${body || "no body"}`);
   }
+  const j = await r.json().catch(() => ({}));
+  const out = j?.translated ?? j?.translation ?? j?.text ?? "";
+  if (!(out && String(out).trim())) throw new Error("translate returned empty");
+  return out;
 }
-async function translateMarkdownInWorker(c, md, source, target) {
+async function translateMarkdownInWorker(c, md, source, target, retryOpts = { tries: 5, delayMs: 400, backoff: 1.5, timeoutMs: 8e3 }) {
   const lines = String(md || "").split("\n");
   const out = [];
   for (const line of lines) {
@@ -31935,8 +31944,12 @@ async function translateMarkdownInWorker(c, md, source, target) {
       out.push(prefix ? prefix : line);
       continue;
     }
-    const t = await translateTextInWorker(c, text, source, target);
-    out.push(prefix ? prefix + t : t);
+    try {
+      const t = await withRetry(() => translateTextInWorker(c, text, source, target), retryOpts);
+      out.push(prefix ? prefix + t : t);
+    } catch {
+      out.push(prefix ? prefix + text : text);
+    }
   }
   return out.join("\n");
 }
@@ -32069,24 +32082,25 @@ productsRouter.post("/import", async (c) => {
           const tDesc0 = toStr(row[`${lc}_description`]);
           const tCont0 = toStr(row[`${lc}_content`]);
           const tSlug0 = toStr(row[`${lc}_slug`]);
-          const tTitle = tTitle0 || await withRetry(
-            () => translateTextInWorker(c, title2, source, lc),
-            { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }
-          );
-          const tDesc = tDesc0 || (description ? await withRetry(() => translateTextInWorker(c, description, source, lc), { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }) : "");
-          const tCont = tCont0 || await withRetry(
-            () => translateMarkdownInWorker(c, content, source, lc),
-            { tries, delayMs: delay0, backoff, timeoutMs: 1e4 }
-          );
-          const ok2 = Boolean((tTitle || "").trim());
-          trans[lc] = {
-            ok: ok2,
-            title: tTitle,
-            desc: tDesc,
-            cont: tCont,
-            slug: slugify(tSlug0 || tTitle)
-            // slug đúng ngôn ngữ vì dựa trên title đã dịch
-          };
+          try {
+            const tTitle = tTitle0 || await withRetry(
+              () => translateTextInWorker(c, title2, source, lc),
+              { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }
+            );
+            const tDesc = tDesc0 || (description ? await withRetry(
+              () => translateTextInWorker(c, description, source, lc),
+              { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }
+            ) : "");
+            const tCont = tCont0 || await withRetry(
+              () => translateMarkdownInWorker(c, content, source, lc, { tries, delayMs: delay0, backoff, timeoutMs: 1e4 }),
+              { tries, delayMs: delay0, backoff, timeoutMs: 12e3 }
+            );
+            const ok2 = Boolean((tTitle || "").trim());
+            trans[lc] = { ok: ok2, title: tTitle, desc: tDesc, cont: tCont, slug: slugify(tSlug0 || tTitle) };
+          } catch (e) {
+            errors.push({ row: i + 1, locale: lc, reason: "translate_failed", message: String(e?.message || e) });
+            trans[lc] = { ok: false, title: "", desc: "", cont: "", slug: "" };
+          }
         }
         const missing = requireLocales.filter((lc) => !trans[lc]?.ok);
         if (mode === "strict" && missing.length) {
