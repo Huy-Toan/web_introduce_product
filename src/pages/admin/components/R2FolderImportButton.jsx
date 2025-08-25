@@ -9,8 +9,8 @@ export default function R2FolderImportButton({
   folder = "",
   concurrent = 3,
   className = "",
-  disabled = false,           // NEW
-  onBusyChange,               // NEW: (busy:boolean) => void
+  disabled = false,         
+  onBusyChange,               
 }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);

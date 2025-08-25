@@ -653,7 +653,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
             
             <R2FolderImportButton
               apiUrl="/api/upload-image"
-              folder={base.slug ? `products/${base.slug}` : "uploads"}
+              folder=""
               concurrent={3}
               className="inline-block"           
               onBusyChange={setIsR2Importing}       // NEW: nhận busy từ child
