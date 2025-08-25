@@ -17,7 +17,7 @@ function pickLocale(search) {
       : DEFAULT_LOCALE;
 }
 
-// Chuẩn hoá payload danh mục từ API (tuỳ BE trả về)
+// Chuẩn hoá payload danh mục từ API
 function normalizeParentsPayload(data) {
   const list =
     data?.parents ??
@@ -36,7 +36,7 @@ export default function Footer() {
   const [categories, setCategories] = useState([]);
   const [loadingCats, setLoadingCats] = useState(false);
 
-  // Lấy danh mục có kèm locale
+  // Lấy danh mục (kèm locale)
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
@@ -67,7 +67,7 @@ export default function Footer() {
     return () => ac.abort();
   }, [locale]);
 
-  // Điều hướng và GIỮ locale trong query
+  // Điều hướng & GIỮ locale
   const handleNavigation = (path) => {
     const u = new URL(path, window.location.origin);
     u.searchParams.set("locale", locale);
@@ -76,10 +76,11 @@ export default function Footer() {
   };
 
   return (
-    <footer className="bg-white border-t border-gray-200 mt-12 text-[15px] md:text-base text-gray-700 leading-relaxed">
-      <div className="max-w-7xl mx-auto px-4 py-12 grid grid-cols-1 md:grid-cols-4 gap-10">
-        {/* Company Info */}
-        <div>
+    <footer className="bg-white border-t border-gray-200 mt-12 text-[15px] text-gray-700 leading-relaxed">
+      {/* GRID: mobile = 2 cột (để Dịch vụ & Sản phẩm cùng hàng), desktop = 4 cột */}
+      <div className="max-w-7xl mx-auto px-4 py-12 grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-12">
+        {/* Company Info: span 2 cột ở mobile */}
+        <div className="col-span-2 md:col-span-1">
           <button
             type="button"
             className="flex items-center space-x-2 cursor-pointer mb-4"
@@ -89,28 +90,31 @@ export default function Footer() {
             <img
               src="https://allxone.vn/wp-content/uploads/2022/08/cropped-logo1-150x31.png"
               alt="AllXone Logo"
-              className="h-10 w-auto"
+              className="h-9 w-auto"
               loading="lazy"
             />
           </button>
-          <p className="mb-2">{t("footer.address")}</p>
-          <p className="mb-2">
-            {t("footer.contact")}: +84 383 655 628
-          </p>
-          <p>
-            Email:{" "}
-            <a
-              href="mailto:support@allxone.com"
-              className="hover:text-blue-600 underline underline-offset-2"
-            >
-              support@allxone.com
-            </a>
-          </p>
+
+          <div className="space-y-2 text-[15px]">
+            <p>{t("footer.address")}</p>
+            <p>
+              {t("footer.contact")}: <span className="font-medium">+84 383 655 628</span>
+            </p>
+            <p>
+              Email:{" "}
+              <a
+                href="mailto:support@allxone.com"
+                className="hover:text-blue-600 underline underline-offset-2"
+              >
+                support@allxone.com
+              </a>
+            </p>
+          </div>
         </div>
 
         {/* Services */}
         <div>
-          <h4 className="font-semibold text-yellow-700 mb-3 text-[16px] md:text-lg">
+          <h4 className="text-[13px] md:text-sm font-semibold tracking-wide text-yellow-700 uppercase mb-3">
             {t("footer.service")}
           </h4>
           <ul className="space-y-2">
@@ -157,9 +161,9 @@ export default function Footer() {
           </ul>
         </div>
 
-        {/* Products */}
+        {/* Products (đứng cùng hàng với Services ở mobile) */}
         <div>
-          <h4 className="font-semibold text-yellow-700 mb-3 text-[16px] md:text-lg">
+          <h4 className="text-[13px] md:text-sm font-semibold tracking-wide text-yellow-700 uppercase mb-3">
             {t("footer.products")}
           </h4>
           <ul className="space-y-2">
@@ -172,7 +176,7 @@ export default function Footer() {
                     onClick={() =>
                       handleNavigation(`/product/${encodeURIComponent(cat.slug)}`)
                     }
-                    className="hover:text-blue-600 cursor-pointer"
+                    className="hover:text-blue-600 cursor-pointer line-clamp-1 text-left"
                     title={cat.name}
                   >
                     {cat.name}
@@ -185,13 +189,14 @@ export default function Footer() {
           </ul>
         </div>
 
-        {/* Register */}
-        <div>
-          <h4 className="font-semibold text-yellow-700 mb-3 text-[16px] md:text-lg">
+        {/* Register: span 2 cột ở mobile */}
+        <div className="col-span-2 md:col-span-1">
+          <h4 className="text-[13px] md:text-sm font-semibold tracking-wide text-yellow-700 uppercase mb-3">
             {t("footer.register")}
           </h4>
           <p className="mb-3">{t("footer.subscribe")}</p>
-          <div className="flex items-center border rounded overflow-hidden mb-4">
+
+          <div className="flex items-stretch border rounded overflow-hidden mb-4">
             <input
               type="email"
               placeholder={t("footer.email_placeholder")}
@@ -207,7 +212,7 @@ export default function Footer() {
             </button>
           </div>
 
-          <div className="flex space-x-4 text-2xl text-gray-600">
+          <div className="flex space-x-4 text-xl text-gray-600">
             <a
               href="https://facebook.com"
               className="hover:text-blue-600"
@@ -236,6 +241,14 @@ export default function Footer() {
               <FaYoutube />
             </a>
           </div>
+        </div>
+      </div>
+
+      {/* Bottom bar nhỏ cho sạch sẽ */}
+      <div className="border-t border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 py-5 text-xs text-gray-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>© {new Date().getFullYear()} AllXone. All rights reserved.</span>
+          <span className="hidden sm:inline">Made with ❤️</span>
         </div>
       </div>
     </footer>
