@@ -18,20 +18,6 @@ const slugify = (s = "") =>
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  async function withRetry(fn, { tries = 5, delayMs = 400, backoff = 1.5, timeoutMs = 5000 } = {}) {
-    let d = delayMs;
-    for (let i = 0; i < tries; i++) {
-      const v = await Promise.race([
-        fn(),
-        new Promise((res) => setTimeout(() => res(""), timeoutMs)),
-      ]);
-      if (v && String(v).trim()) return v;
-      if (i < tries - 1) await sleep(d);
-      d = Math.round(d * backoff);
-    }
-    return "";
-  }
 /* ---------------------------------------------------------
  * Resolve product by id or slug (supports translated slug)
  * --------------------------------------------------------- */
@@ -513,41 +499,72 @@ function csvToJson(text) {
   return rows
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function withRetry(fn, { tries = 5, delayMs = 400, backoff = 1.5, timeoutMs = 5000 } = {}) {
+  let d = delayMs;
+  let lastErr;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const v = await Promise.race([
+        Promise.resolve(fn()),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+      ]);
+      if (v && String(v).trim()) return v;       // coi rỗng là thất bại để thử lại
+      lastErr = new Error('empty result');
+    } catch (e) {
+      lastErr = e;
+    }
+    if (i < tries - 1) {
+      await sleep(d);
+      d = Math.round(d * backoff);
+    }
+  }
+  throw lastErr || new Error('withRetry exhausted');
+}
+
 // gọi lại chính /api/translate đang có (để chạy trong Worker)
 async function translateTextInWorker(c, text, source, target) {
-  if (!text || !text.trim()) return ''
-  try {
-    const base = new URL(c.req.url)
-    const url = new URL('/api/translate', base.origin)
-    const r = await fetch(url.toString(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, source, target })
-    })
-    if (!r.ok) return ''
-    const j = await r.json()
-    return j?.translated || ''
-  } catch {
-    return ''
+  if (!text || !text.trim()) return '';
+  const base = new URL(c.req.url);
+  const url = new URL('/api/translate', base.origin);
+
+  const r = await fetch(url.toString(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, source, target })
+  });
+
+  if (!r.ok) {
+    const body = await r.text().catch(() => '');
+    throw new Error(`translate HTTP ${r.status}: ${body || 'no body'}`);
   }
+
+  const j = await r.json().catch(() => ({}));
+  const out = j?.translated ?? j?.translation ?? j?.text ?? '';
+  if (!(out && String(out).trim())) throw new Error('translate returned empty');
+  return out;
 }
 
 // dịch markdown theo dòng: giữ prefix (#, -, 1., >) như client
-async function translateMarkdownInWorker(c, md, source, target) {
-  const lines = String(md || '').split('\n')
-  const out = []
+async function translateMarkdownInWorker(c, md, source, target, retryOpts = { tries: 5, delayMs: 400, backoff: 1.5, timeoutMs: 8000 }) {
+  const lines = String(md || '').split('\n');
+  const out = [];
   for (const line of lines) {
-    const m = line.match(/^(\s*([#>*\-]|[0-9]+\.)\s*)(.*)$/)
-    const prefix = m ? m[1] : ''
-    const text = m ? m[3] : line
-    if (!text.trim()) {
-      out.push(prefix ? prefix : line)
-      continue
+    const m = line.match(/^(\s*([#>*\-]|[0-9]+\.)\s*)(.*)$/);
+    const prefix = m ? m[1] : '';
+    const text = m ? m[3] : line;
+
+    if (!text.trim()) { out.push(prefix ? prefix : line); continue; }
+
+    try {
+      const t = await withRetry(() => translateTextInWorker(c, text, source, target), retryOpts);
+      out.push(prefix ? prefix + t : t);
+    } catch {
+      out.push(prefix ? prefix + text : text);
     }
-    const t = await translateTextInWorker(c, text, source, target)
-    out.push(prefix ? prefix + t : t)
   }
-  return out.join('\n')
+  return out.join('\n');
 }
 
 productsRouter.post('/import', async (c) => {
@@ -710,37 +727,36 @@ productsRouter.post('/import', async (c) => {
         const trans = {};
 
         for (const lc of targets) {
-          if (waitMs > 0) await sleep(waitMs); // tránh dồn request dịch
+          if (waitMs > 0) await sleep(waitMs);
 
           const tTitle0 = toStr(row[`${lc}_title`]);
           const tDesc0  = toStr(row[`${lc}_description`]);
           const tCont0  = toStr(row[`${lc}_content`]);
           const tSlug0  = toStr(row[`${lc}_slug`]);
 
-          // DỊCH CÓ RETRY + TIMEOUT — chỉ cần tTitle để tạo slug đúng ngôn ngữ
-          const tTitle = tTitle0 || await withRetry(
-            () => translateTextInWorker(c, title, source, lc),
-            { tries, delayMs: delay0, backoff, timeoutMs: 6000 }
-          );
+          try {
+            const tTitle = tTitle0 || await withRetry(
+              () => translateTextInWorker(c, title, source, lc),
+              { tries, delayMs: delay0, backoff, timeoutMs: 6000 }
+            );
 
-          const tDesc  = tDesc0 || (description
-            ? await withRetry(() => translateTextInWorker(c, description, source, lc), { tries, delayMs: delay0, backoff, timeoutMs: 6000 })
-            : ""
-          );
+            const tDesc  = tDesc0 || (description
+              ? await withRetry(() => translateTextInWorker(c, description, source, lc),
+                  { tries, delayMs: delay0, backoff, timeoutMs: 6000 })
+              : ""
+            );
 
-          const tCont  = tCont0 || await withRetry(
-            () => translateMarkdownInWorker(c, content, source, lc),
-            { tries, delayMs: delay0, backoff, timeoutMs: 10000 }
-          );
+            const tCont  = tCont0 || await withRetry(
+              () => translateMarkdownInWorker(c, content, source, lc, { tries, delayMs: delay0, backoff, timeoutMs: 10000 }),
+              { tries, delayMs: delay0, backoff, timeoutMs: 12000 }
+            );
 
-          const ok = Boolean((tTitle || '').trim());
-          trans[lc] = {
-            ok,
-            title: tTitle,
-            desc:  tDesc,
-            cont:  tCont,
-            slug:  slugify(tSlug0 || tTitle) // slug đúng ngôn ngữ vì dựa trên title đã dịch
-          };
+            const ok = Boolean((tTitle || '').trim());
+            trans[lc] = { ok, title: tTitle, desc: tDesc, cont: tCont, slug: slugify(tSlug0 || tTitle) };
+          } catch (e) {
+            errors.push({ row: i + 1, locale: lc, reason: 'translate_failed', message: String(e?.message || e) });
+            trans[lc] = { ok: false, title: '', desc: '', cont: '', slug: '' };
+          }
         }
 
         // locale bắt buộc phải có (ví dụ en)
