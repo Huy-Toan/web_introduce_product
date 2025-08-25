@@ -430,7 +430,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
             </label>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="cursor-pointer text-gray-400 hover:text-gray-600"
               disabled={isUploading}
             >
               <X size={24} />
@@ -446,7 +446,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
                 <button
                   type="button"
                   onClick={() => setActiveTab(lc)}
-                  className={`px-3 py-1 rounded-full border text-sm mr-1 ${activeTab === lc ? 'bg-black text-white' : ''}`}
+                  className={`cursor-pointer px-3 py-1 rounded-full border text-sm mr-1 ${activeTab === lc ? 'bg-black text-white' : ''}`}
                 >
                   {lc.toUpperCase()}
                 </button>
@@ -454,7 +454,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
                   <button
                     type="button"
                     onClick={() => removeLocaleTab(lc)}
-                    className="text-xs text-red-600 mr-2"
+                    className="cursor-pointer text-xs text-red-600 mr-2"
                     title="Đóng tab này"
                   >
                     <X size={16} />
@@ -515,7 +515,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
                       type="button"
                       onClick={generateSlugFromVIName}
                       disabled={isUploading}
-                      className="text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
+                      className="cursor-pointer text-sm inline-flex items-center gap-1 px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
                       title="Sinh slug từ tên"
                     >
                       <Wand2 size={16} />
@@ -651,14 +651,14 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
               type="button"
               onClick={onClose}
               disabled={isUploading}
-              className="px-5 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="cursor-pointer px-5 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={isUploading}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
+              className="cursor-pointer px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isUploading && <Loader2 className="animate-spin" size={18} />}
               {isEditing ? 'Cập nhật' : 'Thêm'}

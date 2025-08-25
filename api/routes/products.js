@@ -493,7 +493,6 @@ productsRouter.delete("/:id", async (c) => {
 
 export default productsRouter;
 
-// ... giữ nguyên các helper getLocale, hasDB, slugify ... bạn đã có ở trên
 
 // Helper nhỏ: ép chuỗi
 const toStr = (v) => (v == null ? '' : String(v).trim())

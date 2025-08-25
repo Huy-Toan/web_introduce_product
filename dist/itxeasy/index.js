@@ -2295,11 +2295,9 @@ uploadImageRouter.post("/", async (c) => {
       success: true,
       url: publicUrl,
       key,
-      // ví dụ: products/xuat-nhap-khau.jpg
       fileName: key.split("/").pop(),
       alt: baseSlug,
       prefix
-      // để bạn biết đang lưu vào "thư mục" nào (nếu có)
     });
   } catch (error) {
     console.error("Upload error:", error);

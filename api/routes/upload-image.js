@@ -122,10 +122,10 @@ uploadImageRouter.post('/', async (c) => {
     return c.json({
       success: true,
       url: publicUrl,
-      key,               // ví dụ: products/xuat-nhap-khau.jpg
+      key,              
       fileName: key.split('/').pop(),
       alt: baseSlug,
-      prefix,            // để bạn biết đang lưu vào "thư mục" nào (nếu có)
+      prefix,          
     });
   } catch (error) {
     console.error('Upload error:', error);

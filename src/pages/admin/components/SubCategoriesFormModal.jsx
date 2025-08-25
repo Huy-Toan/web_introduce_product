@@ -481,7 +481,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
             </label>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="cursor-pointer text-gray-400 hover:text-gray-600"
               disabled={isUploading}
             >
               <X size={24} />
@@ -748,14 +748,14 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
               type="button"
               onClick={onClose}
               disabled={isUploading}
-              className="px-5 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="cursor-pointer px-5 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={isUploading}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
+              className="cursor-pointer px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isUploading && <Loader2 className="animate-spin" size={18} />}
               {isEditing ? 'Cập nhật' : 'Thêm'}

@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Upload, Loader2, Wand2, Plus, Sparkles, Languages } from 'lucide-react';
 import EditorMd from './EditorMd';
-
+import R2FolderImportButton from './R2FolderImportButton';
 // Tinh chỉnh import: chờ dịch & retry
 const IMPORT_TUNE = {
   wait_ms: 600,
@@ -191,7 +191,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
   // Editors
   const editorVIRef = useRef(null);
-  const editorRefs = useRef({}); // per-locale
+  const editorRefs = useRef({}); 
 
   // Fetch subcategories
   useEffect(() => {
@@ -635,9 +635,10 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               type="button"
               onClick={() => fileImportRef.current?.click()}
               disabled={isUploading || isImporting}
-              className="text-sm inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
               title="Import sản phẩm từ Excel"
             >
+
               <Upload size={16} />
               {isImporting ? 'Đang import...' : 'Import Excel'}
             </button>
@@ -648,8 +649,14 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               hidden
               onChange={handleImportSelected}
             />
+            <R2FolderImportButton
+              apiUrl="/api/upload-image"
+              folder={base.slug ? `products/${base.slug}` : "uploads"}
+              concurrent={3}
+              className="inline-block"
+            />
 
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600" disabled={isUploading || isImporting}>
+            <button onClick={onClose} className="cursor-pointer text-gray-400 hover:text-gray-600" disabled={isUploading || isImporting}>
               <X size={20} />
             </button>
           </div>
@@ -894,14 +901,14 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               type="button"
               onClick={onClose}
               disabled={isUploading || isImporting}
-              className="px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="cursor-pointer px-4 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               Hủy
             </button>
             <button
               type="submit"
               disabled={isUploading || isImporting}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
+              className="cursor-pointer px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-blue-400 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {(isUploading || isImporting) && <Loader2 className="animate-spin" size={16} />}
               {isEditing ? 'Cập nhật' : 'Thêm'}
@@ -922,7 +929,7 @@ function LocaleTabs({ openLocales, activeTab, setActiveTab, addLocale, removeLoc
           <button
             type="button"
             onClick={() => setActiveTab(lc)}
-            className={`px-3 py-1 rounded-full border text-sm mr-1 ${activeTab === lc ? 'bg-black text-white' : ''}`}
+            className={`cursor-pointer px-3 py-1 rounded-full border text-sm mr-1 ${activeTab === lc ? 'bg-black text-white' : ''}`}
           >
             {lc.toUpperCase()}
           </button>
@@ -930,7 +937,7 @@ function LocaleTabs({ openLocales, activeTab, setActiveTab, addLocale, removeLoc
             <button
               type="button"
               onClick={() => removeLocale(lc)}
-              className="text-xs text-red-600 mr-2"
+              className="cursor-pointer text-xs text-red-600 mr-2"
               title="Đóng tab này"
             >
               <X size={16} />
