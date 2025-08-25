@@ -17,6 +17,10 @@ export default function ProductDetailPage() {
   const location = useLocation();
   const trackRef = useRef(null);
 
+  // Lưu id của sản phẩm đã load thành công gần nhất để dùng lại khi đổi locale
+  const lastGoodIdRef = useRef(null);
+  const prevLocaleRef = useRef(null);
+
   // ==== locale: URL -> localStorage -> default
   const [locale, setLocale] = useState(() => {
     const urlLc = getLocaleFromSearch(window.location.search);
@@ -138,25 +142,70 @@ export default function ProductDetailPage() {
         setLoading(true);
         setError("");
 
+        // Nếu người dùng vừa đổi locale nhưng param chưa đổi,
+        // ưu tiên fetch bằng ID đã biết để tránh 404 do slug khác nhau theo ngôn ngữ
+        const preferId =
+          prevLocaleRef.current &&
+          prevLocaleRef.current !== locale &&
+          lastGoodIdRef.current != null;
+
+        const key = preferId ? String(lastGoodIdRef.current) : idOrSlug;
+
         // 1) Fetch chi tiết (kèm locale)
         const res = await fetch(
-          `/api/products/${encodeURIComponent(idOrSlug)}${qs}`,
+          `/api/products/${encodeURIComponent(key)}${qs}`,
           { cache: "no-store", signal: ac.signal }
         );
-        if (!res.ok) {
+
+        // Nếu fetch theo id/slug "không hợp lệ", thử một lần fallback: nếu đang ưu tiên id mà fail thì thử lại bằng param gốc
+        if (!res.ok && preferId && key !== idOrSlug) {
+          const res2 = await fetch(
+            `/api/products/${encodeURIComponent(idOrSlug)}${qs}`,
+            { cache: "no-store", signal: ac.signal }
+          );
+          if (res2.ok) {
+            const data2 = await res2.json();
+            const p2 = data2?.product || null;
+            setProduct(p2);
+            if (p2?.id != null) lastGoodIdRef.current = p2.id;
+            // canonicalize slug theo locale mới
+            if (p2?.slug && p2.slug !== idOrSlug) {
+              navigate(
+                `/product/product-detail/${encodeURIComponent(p2.slug)}${qs}`,
+                { replace: true }
+              );
+            }
+          } else {
+            let msg = `HTTP ${res2.status}`;
+            try { msg = (await res2.json())?.error || msg; } catch { }
+            throw new Error(msg);
+          }
+        } else if (!res.ok) {
           let msg = `HTTP ${res.status}`;
-          try {
-            msg = (await res.json())?.error || msg;
-          } catch { }
+          try { msg = (await res.json())?.error || msg; } catch { }
           throw new Error(msg);
+        } else {
+          const data = await res.json();
+          const p = data?.product || null;
+          setProduct(p);
+          if (p?.id != null) lastGoodIdRef.current = p.id;
+          // canonicalize slug theo locale mới
+          if (p?.slug && p.slug !== idOrSlug) {
+            navigate(
+              `/product/product-detail/${encodeURIComponent(p.slug)}${qs}`,
+              { replace: true }
+            );
+          }
         }
-        const data = await res.json();
-        const p = data?.product || null;
-        setProduct(p);
+
+        // Ghi lại locale hiện tại (để nhận biết lần sau có đổi không)
+        prevLocaleRef.current = locale;
 
         // Bổ sung parent nếu thiếu
-        if (!p?.parent_slug && p?.subcategory_slug) {
-          const parent = await fetchParentBySub(p.subcategory_slug, ac.signal);
+        const pNow = (prev) => prev; // just for readability
+        if (!pNow?.parent_slug && (pNow?.subcategory_slug || product?.subcategory_slug)) {
+          const subSlug = pNow?.subcategory_slug || product?.subcategory_slug;
+          const parent = await fetchParentBySub(subSlug, ac.signal);
           if (parent?.parent_slug) {
             setProduct((prev) => ({ ...prev, ...parent }));
           }
@@ -166,20 +215,27 @@ export default function ProductDetailPage() {
         setRelLoading(true);
         let relatedList = [];
 
-        const subSlug = p?.subcategory_slug ?? p?.subcategory?.slug ?? null;
-        const parentSlug = p?.parent_slug ?? p?.parent?.slug ?? null;
+        const subSlug =
+          (product?.subcategory_slug ?? product?.subcategory?.slug) ||
+          undefined;
+        const parentSlug = (product?.parent_slug ?? product?.parent?.slug) || undefined;
 
-        if (subSlug) {
+        // Lấy lại từ state mới nhất sau khi setProduct
+        const pFinal = (prev) => prev;
+        const sub = pFinal?.subcategory_slug ?? pFinal?.subcategory?.slug ?? subSlug;
+        const parent = pFinal?.parent_slug ?? pFinal?.parent?.slug ?? parentSlug;
+
+        if (sub) {
           // Ưu tiên route có join translations
           let relRes = await fetch(
-            `/api/sub_categories/${encodeURIComponent(subSlug)}/products${qs}`,
+            `/api/sub_categories/${encodeURIComponent(sub)}/products${qs}`,
             { cache: "no-store", signal: ac.signal }
           );
 
           // Fallback tên khác
           if (!relRes.ok) {
             relRes = await fetch(
-              `/api/subcategories/${encodeURIComponent(subSlug)}/products${qs}`,
+              `/api/subcategories/${encodeURIComponent(sub)}/products${qs}`,
               { cache: "no-store", signal: ac.signal }
             );
           }
@@ -188,9 +244,9 @@ export default function ProductDetailPage() {
             const relData = await safeJson(relRes);
             relatedList = Array.isArray(relData?.products) ? relData.products : [];
           }
-        } else if (parentSlug) {
+        } else if (parent) {
           const relRes = await fetch(
-            `/api/parent_categories/${encodeURIComponent(parentSlug)}/products${qs}`,
+            `/api/parent_categories/${encodeURIComponent(parent)}/products${qs}`,
             { cache: "no-store", signal: ac.signal }
           );
           if (relRes.ok) {
@@ -200,12 +256,15 @@ export default function ProductDetailPage() {
         }
 
         // loại chính nó + giới hạn
-        relatedList = relatedList.filter((x) => x.id !== p?.id).slice(0, 12);
+        const curId = lastGoodIdRef.current;
+        relatedList = relatedList.filter((x) => x.id !== curId).slice(0, 12);
         setRelated(relatedList);
       } catch (e) {
         if (e.name !== "AbortError") {
           console.error("Load product error:", e);
-          setError(e.message || (locale === "vi" ? "Không tải được sản phẩm" : "Failed to load product"));
+          setError(
+            e.message || (locale === "vi" ? "Không tải được sản phẩm" : "Failed to load product")
+          );
           setProduct(null);
           setRelated([]);
         }
@@ -217,7 +276,7 @@ export default function ProductDetailPage() {
 
     return () => ac.abort();
     // Re-fetch khi đổi locale để lấy bản dịch
-  }, [idOrSlug, locale]);
+  }, [idOrSlug, locale, navigate]);
 
   const handleCategoryClick = () => {
     const subSlug = product?.subcategory_slug ?? product?.subcategory?.slug ?? null;
@@ -232,7 +291,9 @@ export default function ProductDetailPage() {
   };
 
   const handleRelatedClick = (item) => {
-    navigate(`/product/product-detail/${encodeURIComponent(item.product_slug)}${qs}`);
+    const slug = item?.slug || item?.product_slug || item?.id;
+    if (!slug) return;
+    navigate(`/product/product-detail/${encodeURIComponent(String(slug))}${qs}`);
   };
 
   if (loading) {

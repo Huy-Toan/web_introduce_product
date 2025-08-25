@@ -1,5 +1,5 @@
 // src/pages/News_Detail.jsx
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import TopNavigation from "../components/Navigation";
 import Footer from "../components/Footer";
@@ -27,7 +27,10 @@ function News_Detail() {
   const [allNews, setAllNews] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Đồng bộ khi ?locale đổi (từ language switcher trên TopNavigation)
+  // giữ id hiện tại để dự phòng map qua locale nếu cần
+  const lastGoodIdRef = useRef(null);
+
+  // Đồng bộ khi ?locale đổi
   useEffect(() => {
     const sp = new URLSearchParams(location.search);
     const urlLc = (sp.get("locale") || "").toLowerCase();
@@ -51,20 +54,49 @@ function News_Detail() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch chi tiết bài viết hiện tại theo locale
+        // --- Chi tiết bài hiện tại theo locale ---
         const detailUrl = new URL(`/api/news/${encodeURIComponent(slug)}`, window.location.origin);
         detailUrl.searchParams.set("locale", locale);
-        const newsRes = await fetch(detailUrl.toString());
+        const newsRes = await fetch(detailUrl.toString(), { cache: "no-store" });
         const newsDetail = await newsRes.json();
 
-        // Fetch tất cả bài viết cho sidebar theo cùng locale
+        // --- Danh sách cho sidebar (cùng locale) ---
         const listUrl = new URL("/api/news", window.location.origin);
         listUrl.searchParams.set("locale", locale);
-        const allNewsRes = await fetch(listUrl.toString());
+        const allNewsRes = await fetch(listUrl.toString(), { cache: "no-store" });
         const allNewsData = await allNewsRes.json();
 
-        setNewsData(newsRes.ok ? { news: newsDetail.news } : null);
+        // Lưu list cho sidebar
         setAllNews(allNewsData.news || []);
+
+        if (newsRes.ok && newsDetail?.news) {
+          const current = newsDetail.news;
+          setNewsData({ news: current });
+
+          // lưu id gốc để fallback lần sau
+          if (current?.id) lastGoodIdRef.current = current.id;
+
+          // ⬇️ Fix chính: nếu slug "chuẩn" theo locale khác URL hiện tại → replace URL
+          const canonicalSlug = (current.slug || "").trim();
+          if (canonicalSlug && canonicalSlug !== slug) {
+            navigate(`/news/news-detail/${encodeURIComponent(canonicalSlug)}?locale=${locale}`, {
+              replace: true,
+            });
+          }
+        } else {
+          // Fallback nhẹ: nếu fail theo slug cũ, thử map theo id đã xem trước đó (nếu có)
+          const id = lastGoodIdRef.current;
+          if (id && Array.isArray(allNewsData.news)) {
+            const sameId = allNewsData.news.find(n => n.id === id);
+            if (sameId?.slug) {
+              navigate(`/news/news-detail/${encodeURIComponent(sameId.slug)}?locale=${locale}`, {
+                replace: true,
+              });
+              return; // để effect rerun với slug mới
+            }
+          }
+          setNewsData(null);
+        }
       } catch (err) {
         console.error("Failed to load news data:", err);
         setNewsData(null);
@@ -75,7 +107,7 @@ function News_Detail() {
     };
 
     if (slug) fetchData();
-  }, [slug, locale]);
+  }, [slug, locale, navigate]);
 
   // Handler khi click vào bài khác trong sidebar: giữ ?locale
   const handleSelectNews = (n) => {
@@ -132,8 +164,6 @@ function News_Detail() {
 
           {/* Main Content */}
           <div className="flex-1">
-            {/* Truyền newsData như cũ; bên trong NewsDetail đã render title/content/image meta_description
-                Dữ liệu này đã được backend merge (translations → fallback gốc) theo locale. */}
             <NewsDetail newsData={newsData} />
           </div>
         </div>
