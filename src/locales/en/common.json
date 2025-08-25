@@ -1,21 +1,21 @@
 {
   "navigation": {
     "home": "Home",
-    "about": "About Us",
-    "what_we_do": "What We Do",
+    "about": "About",
+    "what_we_do": "What we do",
     "product": "Products",
     "news": "News",
     "contact": "Contact"
   },
   "footer": {
-    "service": "Service",
+    "service": "Services",
     "products": "Products",
     "register": "Register",
-    "subscribe": "Subscribe for updates",
+    "subscribe": "Subscribe",
     "email_placeholder": "Email...",
     "loading": "Loading...",
-    "address": "140 Nguyen Xi Street, Binh Thanh District, Ho Chi Minh City, Vietnam",
-    "contact": "Contact"
+    "address": "140 Nguyen Xi, Binh Thanh District, Ho Chi Minh City, Vietnam",
+    "contact": "Contact number"
   },
   "auto": {
     "tieng_viet": "Vietnamese",
@@ -24,10 +24,239 @@
     "dang_chuyen_doi": "Switching...",
     "chuyen_sang": "Switch to",
     "vui_long_cho": "Please wait",
-    "loading_translations": "Loading translations..."
+    "loading_translations": "Loading translations...",
+    "nothing_to_show": "Nothing to show"
   },
   "home": {
-    "intro": "PREMIUM VIETNAMESE FRUITS"
-
+    "tagline": "Choose us — Choose quality",
+    "page_desc": "Home {{brand}}: Vietnamese agricultural exports, product catalog, service fields, international certification partners, and the latest market news.",
+    "keyword_export": "export",
+    "keyword_vn_export": "vietnam export",
+    "keyword_fruit": "fruit",
+    "keyword_agriculture": "agriculture",
+    "keyword_logistics": "logistics",
+    "keyword_gap": "GAP",
+    "keyword_partners": "partners",
+    "keyword_news": "news",
+    "categories": "Product categories",
+    "featured_products": "Featured products",
+    "services": "Services",
+    "latest_news": "Latest news"
+  },
+  "news": {
+    "latest_news": "Latest news",
+    "view_all": "View all",
+    "posted_on": "Posted on:"
+  },
+  "products": {
+    "product": "Product",
+    "all": "All",
+    "no_products": "No products.",
+    "product_category": "Product categories",
+    "export_agri_vn": "High-quality Vietnamese agricultural exports.",
+    "export": "Export",
+    "agriculture": "Agriculture",
+    "fruit": "Fruit",
+    "vietnam": "Vietnam"
+  },
+  "banner": {
+    "loading": "Loading banner...",
+    "aria_section": "Banner",
+    "prev": "Prev",
+    "next": "Next",
+    "dot_aria": "Go to banner {{index}}",
+    "fallback_title": "Welcome to our store",
+    "cta_contact": "Contact now →"
+  },
+  "about": {
+    "title": "About Us",
+    "home": "Home"
+  },
+  "about_section": {
+    "tagline": "Freshness – Delivered worldwide",
+    "learn_more": "Learn more →",
+    "cta_aria": "Go to about page",
+    "image_alt": "About image"
+  },
+  "field": {
+    "title": "What We Do",
+    "home": "Home"
+  },
+  "fields_section": {
+    "search_newest": "FIND THIS WEEK'S NEWEST CONTENT",
+    "title": "FIELDS & PERSPECTIVES",
+    "subtitle": "From us to you.",
+    "empty": "No content to display.",
+    "untitled": "Untitled",
+    "strength_prefix": "Our strengths:",
+    "learn_more": "Learn more →",
+    "aria_detail": "View details {{name}}"
+  },
+  "categories_section": {
+    "title": "Product categories",
+    "subtitle": "Choose a category to see related products",
+    "empty": "No categories yet.",
+    "category_fallback": "Category",
+    "prev": "Prev",
+    "next": "Next",
+    "dot_aria": "Go to slide {{index}}",
+    "cta_all": "See all products →",
+    "cta_all_aria": "Go to all products page"
+  },
+  "cer_partners": {
+    "title": "Certifications & Partners",
+    "carousel_aria": "Certifications and partners logo carousel",
+    "logo_alt": "logo",
+    "prev": "Prev",
+    "next": "Next",
+    "dot_aria": "Go to group {{index}}",
+    "empty": "No data to display."
+  },
+  "news_detail": {
+    "fallback_title": "Article",
+    "toc": "Table of contents",
+    "cover_alt": "Illustration"
+  },
+  "news_header": {
+    "title": "Fresh fruit trade news",
+    "subtitle": "Stay up to date with the latest news, events and key announcements in the fresh fruit import-export sector."
+  },
+  "product_header": {
+    "title": "Products",
+    "home": "Home"
+  },
+  "sidebar_categories": {
+    "title": "Categories",
+    "all": "All",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "no_subs": "No subcategories yet"
+  },
+  "contact": {
+    "title": "Contact",
+    "page_desc": "Contact {{brand}}: address, email, phone, WhatsApp. Send RFQs/partnership requests for Vietnamese agricultural exports.",
+    "header": "CONTACT",
+    "company_label": "Company",
+    "address_full": "140 Nguyen Xi, Binh Thanh District, Ho Chi Minh City, Vietnam",
+    "phone_label": "Mobile / WhatsApp",
+    "email_label": "Email",
+    "form_full_name": "Full name",
+    "form_email": "Email",
+    "form_phone": "Phone number",
+    "form_address": "Address",
+    "form_message": "Message",
+    "error_required": "Please enter Full name, Email and Message.",
+    "error_email": "Invalid email.",
+    "error_submit": "An error occurred while submitting.",
+    "fail_submit": "Submission failed.",
+    "success_submit": "Submitted successfully!",
+    "send": "Send",
+    "sending": "Sending...",
+    "map_title": "Location of {{brand}}"
+  },
+  "field_page": {
+    "breadcrumb": {
+      "home": "Home",
+      "what_we_do": "What we do"
+    },
+    "titles": {
+      "page": "What we do"
+    },
+    "certifications": {
+      "title": "Certifications"
+    },
+    "partners": {
+      "title": "Partners"
+    },
+    "counts": {
+      "items": "{{count}} items"
+    },
+    "empties": {
+      "certifications": "No certifications available.",
+      "partners": "No partners available.",
+      "content": "No content to display."
+    },
+    "labels": {
+      "no_image": "No image",
+      "field_image_alt": "Field image"
+    },
+    "seo": {
+      "default_desc": "What we do at {{brand}}: export services/solutions for Vietnamese agricultural products – standardized processes and international certification partners.",
+      "keywords_base": [
+        "What we do",
+        "services",
+        "solutions",
+        "export",
+        "agriculture",
+        "Vietnam export"
+      ]
+    }
+  },
+  "news_detail_page": {
+    "breadcrumb": {
+      "detail": "Detail"
+    },
+    "not_found": {
+      "title": "Article not found",
+      "desc_with_id": "The article with ID \"{{id}}\" does not exist or has been removed."
+    }
+  },
+  "product_detail_page": {
+    "breadcrumb": {
+      "detail": "Detail"
+    },
+    "labels": {
+      "product_image_alt": "Product image"
+    },
+    "sections": {
+      "content": "Content"
+    },
+    "related": {
+      "same_subcategory": "Same category: {{name}}",
+      "in_parent": "Under: {{name}}",
+      "maybe_like": "You might also like"
+    },
+    "carousel": {
+      "prev": "Prev",
+      "next": "Next"
+    },
+    "loading": {
+      "related": "Loading..."
+    },
+    "empties": {
+      "no_related": "No related products yet."
+    },
+    "not_found": {
+      "title": "Product not found",
+      "error_prefix": "Error:",
+      "desc_with_id": "The product \"{{id}}\" does not exist or has been removed."
+    },
+    "errors": {
+      "load_failed_fallback": "Failed to load product"
+    }
+  },
+  "news_section": {
+    "title": "NEWS",
+    "loading": "Loading...",
+    "empty": "No news.",
+    "prev": "Prev",
+    "next": "Next",
+    "dot_aria": "Page {{index}}",
+    "aria_section": "News section"
+  },
+  "news_sidebar": {
+    "title": "NEW POSTS",
+    "empty": "No posts yet",
+    "img_alt": "Thumbnail",
+    "aria_aside": "New posts sidebar",
+    "item_aria": "Open post: {{title}}"
+  },
+  "contact_header": {
+    "title": "CONTACT NOW",
+    "breadcrumb": {
+      "home": "Home",
+      "contact": "Contact",
+      "aria": "Contact breadcrumb navigation"
+    }
   }
 }
