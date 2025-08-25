@@ -14,15 +14,15 @@ import { getSiteOrigin, getCanonicalBase, isNonCanonicalHost } from "../lib/site
 function NewsDetail({ newsData }) {
   const { news } = newsData || {};
   const markdown = news?.content || '';
-  const SITE_URL = getSiteOrigin();       
-  const CANON_BASE = getCanonicalBase(); 
+  const SITE_URL = getSiteOrigin();
+  const CANON_BASE = getCanonicalBase();
   const BRAND = import.meta.env.VITE_BRAND_NAME || 'ITXEASY';
 
   // Đường dẫn & canonical
   const slug = news?.slug && String(news.slug).trim();
   const path = slug ? `/news/${encodeURIComponent(slug)}` : `/news`;
   const canonical = `${CANON_BASE}${path}`;
-  const noindex = isNonCanonicalHost(); 
+  const noindex = isNonCanonicalHost();
 
   const seoTitle =
     (news?.title && news.title.trim()) ||
@@ -36,7 +36,7 @@ function NewsDetail({ newsData }) {
     .map(s => s.trim())
     .filter(Boolean);
   const published = news?.published_at || news?.created_at;
-  const modified  = news?.updated_at || published;
+  const modified = news?.updated_at || published;
   const jsonLd = buildNewsArticleJsonLd({
     url: canonical,
     headline: seoTitle,
@@ -86,19 +86,19 @@ function NewsDetail({ newsData }) {
 
   return (
     <div>
-     <SEO
-       title={seoTitle}
-       description={seoDesc}
-       url={canonical}
-       image={news?.image_url}
-       keywords={keywords}
-       publishedTime={published}
-       modifiedTime={modified}
-       siteName="Your Brand"
-       ogType="article"
-       twitterCard="summary_large_image"
-       jsonLd={jsonLd}
-     />
+      <SEO
+        title={seoTitle}
+        description={seoDesc}
+        url={canonical}
+        image={news?.image_url}
+        keywords={keywords}
+        publishedTime={published}
+        modifiedTime={modified}
+        siteName="Your Brand"
+        ogType="article"
+        twitterCard="summary_large_image"
+        jsonLd={jsonLd}
+      />
 
       <div className="space-y-12 mt-12">
         <div className="card">
@@ -122,26 +122,31 @@ function NewsDetail({ newsData }) {
             </div>
           ) : null}
 
-          {/* TOC */}
+          {/* TOC (đánh số tăng dần) */}
           {toc.length > 1 && (
             <nav className="mb-8 rounded-2xl border bg-white/60 p-4 shadow-sm">
               <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-neutral-500">
                 Mục lục
               </div>
-              <ul className="space-y-1 text-sm">
+              <ol className="space-y-1 text-sm">
                 {toc.map((h, idx) => (
                   <li
-                    key={idx}
+                    key={h.id}
+                    className="flex items-start gap-2"
                     style={{ marginLeft: (h.level - 1) * 12 }}
                   >
+                    <span className="min-w-6 text-right tabular-nums text-neutral-500">
+                      {idx + 1}.
+                    </span>
                     <a href={`#${h.id}`} className="inline-block hover:underline">
                       {h.text}
                     </a>
                   </li>
                 ))}
-              </ul>
+              </ol>
             </nav>
           )}
+
 
           {/* Nội dung Markdown */}
           <article className="prose prose-neutral max-w-none">
@@ -149,9 +154,9 @@ function NewsDetail({ newsData }) {
               remarkPlugins={[remarkGfm, remarkBreaks]}
               rehypePlugins={[
                 rehypeSlug,
-                [rehypeAutolinkHeadings, { behavior: 'wrap' }], 
+                [rehypeAutolinkHeadings, { behavior: 'wrap' }],
                 [rehypeExternalLinks, { target: '_blank', rel: ['noopener', 'noreferrer'] }],
-                [rehypeSanitize, schema], 
+                [rehypeSanitize, schema],
               ]}
               components={{
                 img({ node, ...props }) {
