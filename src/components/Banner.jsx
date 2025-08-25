@@ -218,7 +218,7 @@ export default function Banner({ locale: localeProp }) {
       {/* CTA overlay — luôn cố định, không nhảy theo slide */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="pointer-events-auto bg-black/35 backdrop-blur-sm rounded-2xl p-4 sm:p-6 md:p-10 lg:p-12 shadow-2xl w-[92%] max-w-xs sm:max-w-md md:max-w-2xl lg:max-w-3xl">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-4 leading-tight text-white text-center line-clamp-3">
+          <h1 className="text-2x sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-4 leading-tight !text-white text-center line-clamp-3">
             {(banners[idx]?.content || "").trim() || (locale === "vi" ? "Chào mừng bạn" : "Welcome")}
           </h1>
           <div className="flex justify-center">
