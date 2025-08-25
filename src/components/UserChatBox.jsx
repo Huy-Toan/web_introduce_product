@@ -10,6 +10,8 @@ const QRCodeCanvas = lazy(() =>
 
 export default function UserChatBox({ msg }) {
     const [open, setOpen] = useState(false);
+    const [showChat, setShowChat] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
     const [phone, setPhone] = useState("");
     const [messages, setMessages] = useState([]);
     const [text, setText] = useState("");
@@ -43,6 +45,14 @@ export default function UserChatBox({ msg }) {
 
     useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 768);
+        check();
+        window.addEventListener("resize", check);
+        return () => window.removeEventListener("resize", check);
+    }, []);
+
+
     const onSend = async () => {
         const t = text.trim(); if (!t || !canChat) return;
         setText("");
@@ -73,9 +83,77 @@ export default function UserChatBox({ msg }) {
             </button>
         );
     }
+    if (isMobile) {
+        if (showChat) {
+            return (
+                <div className="fixed inset-0 z-50 flex flex-col bg-[#111b21] text-white">
+                    <button
+                        onClick={() => { setShowChat(false); setOpen(false); }}
+                        className="absolute top-2 right-2 cursor-pointer text-gray-300 hover:text-white"
+                        aria-label="Close chat"
+                    >
+                        ×
+                    </button>
+                    <div className="flex flex-col flex-1">
+                        <div className="bg-[#202c33] p-3 pt-10">
+                            <div className="text-sm text-gray-300 mb-2">Số của bạn (E.164)</div>
+                            <input value={phone} onChange={e=>setPhone(e.target.value.replace(/\D/g,""))}
+                                   placeholder="VD: 8490xxxxxxx"
+                                   className="w-full px-3 py-2 rounded bg-[#0b141a] text-white outline-none"/>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-[#0b141a]">
+                            {messages.map((m,i)=>(
+                                <div key={i} className={`w-full flex ${m.direction === "out" ? "justify-start" : "justify-end"}`}>
+                                    <div className={`max-w-[70%] px-3 py-2 rounded-lg text-[15px] whitespace-pre-wrap ${m.direction === "out" ? "bg-[#202c33]" : "bg-[#005c4b]"} ${m.pending ? "opacity-60" : ""}`}>
+                                        {m.body}
+                                        <div className="text-[10px] text-gray-300 mt-1 text-right">{new Date(m.ts).toLocaleTimeString()}</div>
+                                    </div>
+                                </div>
+                            ))}
+                            <div ref={bottomRef} />
+                        </div>
+                        <div className="h-16 flex items-center gap-2 px-3 bg-[#202c33] border-t border-black/20">
+                            <input value={text} onChange={e=>setText(e.target.value)}
+                                   onKeyDown={(e)=>(e.key==="Enter"&&!e.shiftKey?onSend():null)}
+                                   placeholder="Nhập tin nhắn..." className="flex-1 px-3 py-2 rounded bg-[#0b141a] text-white outline-none"/>
+                            <button onClick={onSend} className="px-4 py-2 rounded bg-[#00a884] cursor-pointer text-white font-semibold">Send</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
 
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                <div className="flex flex-col gap-4">
+                    {isPhoneOk() && (
+                        <a
+                            href={waUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-2 rounded bg-[#25d366] text-white text-center"
+                        >
+                            Mở WhatsApp
+                        </a>
+                    )}
+                    <button
+                        onClick={() => setShowChat(true)}
+                        className="px-4 py-2 rounded bg-[#00a884] text-white"
+                    >
+                        Chat trên website
+                    </button>
+                    <button
+                        onClick={() => setOpen(false)}
+                        className="px-4 py-2 rounded bg-gray-300 text-black"
+                    >
+                        Đóng
+                    </button>
+                </div>
+            </div>
+        );
+    }
     return (
-        <div className="fixed bottom-24 right-8 flex items-end space-x-3 z-50">
+        <div className="fixed bottom-24 right-8 flex flex-col items-end space-y-3 md:flex-row md:space-y-0 md:space-x-3 z-50">
             {isPhoneOk() && (
                 <div className="flex flex-col items-center space-y-2">
                     <a
