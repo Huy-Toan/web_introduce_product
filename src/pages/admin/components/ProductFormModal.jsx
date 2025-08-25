@@ -147,6 +147,7 @@ async function translateMarkdown(md, source, target) {
 
 const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id);
+  const [isR2Importing, setIsR2Importing] = useState(false);   
 
   // Base (VI)
   const [base, setBase] = useState({
@@ -283,12 +284,12 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
   // Lock editors when uploading or importing
   useEffect(() => {
-    const lock = (isUploading || isImporting) ? 'nocursor' : false;
+    const lock = (isUploading || isImporting || isR2Importing) ? 'nocursor' : false;
     editorVIRef.current?.cm?.setOption('readOnly', lock);
     Object.values(editorRefs.current || {}).forEach((ref) =>
       ref?.cm?.setOption('readOnly', lock)
     );
-  }, [isUploading, isImporting]);
+  }, [isUploading, isImporting, isR2Importing]);
 
   // Auto-translate title + description from VI (+ tự sinh slug nếu trống/chưa touch)
   useEffect(() => {
@@ -649,11 +650,13 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               hidden
               onChange={handleImportSelected}
             />
+            
             <R2FolderImportButton
               apiUrl="/api/upload-image"
               folder={base.slug ? `products/${base.slug}` : "uploads"}
               concurrent={3}
-              className="inline-block"
+              className="inline-block"           
+              onBusyChange={setIsR2Importing}       // NEW: nhận busy từ child
             />
 
             <button onClick={onClose} className="cursor-pointer text-gray-400 hover:text-gray-600" disabled={isUploading || isImporting}>

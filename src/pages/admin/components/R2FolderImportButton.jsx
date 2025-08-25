@@ -1,23 +1,32 @@
 // components/R2FolderImportButton.jsx
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 
 const ALLOWED = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
-const MAX_SIZE = 5 * 1024 * 1024; 
+const MAX_SIZE = 5 * 1024 * 1024;
 
 export default function R2FolderImportButton({
   apiUrl = "/api/upload-image",
-  folder = "",                 
-  concurrent = 3,            
+  folder = "",
+  concurrent = 3,
   className = "",
+  disabled = false,           // NEW
+  onBusyChange,               // NEW: (busy:boolean) => void
 }) {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
-  const [summary, setSummary] = useState(null); 
+  const [summary, setSummary] = useState(null);
 
-  const clickPicker = () => inputRef.current?.click();
+  // Thông báo busy cho cha
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
+
+  const clickPicker = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.value = "";
+    el.click();
+  };
 
   const uploadOne = async (file) => {
-    // bỏ qua file không phải ảnh hoặc quá 5MB
     if (!ALLOWED.includes(file.type)) {
       return { ok: false, name: file.name, reason: "Loại file không hỗ trợ" };
     }
@@ -25,15 +34,12 @@ export default function R2FolderImportButton({
       return { ok: false, name: file.name, reason: "File > 5MB" };
     }
 
-    // seoName = tên file không đuôi
     const seoName = file.name.replace(/\.[^.]+$/, "");
-
     const fd = new FormData();
     fd.append("image", file);
     fd.append("seoName", seoName);
     if (folder) fd.append("folder", folder);
 
-    // nếu API yêu cầu token:
     const token = localStorage.getItem("token") || sessionStorage.getItem("token");
     const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
@@ -56,18 +62,20 @@ export default function R2FolderImportButton({
   };
 
   const handleFiles = async (fileList) => {
-    const files = Array.from(fileList).filter(f => f && f.type && f.size > 0);
+    const el = inputRef.current;
+
+
+    const files = Array.from(fileList || []);
     if (files.length === 0) {
       setSummary({ total: 0, ok: 0, fail: 0 });
+      alert("Không có file nào được chọn.");
       return;
     }
 
     setBusy(true);
     setSummary(null);
 
-    let idx = 0;
-    let ok = 0, fail = 0;
-
+    let idx = 0, ok = 0, fail = 0;
     const runner = async () => {
       while (idx < files.length) {
         const i = idx++;
@@ -81,12 +89,16 @@ export default function R2FolderImportButton({
 
     setBusy(false);
     setSummary({ total: files.length, ok, fail });
+
+    alert(`Đã xử lý: ${files.length} file\nThành công: ${ok}\nThất bại: ${fail}`);
   };
 
   const onChange = (e) => {
-    const fileList = e.target.files;
-    e.target.value = "";
-    if (fileList) handleFiles(fileList);
+    if (e?.target?.files) handleFiles(e.target.files);
+    else {
+      console.warn("onChange fired nhưng không có files.");
+      setSummary({ total: 0, ok: 0, fail: 0 });
+    }
   };
 
   return (
@@ -94,27 +106,22 @@ export default function R2FolderImportButton({
       <button
         type="button"
         onClick={clickPicker}
-        disabled={busy}
-        className={`cursor-pointer px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60`}
+        disabled={busy || disabled}
+        className="cursor-pointer px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60"
       >
         {busy ? "Đang import..." : "Import ảnh từ thư mục"}
       </button>
 
       <input
+        id="r2-folder-input"
         ref={inputRef}
         type="file"
-        webkitdirectory="true"
+        directory=""
+        webkitdirectory=""
         multiple
-        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
         onChange={onChange}
-        className="hidden"
+        style={{ position:"absolute", left:"-9999px", width:"1px", height:"1px", opacity:0 }}
       />
-
-      {summary && (
-        <p className="mt-2 text-sm">
-          Đã xử lý: <b>{summary.total}</b> file — Thành công: <b className="text-green-700">{summary.ok}</b>, Thất bại: <b className="text-red-700">{summary.fail}</b>.
-        </p>
-      )}
     </div>
   );
 }
