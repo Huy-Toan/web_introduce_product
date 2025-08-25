@@ -298,7 +298,7 @@ export default function ProductDetailPage() {
                     />
                   </div>
                   <div className="px-3 py-2 text-center">
-                    <div className="font-medium text-gray-900 line-clamp-2">{rel.title}</div>
+                    <div className="text-xl font-medium text-gray-900 line-clamp-2">{rel.title}</div>
                   </div>
                 </div>
               ))}

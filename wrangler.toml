@@ -33,7 +33,7 @@ binding = "AI"
 [vars]
 JWT_SECRET = "kOIu0O//qZ7JP++tc7GSBBUmvdw+Fcm7sx/D533H0JQ="
 JWT_EXPIRES_IN = "900" 
-BRAND_NAME = "ALLXONE"
+BRAND_NAME = "ITXEASY"
 ADMIN_EMAIL = "doanvanngoc061220@gmail.com"   
 FROM_EMAIL = "onboarding@resend.dev"         
 EMAIL_PROVIDER = "resend"

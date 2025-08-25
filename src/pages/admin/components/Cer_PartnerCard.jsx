@@ -17,7 +17,7 @@ const Cer_PartnerCard = ({ cer_partner, onEdit, onDelete }) => {
         alt={cer_partner.name}
         className="w-48 h-full object-contain bg-gray-50 flex-shrink-0"
         onError={(e) => {
-          e.target.src = "/fallback.jpg";
+          e.target.src = "/banner.jpg";
         }}
       />
 

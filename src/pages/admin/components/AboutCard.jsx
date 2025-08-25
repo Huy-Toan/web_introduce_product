@@ -10,7 +10,7 @@ const AboutCard = ({ about, onEdit, onDelete }) => {
         alt={about.title}
         className="w-48 h-full object-contain bg-gray-100 flex-shrink-0"
         onError={(e) => {
-            e.target.src = 'fallback_url.jpg';
+            e.target.src = '/banner.jpg';
         }}
         />
 

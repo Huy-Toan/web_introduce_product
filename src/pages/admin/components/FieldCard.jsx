@@ -9,7 +9,7 @@ const FieldCard = ({ field, onEdit, onDelete }) => {
         src={field.image_url}
         className="w-48 h-full object-contain bg-gray-100 flex-shrink-0"
         onError={(e) => {
-            e.target.src = './banner.jpg';
+            e.target.src = '/banner.jpg';
         }}
         />
 

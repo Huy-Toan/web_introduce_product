@@ -9,7 +9,7 @@ const Newscard = ({ news, onEdit, onDelete }) => {
         alt={news.title}
         className="w-full h-48 object-cover"
         onError={(e) => {
-          e.target.src = 'fallback_url.jpg';
+          e.target.src = '/banner.jpg';
         }}
       />
       <div className="p-4">

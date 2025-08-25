@@ -13,7 +13,7 @@ function ProductCard({ product, onClick }) {
       </div>
 
       <div className="p-2">
-        <h3 className="text-sm font-medium line-clamp-1 text-center">
+        <h3 className="text-sm font-medium line-clamp-2 text-center">
           {product.title}
         </h3>
       </div>

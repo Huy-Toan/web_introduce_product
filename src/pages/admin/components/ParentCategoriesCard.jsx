@@ -11,7 +11,7 @@ const ParentCategoriesCard = ({ parentcategories, onEdit, onDelete }) => {
         alt={parentcategories.name}
         className="w-48 h-full object-contain bg-gray-100 flex-shrink-0"
         onError={(e) => {
-          e.target.src = 'fallback_url.jpg';
+          e.target.src = '/banner.jpg';
         }}
       />
       {/* Nội dung ở giữa */}

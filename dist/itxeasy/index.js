@@ -31875,7 +31875,6 @@ productsRouter.delete("/:id", async (c) => {
     return c.json({ error: "Failed to delete product" }, 500);
   }
 });
-const toStr = (v) => v == null ? "" : String(v).trim();
 function csvToJson(text) {
   const lines = text.split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return [];
@@ -31890,45 +31889,40 @@ function csvToJson(text) {
   return rows;
 }
 async function translateTextInWorker(c, text, source, target) {
-  if (!text || !text.trim()) return "";
-  try {
-    const base = new URL(c.req.url);
-    const url = new URL("/api/translate", base.origin);
-    const r = await fetch(url.toString(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, source, target })
-    });
-    if (!r.ok) return "";
-    const j = await r.json();
-    return j?.translated || "";
-  } catch {
-    return "";
-  }
+  if (!text || !String(text).trim()) return "";
+  const out = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+    messages: [
+      { role: "system", content: `Translate from ${source} to ${target}. Reply with translation only.` },
+      { role: "user", content: String(text) }
+    ],
+    temperature: 0.2
+  });
+  return out?.response?.trim() || "";
 }
 async function translateMarkdownInWorker(c, md, source, target) {
-  const lines = String(md || "").split("\n");
-  const out = [];
-  for (const line of lines) {
-    const m = line.match(/^(\s*([#>*\-]|[0-9]+\.)\s*)(.*)$/);
-    const prefix = m ? m[1] : "";
-    const text = m ? m[3] : line;
-    if (!text.trim()) {
-      out.push(prefix ? prefix : line);
-      continue;
-    }
-    const t = await translateTextInWorker(c, text, source, target);
-    out.push(prefix ? prefix + t : t);
-  }
-  return out.join("\n");
+  if (!md || !String(md).trim()) return "";
+  const out = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
+    messages: [
+      { role: "system", content: `Translate markdown from ${source} to ${target}. Keep markdown structure.` },
+      { role: "user", content: String(md) }
+    ],
+    temperature: 0.2
+  });
+  return out?.response?.trim() || "";
 }
 productsRouter.post("/import", async (c) => {
   try {
     if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
     const auto = c.req.query("auto") === "1" || c.req.query("auto") === "true";
-    const targets = (c.req.query("targets") || "").split(",").map((s) => s.trim().toLowerCase()).filter((lc) => lc && lc !== "vi");
+    let targets = (c.req.query("targets") || "").split(",").map((s) => s.trim().toLowerCase()).filter((lc) => lc && lc !== "vi");
     const source = c.req.query("source") || "vi";
     const dryRun = c.req.query("dry_run") === "1";
+    const mode = (c.req.query("mode") || "soft").toLowerCase();
+    const requireLocales = (c.req.query("require_locales") || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const tries = Number(c.req.query("tries") || 5);
+    const delay0 = Number(c.req.query("delay0") || 400);
+    const backoff = Number(c.req.query("backoff") || 1.5);
+    const waitMs = Number(c.req.query("wait_ms") || 200);
     const form = await c.req.formData();
     const file = form.get("file");
     if (!file || !file.arrayBuffer) {
@@ -31940,7 +31934,7 @@ productsRouter.post("/import", async (c) => {
       const wb = readSync(buf, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
       rows = utils.sheet_to_json(ws, { defval: "" });
-    } catch (err) {
+    } catch (_e) {
       const text = new TextDecoder("utf-8").decode(buf);
       rows = csvToJson(text);
     }
@@ -31952,9 +31946,32 @@ productsRouter.post("/import", async (c) => {
       for (const k of Object.keys(r)) out[String(k).toLowerCase().trim()] = r[k];
       return out;
     });
+    const normKey = (k = "") => String(k).toLowerCase().trim().replace(/[\s\-()]+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+    const getCell = (row, lc, field) => {
+      const candidates = [
+        `${lc}_${field}`,
+        `${field}_${lc}`,
+        `${lc}${field}`,
+        // entitle (phòng hờ)
+        `${lc} ${field}`,
+        `${field} ${lc}`,
+        `${field} (${lc})`,
+        `(${lc}) ${field}`,
+        `${lc}-${field}`,
+        `${field}-${lc}`
+      ].map(normKey);
+      const index2 = {};
+      for (const k of Object.keys(row)) index2[normKey(k)] = row[k];
+      for (const key of candidates) {
+        const v = index2[key];
+        if (v != null && String(v).trim() !== "") return String(v);
+      }
+      return "";
+    };
+    const toStr = (v) => v == null ? "" : String(v).trim();
+    const locale = getLocale$3(c);
     let created = 0, updated = 0, skipped = 0;
     const errors = [];
-    const locale = getLocale$3(c);
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const title2 = toStr(row.title);
@@ -32027,7 +32044,16 @@ productsRouter.post("/import", async (c) => {
           continue;
         }
       }
-      if (auto && targets.length > 0 && productId) {
+      if (!targets.length) {
+        const keys2 = Object.keys(row);
+        const guessed = /* @__PURE__ */ new Set();
+        for (const k of keys2) {
+          const m = normKey(k).match(/^([a-z]{2})_(title|description|content|slug)$/i);
+          if (m && m[1] && m[1] !== "vi") guessed.add(m[1]);
+        }
+        targets = Array.from(guessed);
+      }
+      if (targets.length > 0 && productId) {
         const upsertT = `
           INSERT INTO products_translations (product_id, locale, title, slug, description, content)
           VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -32038,53 +32064,72 @@ productsRouter.post("/import", async (c) => {
             content     = COALESCE(excluded.content, content),
             updated_at  = CURRENT_TIMESTAMP
         `;
-        const mode = (c.req.query("mode") || "soft").toLowerCase();
-        const requireLocales = (c.req.query("require_locales") || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-        const tries = Number(c.req.query("tries") || 5);
-        const delay0 = Number(c.req.query("delay0") || 400);
-        const backoff = Number(c.req.query("backoff") || 1.5);
-        const waitMs = Number(c.req.query("wait_ms") || 0);
         const trans = {};
         for (const lc of targets) {
           if (waitMs > 0) await sleep(waitMs);
-          const tTitle0 = toStr(row[`${lc}_title`]);
-          const tDesc0 = toStr(row[`${lc}_description`]);
-          const tCont0 = toStr(row[`${lc}_content`]);
-          const tSlug0 = toStr(row[`${lc}_slug`]);
-          const tTitle = tTitle0 || await withRetry(
-            () => translateTextInWorker(c, title2, source, lc),
-            { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }
-          );
-          const tDesc = tDesc0 || (description ? await withRetry(() => translateTextInWorker(c, description, source, lc), { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }) : "");
-          const tCont = tCont0 || await withRetry(
-            () => translateMarkdownInWorker(c, content, source, lc),
-            { tries, delayMs: delay0, backoff, timeoutMs: 1e4 }
-          );
+          const tTitle0 = getCell(row, lc, "title");
+          const tDesc0 = getCell(row, lc, "description");
+          const tCont0 = getCell(row, lc, "content");
+          const tSlug0 = getCell(row, lc, "slug");
+          let tTitle = tTitle0;
+          let tDesc = tDesc0;
+          let tCont = tCont0;
+          if (!tTitle && auto) {
+            try {
+              tTitle = await withRetry(
+                () => translateTextInWorker(c, title2, source, lc),
+                { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }
+              );
+            } catch (_e) {
+            }
+          }
+          if (!tDesc && description && auto) {
+            try {
+              tDesc = await withRetry(
+                () => translateTextInWorker(c, description, source, lc),
+                { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }
+              );
+            } catch (_e) {
+            }
+          }
+          if (!tCont && auto) {
+            try {
+              tCont = await withRetry(
+                () => translateMarkdownInWorker(c, content, source, lc),
+                { tries, delayMs: delay0, backoff, timeoutMs: 1e4 }
+              );
+            } catch (_e) {
+            }
+          }
           const ok2 = Boolean((tTitle || "").trim());
           trans[lc] = {
             ok: ok2,
             title: tTitle,
             desc: tDesc,
             cont: tCont,
-            slug: slugify(tSlug0 || tTitle)
-            // slug đúng ngôn ngữ vì dựa trên title đã dịch
+            slug: slugify(tSlug0 || tTitle || "")
+            // slug theo title dịch (nếu có)
           };
         }
         const missing = requireLocales.filter((lc) => !trans[lc]?.ok);
         if (mode === "strict" && missing.length) {
           errors.push({ row: i + 1, reason: "strict_missing_required_locales", locales: missing });
         } else {
+          const stmts = [];
           for (const lc of targets) {
             if (!trans[lc]?.ok) continue;
-            await c.env.DB.prepare(upsertT).bind(
-              productId,
-              lc,
-              trans[lc].title || null,
-              trans[lc].slug || null,
-              trans[lc].desc || null,
-              trans[lc].cont || null
-            ).run();
+            stmts.push(
+              c.env.DB.prepare(upsertT).bind(
+                productId,
+                lc,
+                trans[lc].title || null,
+                trans[lc].slug || null,
+                trans[lc].desc || null,
+                trans[lc].cont || null
+              )
+            );
           }
+          if (stmts.length) await c.env.DB.batch(stmts);
         }
       }
     }
