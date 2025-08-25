@@ -31509,6 +31509,20 @@ const DEFAULT_LOCALE$3 = "vi";
 const getLocale$3 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$3).toLowerCase();
 const hasDB$3 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const slugify = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function withRetry(fn, { tries = 5, delayMs = 400, backoff = 1.5, timeoutMs = 5e3 } = {}) {
+  let d = delayMs;
+  for (let i = 0; i < tries; i++) {
+    const v = await Promise.race([
+      fn(),
+      new Promise((res) => setTimeout(() => res(""), timeoutMs))
+    ]);
+    if (v && String(v).trim()) return v;
+    if (i < tries - 1) await sleep(d);
+    d = Math.round(d * backoff);
+  }
+  return "";
+}
 const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
   const isNumericId = /^\d+$/.test(idOrSlug);
   const sql = `
@@ -32026,23 +32040,53 @@ productsRouter.post("/import", async (c) => {
             content     = COALESCE(excluded.content, content),
             updated_at  = CURRENT_TIMESTAMP
         `;
+        const mode = (c.req.query("mode") || "soft").toLowerCase();
+        const requireLocales = (c.req.query("require_locales") || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+        const tries = Number(c.req.query("tries") || 5);
+        const delay0 = Number(c.req.query("delay0") || 400);
+        const backoff = Number(c.req.query("backoff") || 1.5);
+        const waitMs = Number(c.req.query("wait_ms") || 0);
+        const trans = {};
         for (const lc of targets) {
+          if (waitMs > 0) await sleep(waitMs);
           const tTitle0 = toStr(row[`${lc}_title`]);
           const tDesc0 = toStr(row[`${lc}_description`]);
           const tCont0 = toStr(row[`${lc}_content`]);
           const tSlug0 = toStr(row[`${lc}_slug`]);
-          const tTitle = tTitle0 || await translateTextInWorker(c, title2, source, lc);
-          const tDesc = tDesc0 || (description ? await translateTextInWorker(c, description, source, lc) : "");
-          const tCont = tCont0 || await translateMarkdownInWorker(c, content, source, lc);
-          const tSlug = slugify(tSlug0 || tTitle);
-          await c.env.DB.prepare(upsertT).bind(
-            productId,
-            lc,
-            tTitle || null,
-            tSlug || null,
-            tDesc || null,
-            tCont || null
-          ).run();
+          const tTitle = tTitle0 || await withRetry(
+            () => translateTextInWorker(c, title2, source, lc),
+            { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }
+          );
+          const tDesc = tDesc0 || (description ? await withRetry(() => translateTextInWorker(c, description, source, lc), { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }) : "");
+          const tCont = tCont0 || await withRetry(
+            () => translateMarkdownInWorker(c, content, source, lc),
+            { tries, delayMs: delay0, backoff, timeoutMs: 1e4 }
+          );
+          const ok2 = Boolean((tTitle || "").trim());
+          trans[lc] = {
+            ok: ok2,
+            title: tTitle,
+            desc: tDesc,
+            cont: tCont,
+            slug: slugify(tSlug0 || tTitle)
+            // slug đúng ngôn ngữ vì dựa trên title đã dịch
+          };
+        }
+        const missing = requireLocales.filter((lc) => !trans[lc]?.ok);
+        if (mode === "strict" && missing.length) {
+          errors.push({ row: i + 1, reason: "strict_missing_required_locales", locales: missing });
+        } else {
+          for (const lc of targets) {
+            if (!trans[lc]?.ok) continue;
+            await c.env.DB.prepare(upsertT).bind(
+              productId,
+              lc,
+              trans[lc].title || null,
+              trans[lc].slug || null,
+              trans[lc].desc || null,
+              trans[lc].cont || null
+            ).run();
+          }
         }
       }
     }

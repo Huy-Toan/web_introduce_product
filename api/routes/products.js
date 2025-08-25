@@ -18,6 +18,20 @@ const slugify = (s = "") =>
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  async function withRetry(fn, { tries = 5, delayMs = 400, backoff = 1.5, timeoutMs = 5000 } = {}) {
+    let d = delayMs;
+    for (let i = 0; i < tries; i++) {
+      const v = await Promise.race([
+        fn(),
+        new Promise((res) => setTimeout(() => res(""), timeoutMs)),
+      ]);
+      if (v && String(v).trim()) return v;
+      if (i < tries - 1) await sleep(d);
+      d = Math.round(d * backoff);
+    }
+    return "";
+  }
 /* ---------------------------------------------------------
  * Resolve product by id or slug (supports translated slug)
  * --------------------------------------------------------- */
@@ -680,32 +694,78 @@ productsRouter.post('/import', async (c) => {
             description = COALESCE(excluded.description, description),
             content     = COALESCE(excluded.content, content),
             updated_at  = CURRENT_TIMESTAMP
-        `
+        `;
+
+        // điều khiển hành vi
+        const mode = (c.req.query('mode') || 'soft').toLowerCase(); // soft | strict
+        const requireLocales = (c.req.query('require_locales') || '')
+          .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+        const tries   = Number(c.req.query('tries')   || 5);
+        const delay0  = Number(c.req.query('delay0')  || 400);
+        const backoff = Number(c.req.query('backoff') || 1.5);
+        const waitMs  = Number(c.req.query('wait_ms') || 0);
+
+        /** @type {Record<string,{ok:boolean,title:string,desc:string,cont:string,slug:string}>} */
+        const trans = {};
 
         for (const lc of targets) {
-          // Nếu file có sẵn cột en_title / en_description / en_content / en_slug -> ưu tiên dùng
-          const tTitle0 = toStr(row[`${lc}_title`])
-          const tDesc0 = toStr(row[`${lc}_description`])
-          const tCont0 = toStr(row[`${lc}_content`])
-          const tSlug0 = toStr(row[`${lc}_slug`])
+          if (waitMs > 0) await sleep(waitMs); // tránh dồn request dịch
 
-          const tTitle = tTitle0 || await translateTextInWorker(c, title, source, lc)
-          const tDesc = tDesc0 || (description ? await translateTextInWorker(c, description, source, lc) : '')
-          const tCont = tCont0 || await translateMarkdownInWorker(c, content, source, lc)
-          const tSlug = slugify(tSlug0 || tTitle)
+          const tTitle0 = toStr(row[`${lc}_title`]);
+          const tDesc0  = toStr(row[`${lc}_description`]);
+          const tCont0  = toStr(row[`${lc}_content`]);
+          const tSlug0  = toStr(row[`${lc}_slug`]);
 
-          await c.env.DB.prepare(upsertT).bind(
-            productId,
-            lc,
-            tTitle || null,
-            tSlug || null,
-            tDesc || null,
-            tCont || null
-          ).run()
+          // DỊCH CÓ RETRY + TIMEOUT — chỉ cần tTitle để tạo slug đúng ngôn ngữ
+          const tTitle = tTitle0 || await withRetry(
+            () => translateTextInWorker(c, title, source, lc),
+            { tries, delayMs: delay0, backoff, timeoutMs: 6000 }
+          );
+
+          const tDesc  = tDesc0 || (description
+            ? await withRetry(() => translateTextInWorker(c, description, source, lc), { tries, delayMs: delay0, backoff, timeoutMs: 6000 })
+            : ""
+          );
+
+          const tCont  = tCont0 || await withRetry(
+            () => translateMarkdownInWorker(c, content, source, lc),
+            { tries, delayMs: delay0, backoff, timeoutMs: 10000 }
+          );
+
+          const ok = Boolean((tTitle || '').trim());
+          trans[lc] = {
+            ok,
+            title: tTitle,
+            desc:  tDesc,
+            cont:  tCont,
+            slug:  slugify(tSlug0 || tTitle) // slug đúng ngôn ngữ vì dựa trên title đã dịch
+          };
+        }
+
+        // locale bắt buộc phải có (ví dụ en)
+        const missing = requireLocales.filter(lc => !trans[lc]?.ok);
+
+        if (mode === 'strict' && missing.length) {
+          // thiếu bản dịch bắt buộc → không insert translations (tuỳ chọn: rollback base)
+          // await c.env.DB.prepare("DELETE FROM products WHERE id = ?").bind(productId).run();
+          errors.push({ row: i + 1, reason: 'strict_missing_required_locales', locales: missing });
+        } else {
+          // soft: luôn giữ base; chỉ insert các locale đã dịch xong
+          for (const lc of targets) {
+            if (!trans[lc]?.ok) continue;
+            await c.env.DB.prepare(upsertT).bind(
+              productId,
+              lc,
+              trans[lc].title || null,
+              trans[lc].slug  || null,
+              trans[lc].desc  || null,
+              trans[lc].cont  || null
+            ).run();
+          }
         }
       }
     }
-
     return c.json({ ok: true, created, updated, skipped, errors })
   } catch (err) {
     console.error('Import products error:', err)

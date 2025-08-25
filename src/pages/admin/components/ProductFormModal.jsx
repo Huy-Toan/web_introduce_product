@@ -3,6 +3,16 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Upload, Loader2, Wand2, Plus, Sparkles, Languages } from 'lucide-react';
 import EditorMd from './EditorMd';
 
+// Tinh chỉnh import: chờ dịch & retry
+const IMPORT_TUNE = {
+  wait_ms: 600,
+  tries: 6,
+  delay0: 400,
+  backoff: 1.6,
+  mode: 'soft',            
+  require_locales: 'en', 
+};
+
 const slugify = (s = '') =>
   s
     .toLowerCase()
@@ -478,7 +488,19 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       const fd = new FormData();
       fd.append('file', f);
 
-      const res = await fetch('/api/products/import?auto=1&targets=en&source=vi', { method: 'POST', body: fd });
+      const q = new URLSearchParams({
+        auto: '1',
+        targets: 'en',  
+        source: 'vi',
+        wait_ms: String(IMPORT_TUNE.wait_ms),
+        tries: String(IMPORT_TUNE.tries),
+        delay0: String(IMPORT_TUNE.delay0),
+        backoff: String(IMPORT_TUNE.backoff),
+        mode: String(IMPORT_TUNE.mode || 'soft'),
+        require_locales: String(IMPORT_TUNE.require_locales || 'en'),
+      });
+      const res = await fetch(`/api/products/import?${q.toString()}`, { method: 'POST', body: fd });
+
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok || data.ok === false) {
