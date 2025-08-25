@@ -13,6 +13,7 @@ import AboutCard from './components/AboutCard';
 import ParentCategoriesCard from './components/ParentCategoriesCard';
 import ParentCategoriesFormModal from './components/ParentCategoriesFormModal';
 import useParentCategories from './hook/UseParentCategories';
+import ProductsTab from './components/productTab.jsx';
 
 import useSubCategories from './hook/UseSubCategories';
 import SubCategoriesCard from './components/SubCategoriesCard';
@@ -339,42 +340,20 @@ const AdminDashboard = () => {
         )}
 
 {/* products */}
-        {activeTab === 'products' && (
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() => openProductModal(null)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer"
-              >
-                Thêm sản phẩm
-              </button>
-            </div>
+{activeTab === 'products' && (
+  <ProductsTab
+    products={products}
+    productsLoading={productsLoading}
+    openProductModal={openProductModal}
+    closeProductModal={closeProductModal}
+    isProductModalOpen={isProductModalOpen}
+    productToEdit={productToEdit}
+    addProduct={addProduct}
+    updateProduct={updateProduct}
+    deleteProduct={deleteProduct}
+  />
+)}
 
-            {productsLoading ? (
-              <p>Đang tải...</p>
-            ) : products.length === 0 ? (
-              <p className="text-gray-600">Không có tin tức.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {products.map(item => (
-                  <ProductCard
-                    key={item.id}
-                    product={item}
-                    onEdit={() => openProductModal(item)}
-                    onDelete={deleteProduct}
-                  />
-                ))}
-              </div>
-            )}
-            
-            <ProductFormModal
-              isOpen={isProductModalOpen}
-              onClose={closeProductModal}
-              onSubmit={productToEdit ? updateProduct : addProduct}
-              initialData={productToEdit || {}}
-            />
-          </div>
-        )}
 {/* Banner */}
         {activeTab === 'banners' && (
           <div>
