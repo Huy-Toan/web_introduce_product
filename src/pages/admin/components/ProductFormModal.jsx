@@ -9,7 +9,7 @@ const IMPORT_TUNE = {
   tries: 6,
   delay0: 400,
   backoff: 1.6,
-  mode: 'soft',            
+  mode: 'strict',            
   require_locales: 'en', 
 };
 

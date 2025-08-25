@@ -31890,68 +31890,37 @@ function csvToJson(text) {
   return rows;
 }
 async function translateTextInWorker(c, text, source, target) {
-  const out = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
-    messages: [
-      { role: "system", content: `Translate from ${source} to ${target}. Reply with translation only.` },
-      { role: "user", content: text }
-    ],
-    temperature: 0.2
-  });
-  return out?.response?.trim() || "";
-}
-function cleanLLMOutput(s) {
-  let t = String(s ?? "");
-  t = t.replace(/^\s*```(?:markdown|md|text)?\s*/i, "").replace(/\s*```\s*$/i, "");
-  t = t.replace(/^(?:translation|translated|english|bản dịch|dịch)\s*:\s*/i, "");
-  return t.trim();
-}
-function splitMarkdownByPara(md, maxChars = 2800) {
-  const lines = String(md).split(/\r?\n/);
-  const out = [];
-  let buf = "";
-  for (const line of lines) {
-    const next = buf ? `${buf}
-${line}` : line;
-    if (next.length > maxChars) {
-      if (buf) out.push(buf);
-      buf = line;
-    } else {
-      buf = next;
-    }
+  if (!text || !text.trim()) return "";
+  try {
+    const base = new URL(c.req.url);
+    const url = new URL("/api/translate", base.origin);
+    const r = await fetch(url.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, source, target })
+    });
+    if (!r.ok) return "";
+    const j = await r.json();
+    return j?.translated || "";
+  } catch {
+    return "";
   }
-  if (buf.trim()) out.push(buf);
-  return out;
-}
-async function translateChunk(c, chunk, source, target) {
-  const out = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
-    messages: [
-      { role: "system", content: `Translate ${source}->${target} and PRESERVE MARKDOWN exactly.
-Rules:
-- Keep headings, bold/italics, lists (* or +), line breaks, symbols (°C, %, etc.).
-- Do NOT add explanations, labels, or code fences.
-- Return MARKDOWN ONLY.` },
-      { role: "user", content: String(chunk) }
-    ],
-    temperature: 0
-  });
-  return cleanLLMOutput(out?.response ?? "");
 }
 async function translateMarkdownInWorker(c, md, source, target) {
-  const text = String(md || "").trim();
-  if (!text) return "";
-  if (text.length <= 2800) {
-    const res = await translateChunk(c, text, source, target);
-    return res;
+  const lines = String(md || "").split("\n");
+  const out = [];
+  for (const line of lines) {
+    const m = line.match(/^(\s*([#>*\-]|[0-9]+\.)\s*)(.*)$/);
+    const prefix = m ? m[1] : "";
+    const text = m ? m[3] : line;
+    if (!text.trim()) {
+      out.push(prefix ? prefix : line);
+      continue;
+    }
+    const t = await translateTextInWorker(c, text, source, target);
+    out.push(prefix ? prefix + t : t);
   }
-  const parts = splitMarkdownByPara(text, 2800);
-  const outs = [];
-  for (const p of parts) {
-    const res = await translateChunk(c, p, source, target);
-    if (!res) return "";
-    outs.push(res);
-    await sleep(150);
-  }
-  return outs.join("\n");
+  return out.join("\n");
 }
 productsRouter.post("/import", async (c) => {
   try {
@@ -32089,12 +32058,7 @@ productsRouter.post("/import", async (c) => {
           const tDesc = tDesc0 || (description ? await withRetry(() => translateTextInWorker(c, description, source, lc), { tries, delayMs: delay0, backoff, timeoutMs: 6e3 }) : "");
           const tCont = tCont0 || await withRetry(
             () => translateMarkdownInWorker(c, content, source, lc),
-            {
-              tries: Math.max(tries, 6),
-              delayMs: Math.max(delay0, 600),
-              backoff,
-              timeoutMs: 22e3
-            }
+            { tries, delayMs: delay0, backoff, timeoutMs: 1e4 }
           );
           const ok2 = Boolean((tTitle || "").trim());
           trans[lc] = {
@@ -32103,6 +32067,7 @@ productsRouter.post("/import", async (c) => {
             desc: tDesc,
             cont: tCont,
             slug: slugify(tSlug0 || tTitle)
+            // slug đúng ngôn ngữ vì dựa trên title đã dịch
           };
         }
         const missing = requireLocales.filter((lc) => !trans[lc]?.ok);

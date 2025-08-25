@@ -513,97 +513,55 @@ function csvToJson(text) {
   return rows
 }
 
-
+// gọi lại chính /api/translate đang có (để chạy trong Worker)
 async function translateTextInWorker(c, text, source, target) {
-  const out = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-    messages: [
-      { role: 'system', content: `Translate from ${source} to ${target}. Reply with translation only.` },
-      { role: 'user', content: text }
-    ],
-    temperature: 0.2,
-  });
-  return out?.response?.trim() || '';
-}
-
-function cleanLLMOutput(s) {
-  let t = String(s ?? '');
-  // Bỏ code fences ```...```
-  t = t.replace(/^\s*```(?:markdown|md|text)?\s*/i, '')
-       .replace(/\s*```\s*$/i, '');
-  // Bỏ nhãn kiểu "Translation:", "English:", "Dịch:"
-  t = t.replace(/^(?:translation|translated|english|bản dịch|dịch)\s*:\s*/i, '');
-  return t.trim();
-}
-
-function splitMarkdownByPara(md, maxChars = 2800) {
-  const lines = String(md).split(/\r?\n/);
-  const out = [];
-  let buf = '';
-  for (const line of lines) {
-    const next = buf ? `${buf}\n${line}` : line;
-    if (next.length > maxChars) {
-      if (buf) out.push(buf);
-      buf = line;
-    } else {
-      buf = next;
-    }
+  if (!text || !text.trim()) return ''
+  try {
+    const base = new URL(c.req.url)
+    const url = new URL('/api/translate', base.origin)
+    const r = await fetch(url.toString(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, source, target })
+    })
+    if (!r.ok) return ''
+    const j = await r.json()
+    return j?.translated || ''
+  } catch {
+    return ''
   }
-  if (buf.trim()) out.push(buf);
-  return out;
 }
 
-async function translateChunk(c, chunk, source, target) {
-  const out = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-    messages: [
-      { role: 'system', content:
-`Translate ${source}->${target} and PRESERVE MARKDOWN exactly.
-Rules:
-- Keep headings, bold/italics, lists (* or +), line breaks, symbols (°C, %, etc.).
-- Do NOT add explanations, labels, or code fences.
-- Return MARKDOWN ONLY.` },
-      { role: 'user', content: String(chunk) }
-    ],
-    temperature: 0
-  });
-  return cleanLLMOutput(out?.response ?? '');
-}
-
+// dịch markdown theo dòng: giữ prefix (#, -, 1., >) như client
 async function translateMarkdownInWorker(c, md, source, target) {
-  const text = String(md || '').trim();
-  if (!text) return '';
-
-  // Nội dung ngắn: dịch 1 phát
-  if (text.length <= 2800) {
-    const res = await translateChunk(c, text, source, target);
-    return res; // '' nếu fail -> để withRetry retry
+  const lines = String(md || '').split('\n')
+  const out = []
+  for (const line of lines) {
+    const m = line.match(/^(\s*([#>*\-]|[0-9]+\.)\s*)(.*)$/)
+    const prefix = m ? m[1] : ''
+    const text = m ? m[3] : line
+    if (!text.trim()) {
+      out.push(prefix ? prefix : line)
+      continue
+    }
+    const t = await translateTextInWorker(c, text, source, target)
+    out.push(prefix ? prefix + t : t)
   }
-
-  // Nội dung dài: chia mảnh để giảm timeout
-  const parts = splitMarkdownByPara(text, 2800);
-  const outs = [];
-  for (const p of parts) {
-    const res = await translateChunk(c, p, source, target);
-    if (!res) return '';         // buộc retry toàn bộ qua withRetry
-    outs.push(res);
-    await sleep(150);            // giãn nhịp nhẹ tránh throttle
-  }
-  return outs.join('\n');
+  return out.join('\n')
 }
-
-
 
 productsRouter.post('/import', async (c) => {
   try {
     if (!hasDB(c.env)) return c.json({ error: 'Database not available' }, 503)
 
     // >>>> 1) đọc query auto-translate
-    const auto = c.req.query('auto') === '1' || c.req.query('auto') === 'true'    
+    const auto = c.req.query('auto') === '1' || c.req.query('auto') === 'true'     // ?auto=1
     const targets = (c.req.query('targets') || '')
       .split(',')
       .map(s => s.trim().toLowerCase())
-      .filter(lc => lc && lc !== 'vi')
-    const source = c.req.query('source') || 'vi'                           
-    const dryRun = c.req.query('dry_run') === '1'                               
+      .filter(lc => lc && lc !== 'vi')  // không dịch sang vi
+    const source = c.req.query('source') || 'vi'                                   // ?source=vi
+    const dryRun = c.req.query('dry_run') === '1'                                  // ?dry_run=1  (optional)
 
     const form = await c.req.formData()
     const file = form.get('file')
@@ -771,14 +729,9 @@ productsRouter.post('/import', async (c) => {
           );
 
           const tCont  = tCont0 || await withRetry(
-          () => translateMarkdownInWorker(c, content, source, lc), 
-          { 
-            tries: Math.max(tries, 6),              
-            delayMs: Math.max(delay0, 600),       
-            backoff, 
-            timeoutMs: 22000                       
-          } 
-        );
+            () => translateMarkdownInWorker(c, content, source, lc),
+            { tries, delayMs: delay0, backoff, timeoutMs: 10000 }
+          );
 
           const ok = Boolean((tTitle || '').trim());
           trans[lc] = {
@@ -786,7 +739,7 @@ productsRouter.post('/import', async (c) => {
             title: tTitle,
             desc:  tDesc,
             cont:  tCont,
-            slug:  slugify(tSlug0 || tTitle)
+            slug:  slugify(tSlug0 || tTitle) // slug đúng ngôn ngữ vì dựa trên title đã dịch
           };
         }
 
