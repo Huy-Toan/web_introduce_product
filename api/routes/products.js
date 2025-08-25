@@ -479,26 +479,25 @@ productsRouter.delete("/:id", async (c) => {
 
 export default productsRouter;
 
-// ... giữ nguyên các helper getLocale, hasDB, slugify ... bạn đã có ở trên
 
-// Helper nhỏ: ép chuỗi
-const toStr = (v) => (v == null ? '' : String(v).trim())
+// ====== Utils cơ bản (nếu đã có ở nơi khác thì bỏ phần này) ======
+const toStr = (v) => (v == null ? '' : String(v).trim());
 
-// (tuỳ chọn) parse CSV fallback nếu không dùng xlsx
 function csvToJson(text) {
-  const lines = text.split(/\r?\n/).filter(Boolean)
-  if (lines.length < 2) return []
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase())
-  const rows = []
+  const lines = String(text || '').split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const rows = [];
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',')
-    const obj = {}
-    headers.forEach((h, idx) => obj[h] = cols[idx] != null ? cols[idx].trim() : '')
-    rows.push(obj)
+    const cols = lines[i].split(',');
+    const obj = {};
+    headers.forEach((h, idx) => obj[h] = cols[idx] != null ? cols[idx].trim() : '');
+    rows.push(obj);
   }
-  return rows
+  return rows;
 }
 
+// ====== Sleep & Retry ======
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function withRetry(fn, { tries = 5, delayMs = 400, backoff = 1.5, timeoutMs = 5000 } = {}) {
@@ -510,7 +509,7 @@ async function withRetry(fn, { tries = 5, delayMs = 400, backoff = 1.5, timeoutM
         Promise.resolve(fn()),
         new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
       ]);
-      if (v && String(v).trim()) return v;       // coi rỗng là thất bại để thử lại
+      if (v && String(v).trim()) return v; // coi rỗng là fail để lặp tiếp
       lastErr = new Error('empty result');
     } catch (e) {
       lastErr = e;
@@ -523,62 +522,329 @@ async function withRetry(fn, { tries = 5, delayMs = 400, backoff = 1.5, timeoutM
   throw lastErr || new Error('withRetry exhausted');
 }
 
-// gọi lại chính /api/translate đang có (để chạy trong Worker)
+// ====== Clean & Heuristics chống "chưa dịch" ======
+const VI_CHAR_RE_G = /[áàảãạăắằẳẵặâấầẩẫậđéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữự]/gi;
+
+function cleanLLMOutput(s) {
+  let t = String(s ?? '');
+  t = t.replace(/^\s*```(?:markdown|md|text)?\s*/i, '').replace(/\s*```\s*$/i, '');
+  t = t.replace(/^(?:translation|translated|english|bản dịch|dịch)\s*:\s*/i, '');
+  return t.trim();
+}
+
+function jaccardTokens(a, b) {
+  const A = new Set(String(a || '').toLowerCase().split(/\s+/).filter(Boolean));
+  const B = new Set(String(b || '').toLowerCase().split(/\s+/).filter(Boolean));
+  const inter = [...A].filter(x => B.has(x)).length;
+  const uni = new Set([...A, ...B]).size || 1;
+  return inter / uni;
+}
+
+function looksUntranslated(src, out, target) {
+  const s = (src || '').trim();
+  const o = (out || '').trim();
+  if (!o) return true;
+  // quá giống câu gốc ⇒ nghi ngờ chưa dịch
+  if (jaccardTokens(s, o) > 0.9) return true;
+  // nếu dịch sang non-vi mà đa phần vẫn là ký tự tiếng Việt ⇒ coi như fail
+  if (target !== 'vi') {
+    const viCount = (o.match(VI_CHAR_RE_G) || []).length;
+    const ratio = viCount / Math.max(o.length, 1);
+    if (ratio > 0.35) return true; // vẫn cho phép vài tên riêng có dấu
+  }
+  return false;
+}
+
+// ====== Gọi model dịch ======
 async function translateTextInWorker(c, text, source, target) {
-  if (!text || !text.trim()) return '';
-  const base = new URL(c.req.url);
-  const url = new URL('/api/translate', base.origin);
-
-  const r = await fetch(url.toString(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, source, target })
+  const out = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+    messages: [
+      { role: 'system', content: `Translate from ${source} to ${target}. Reply with translation only.` },
+      { role: 'user', content: text }
+    ],
+    temperature: 0.2,
   });
-
-  if (!r.ok) {
-    const body = await r.text().catch(() => '');
-    throw new Error(`translate HTTP ${r.status}: ${body || 'no body'}`);
-  }
-
-  const j = await r.json().catch(() => ({}));
-  const out = j?.translated ?? j?.translation ?? j?.text ?? '';
-  if (!(out && String(out).trim())) throw new Error('translate returned empty');
-  return out;
+  const ans = cleanLLMOutput(out?.response ?? '');
+  return looksUntranslated(text, ans, target) ? '' : ans;
 }
 
-// dịch markdown theo dòng: giữ prefix (#, -, 1., >) như client
-async function translateMarkdownInWorker(c, md, source, target, retryOpts = { tries: 5, delayMs: 400, backoff: 1.5, timeoutMs: 8000 }) {
-  const lines = String(md || '').split('\n');
-  const out = [];
-  for (const line of lines) {
-    const m = line.match(/^(\s*([#>*\-]|[0-9]+\.)\s*)(.*)$/);
-    const prefix = m ? m[1] : '';
-    const text = m ? m[3] : line;
+async function translateContentInWorker(c, text, source, target) {
+  const src = String(text || '').trim();
+  if (!src) return '';
+  const out = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+    messages: [
+      { role: 'system', content:
+`Translate from ${source} to ${target}.
+Return PLAIN TEXT only (no markdown, no code fences, no labels).
+Keep short line breaks. Do not add headings or bullets.` },
+      { role: 'user', content: src }
+    ],
+    temperature: 0,
+  });
+  const ans = cleanLLMOutput(out?.response ?? '');
+  return looksUntranslated(src, ans, target) ? '' : ans;
+}
 
-    if (!text.trim()) { out.push(prefix ? prefix : line); continue; }
+// ====== Route import sản phẩm ======
+productsRouter.post('/import', async (c) => {
+  try {
+    if (!hasDB(c.env)) return c.json({ error: 'Database not available' }, 503);
 
-    try {
-      const t = await withRetry(() => translateTextInWorker(c, text, source, target), retryOpts);
-      out.push(prefix ? prefix + t : t);
-    } catch {
-      out.push(prefix ? prefix + text : text);
+    // 1) Query flags
+    const auto = c.req.query('auto') === '1' || c.req.query('auto') === 'true';
+    const targets = (c.req.query('targets') || '')
+      .split(',').map(s => s.trim().toLowerCase())
+      .filter(lc => lc && lc !== 'vi');
+    const source = c.req.query('source') || 'vi';
+    const dryRun = c.req.query('dry_run') === '1';
+
+    // Strict/soft và yêu cầu locales
+    const mode = (c.req.query('mode') || 'soft').toLowerCase(); // 'soft' | 'strict'
+    const requireLocales = (c.req.query('require_locales') || '')
+      .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    const required = mode === 'strict'
+      ? (requireLocales.length ? requireLocales : targets) // strict ⇒ mặc định yêu cầu toàn bộ targets
+      : requireLocales;
+
+    // Retry options
+    const tries   = Number(c.req.query('tries')   || 5);
+    const delay0  = Number(c.req.query('delay0')  || 400);
+    const backoff = Number(c.req.query('backoff') || 1.5);
+    const waitMs  = Number(c.req.query('wait_ms') || 0);
+
+    // 2) File
+    const form = await c.req.formData();
+    const file = form.get('file');
+    if (!file || !file.arrayBuffer) {
+      return c.json({ error: 'Missing file' }, 400);
     }
+    const buf = await file.arrayBuffer();
+
+    // 3) Parse rows
+    let rows = [];
+    try {
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    } catch {
+      const text = new TextDecoder('utf-8').decode(buf);
+      rows = csvToJson(text);
+    }
+
+    if (!rows.length) {
+      return c.json({ ok: true, created: 0, updated: 0, skipped: 0, message: 'No data rows found' });
+    }
+
+    // Chuẩn hóa key về lowercase
+    rows = rows.map((r) => {
+      const out = {};
+      for (const k of Object.keys(r)) out[String(k).toLowerCase().trim()] = r[k];
+      return out;
+    });
+
+    let created = 0, updated = 0, skipped = 0;
+    const errors = [];
+    const locale = getLocale(c); // dùng để resolve subcategory theo name/slug nếu có
+
+    // 4) Loop từng dòng
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const title = toStr(row.title);
+      const content = toStr(row.content);
+      if (!title || !content) { skipped++; continue; }
+
+      let slug = toStr(row.slug) || slugify(title);
+      slug = slugify(slug);
+
+      const description = toStr(row.description);
+      const image_url = toStr(row.image_url);
+
+      // Resolve subcategory
+      let subcategory_id = null;
+      if (row.subcategory_id != null && String(row.subcategory_id).trim() !== '') {
+        const idNum = Number(row.subcategory_id);
+        if (Number.isFinite(idNum)) subcategory_id = idNum;
+      } else if (row.subcategory) {
+        const subKey = toStr(row.subcategory);
+        if (subKey) {
+          const rs = await c.env.DB
+            .prepare(`
+              SELECT s.id
+              FROM subcategories s
+              LEFT JOIN subcategories_translations st
+                ON st.sub_id = s.id AND st.locale = ?
+              WHERE s.slug = ? OR st.slug = ? OR s.name = ? OR st.name = ?
+              LIMIT 1
+            `)
+            .bind(locale, slugify(subKey), slugify(subKey), subKey, subKey)
+            .first();
+          if (rs?.id) subcategory_id = rs.id;
+        }
+      }
+
+      // Dry run: chỉ đếm
+      if (dryRun) { created++; continue; }
+
+      // Base product upsert theo slug
+      const exists = await c.env.DB
+        .prepare('SELECT id FROM products WHERE slug = ? LIMIT 1')
+        .bind(slug)
+        .first();
+
+      let productId;
+      if (exists?.id) {
+        const res = await c.env.DB.prepare(`
+          UPDATE products
+          SET title = ?, description = ?, content = ?, image_url = ?, subcategory_id = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(
+          title,
+          description || null,
+          content,
+          image_url || null,
+          subcategory_id == null ? null : Number(subcategory_id),
+          exists.id
+        ).run();
+        productId = exists.id;
+        if ((res.meta?.changes || 0) > 0) updated++;
+        else skipped++;
+      } else {
+        const res = await c.env.DB.prepare(`
+          INSERT INTO products (title, slug, description, content, image_url, subcategory_id)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).bind(
+          title,
+          slug,
+          description || null,
+          content,
+          image_url || null,
+          subcategory_id == null ? null : Number(subcategory_id)
+        ).run();
+        if (res.success) {
+          productId = res.meta?.last_row_id;
+          created++;
+        } else {
+          skipped++;
+          continue;
+        }
+      }
+
+      // 5) Auto-translate
+      if (auto && targets.length > 0 && productId) {
+        const upsertT = `
+          INSERT INTO products_translations (product_id, locale, title, slug, description, content)
+          VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+          ON CONFLICT(product_id, locale) DO UPDATE SET
+            title       = COALESCE(excluded.title, title),
+            slug        = COALESCE(excluded.slug, slug),
+            description = COALESCE(excluded.description, description),
+            content     = COALESCE(excluded.content, content),
+            updated_at  = CURRENT_TIMESTAMP
+        `;
+
+        /** @type {Record<string,{ok:boolean,title:string,desc:string,cont:string,slug:string, reason?:string}>} */
+        const trans = {};
+
+        for (const lc of targets) {
+          if (waitMs > 0) await sleep(waitMs);
+
+          const tTitle0 = toStr(row[`${lc}_title`]);
+          const tDesc0  = toStr(row[`${lc}_description`]);
+          const tCont0  = toStr(row[`${lc}_content`]);
+          const tSlug0  = toStr(row[`${lc}_slug`]);
+
+          // Dịch có retry + timeout
+          const tTitle = tTitle0 || await withRetry(
+            () => translateTextInWorker(c, title, source, lc),
+            { tries, delayMs: delay0, backoff, timeoutMs: 8000 }
+          );
+
+          const tDesc  = tDesc0 || (description
+            ? await withRetry(
+                () => translateTextInWorker(c, description, source, lc),
+                { tries, delayMs: delay0, backoff, timeoutMs: 8000 }
+              )
+            : ''
+          );
+
+          const tCont = tCont0 || await withRetry(
+            () => translateContentInWorker(c, content, source, lc),
+            {
+              tries: Math.max(tries, 6),
+              delayMs: Math.max(delay0, 600),
+              backoff,
+              timeoutMs: 25000
+            }
+          );
+
+          const okTitle   = !!String(tTitle || '').trim();
+          const okContent = !!String(tCont  || '').trim();
+          const ok = okTitle && okContent; // STRICT: phải đủ bộ
+
+          const slugTranslated = slugify(tSlug0 || tTitle) || `${slug}-${lc}`;
+
+          trans[lc] = {
+            ok,
+            title: tTitle,
+            desc:  tDesc,
+            cont:  tCont,
+            slug:  slugTranslated
+          };
+          if (!ok) {
+            trans[lc].reason = !okTitle && !okContent
+              ? 'empty_title_and_content'
+              : !okTitle ? 'empty_title'
+              : 'empty_content_or_untranslated';
+          }
+        }
+
+        // Strict: yêu cầu đủ "required" locales
+        const missing = required.filter(lc => !trans[lc]?.ok);
+
+        if (mode === 'strict' && missing.length) {
+          errors.push({ row: i + 1, reason: 'strict_missing_required_locales', locales: missing });
+          // Nếu muốn rollback base khi strict fail, mở dòng sau:
+          // await c.env.DB.prepare("DELETE FROM products WHERE id = ?").bind(productId).run();
+          // created--; skipped++;
+          // continue;
+        } else {
+          // Soft: chỉ insert những locale ok
+          for (const lc of targets) {
+            if (!trans[lc]?.ok) continue;
+            await c.env.DB.prepare(upsertT).bind(
+              productId,
+              lc,
+              trans[lc].title || null,
+              trans[lc].slug  || null,
+              trans[lc].desc  || null,
+              trans[lc].cont  || null
+            ).run();
+          }
+        }
+      }
+    }
+
+    return c.json({ ok: true, created, updated, skipped, errors });
+  } catch (err) {
+    console.error('Import products error:', err);
+    return c.json({ error: 'Failed to import' }, 500);
   }
-  return out.join('\n');
-}
+});
+
+
 
 productsRouter.post('/import', async (c) => {
   try {
     if (!hasDB(c.env)) return c.json({ error: 'Database not available' }, 503)
 
     // >>>> 1) đọc query auto-translate
-    const auto = c.req.query('auto') === '1' || c.req.query('auto') === 'true'     // ?auto=1
+    const auto = c.req.query('auto') === '1' || c.req.query('auto') === 'true'    
     const targets = (c.req.query('targets') || '')
       .split(',')
       .map(s => s.trim().toLowerCase())
-      .filter(lc => lc && lc !== 'vi')  // không dịch sang vi
-    const source = c.req.query('source') || 'vi'                                   // ?source=vi
-    const dryRun = c.req.query('dry_run') === '1'                                  // ?dry_run=1  (optional)
+      .filter(lc => lc && lc !== 'vi')
+    const source = c.req.query('source') || 'vi'                           
+    const dryRun = c.req.query('dry_run') === '1'                               
 
     const form = await c.req.formData()
     const file = form.get('file')
@@ -727,36 +993,45 @@ productsRouter.post('/import', async (c) => {
         const trans = {};
 
         for (const lc of targets) {
-          if (waitMs > 0) await sleep(waitMs);
+          if (waitMs > 0) await sleep(waitMs); // tránh dồn request dịch
 
           const tTitle0 = toStr(row[`${lc}_title`]);
           const tDesc0  = toStr(row[`${lc}_description`]);
           const tCont0  = toStr(row[`${lc}_content`]);
           const tSlug0  = toStr(row[`${lc}_slug`]);
 
-          try {
-            const tTitle = tTitle0 || await withRetry(
-              () => translateTextInWorker(c, title, source, lc),
-              { tries, delayMs: delay0, backoff, timeoutMs: 6000 }
-            );
+          // DỊCH CÓ RETRY + TIMEOUT — chỉ cần tTitle để tạo slug đúng ngôn ngữ
+          const tTitle = tTitle0 || await withRetry(
+            () => translateTextInWorker(c, title, source, lc),
+            { tries, delayMs: delay0, backoff, timeoutMs: 6000 }
+          );
 
-            const tDesc  = tDesc0 || (description
-              ? await withRetry(() => translateTextInWorker(c, description, source, lc),
-                  { tries, delayMs: delay0, backoff, timeoutMs: 6000 })
-              : ""
-            );
+          const tDesc  = tDesc0 || (description
+            ? await withRetry(() => translateTextInWorker(c, description, source, lc), { tries, delayMs: delay0, backoff, timeoutMs: 6000 })
+            : ""
+          );
 
-            const tCont  = tCont0 || await withRetry(
-              () => translateMarkdownInWorker(c, content, source, lc, { tries, delayMs: delay0, backoff, timeoutMs: 10000 }),
-              { tries, delayMs: delay0, backoff, timeoutMs: 12000 }
-            );
-
-            const ok = Boolean((tTitle || '').trim());
-            trans[lc] = { ok, title: tTitle, desc: tDesc, cont: tCont, slug: slugify(tSlug0 || tTitle) };
-          } catch (e) {
-            errors.push({ row: i + 1, locale: lc, reason: 'translate_failed', message: String(e?.message || e) });
-            trans[lc] = { ok: false, title: '', desc: '', cont: '', slug: '' };
+        const tCont = tCont0 || await withRetry(
+          () => translateContentInWorker(c, content, source, lc),
+          {
+            tries: Math.max(tries, 6),   
+            delayMs: Math.max(delay0, 600),
+            backoff,
+            timeoutMs: 22000            
           }
+        );
+
+          const okTitle   = !!String(tTitle || '').trim();
+          const okContent = !!String(tCont  || '').trim(); 
+          const ok = okTitle && okContent;
+
+          trans[lc] = {
+            ok,
+            title: tTitle,
+            desc:  tDesc,
+            cont:  tCont,
+            slug:  slugify(tSlug0 || tTitle)
+          };
         }
 
         // locale bắt buộc phải có (ví dụ en)
