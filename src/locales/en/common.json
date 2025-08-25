@@ -1,0 +1,33 @@
+{
+  "navigation": {
+    "home": "Home",
+    "about": "About Us",
+    "what_we_do": "What We Do",
+    "product": "Products",
+    "news": "News",
+    "contact": "Contact"
+  },
+  "footer": {
+    "service": "Service",
+    "products": "Products",
+    "register": "Register",
+    "subscribe": "Subscribe for updates",
+    "email_placeholder": "Email...",
+    "loading": "Loading...",
+    "address": "140 Nguyen Xi Street, Binh Thanh District, Ho Chi Minh City, Vietnam",
+    "contact": "Contact"
+  },
+  "auto": {
+    "tieng_viet": "Vietnamese",
+    "tieng_anh": "English",
+    "dang_chuyen_doi_ngon_ngu": "Switching language",
+    "dang_chuyen_doi": "Switching...",
+    "chuyen_sang": "Switch to",
+    "vui_long_cho": "Please wait",
+    "loading_translations": "Loading translations..."
+  },
+  "home": {
+    "intro": "PREMIUM VIETNAMESE FRUITS"
+
+  }
+}

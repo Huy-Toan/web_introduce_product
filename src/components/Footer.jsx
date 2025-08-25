@@ -1,9 +1,11 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { FaFacebook, FaInstagram, FaYoutube } from "react-icons/fa";
+import { useT } from "../context/TContext";
 
 function Footer() {
   const navigate = useNavigate();
+    const { t } = useT();
   const [categories, setCategories] = useState([]);
   
   useEffect(() => {
@@ -40,21 +42,21 @@ function Footer() {
               className="h-10 w-auto"
             />
           </div>
-          <p className="mb-2">140 Nguyen Xi Street, Binh Thanh District, Ho Chi Minh City, Vietnam</p>
-          <p className="mb-2">Tel: +84 383 655 628</p>
+          <p className="mb-2">{t('footer.address')}</p>
+          <p className="mb-2">{t('footer.contact')}: +84 383 655 628</p>
           <p>Email: support@allxone.com</p>
         </div>
 
         {/* Services */}
         <div>
-          <h4 className="font-semibold text-yellow-700 mb-3">Service</h4>
+          <h4 className="font-semibold text-yellow-700 mb-3">{t('footer.service')}</h4>
           <ul className="space-y-2">
             <li>
               <button
                 onClick={() => handleNavigation("/")}
                 className="hover:text-blue-600 cursor-pointer"
               >
-                Home
+                  {t('navigation.home')}
               </button>
             </li>
             <li>
@@ -62,7 +64,7 @@ function Footer() {
                 onClick={() => handleNavigation("/about")}
                 className="hover:text-blue-600 cursor-pointer"
               >
-                About Us
+                  {t('navigation.about')}
               </button>
             </li>
             <li>
@@ -70,7 +72,7 @@ function Footer() {
                 onClick={() => handleNavigation("/product")}
                 className="hover:text-blue-600 cursor-pointer"
               >
-                Products
+                  {t('navigation.product')}
               </button>
             </li>
 
@@ -79,7 +81,7 @@ function Footer() {
                 onClick={() => handleNavigation("/news")}
                 className="hover:text-blue-600 cursor-pointer"
               >
-                News
+                  {t('navigation.news')}
               </button>
             </li>
 
@@ -88,7 +90,7 @@ function Footer() {
                 onClick={() => handleNavigation("/contact")}
                 className="hover:text-blue-600 cursor-pointer"
               >
-                Contact
+                  {t('navigation.contact')}
               </button>
             </li>
 
@@ -97,7 +99,7 @@ function Footer() {
 
         {/* Products */}
         <div>
-          <h4 className="font-semibold text-yellow-700 mb-3">Products</h4>
+          <h4 className="font-semibold text-yellow-700 mb-3"> {t('footer.products')}</h4>
           <ul className="space-y-2">
             {categories.length > 0 ? (
               categories.map((cat) => (
@@ -111,19 +113,19 @@ function Footer() {
                 </li>
               ))
             ) : (
-              <li className="text-gray-500 italic">Loading...</li>
+              <li className="text-gray-500 italic"> {t('footer.loading')}</li>
             )}
           </ul>
         </div>
 
         {/* Register */}
         <div>
-          <h4 className="font-semibold text-yellow-700 mb-3">Register</h4>
-          <p className="mb-3">Subscribe for updates</p>
+            <h4 className="font-semibold text-yellow-700 mb-3">{t('footer.register')}</h4>
+            <p className="mb-3">{t('footer.subscribe')}</p>
           <div className="flex items-center border rounded overflow-hidden mb-4">
             <input
               type="email"
-              placeholder="Email..."
+              placeholder={t('footer.email_placeholder')}
               className="px-3 py-3 w-full outline-none text-sm"
             />
             <button className="bg-yellow-600 cursor-pointer text-white px-4 py-3 hover:bg-yellow-700">

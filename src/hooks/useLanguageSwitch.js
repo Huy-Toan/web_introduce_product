@@ -17,7 +17,7 @@ export const useLanguageSwitch = () => {
   const supportedLanguages = [
     {
       code: 'vi',
-      name: t('auto.tieng_viet_2'),
+        name: t('auto.tieng_viet'),
       flag: '🇻🇳',
       shortName: 'VI'
     },
@@ -139,7 +139,7 @@ const showLanguageLoadingToast = targetLanguage => {
   // Remove existing toast first
   hideLanguageLoadingToast();
   const langNames = {
-    vi: i18next.t('auto.tieng_viet_2'),
+      vi: i18next.t('auto.tieng_viet'),
     en: i18next.t('auto.tieng_anh')
   };
   const toast = document.createElement('div');
