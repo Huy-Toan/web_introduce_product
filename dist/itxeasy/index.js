@@ -3497,26 +3497,44 @@ parentsRouter.get("/:slug/products", async (c) => {
     if (!hasDB$5(c.env)) {
       return c.json({ products: [], source: "fallback", count: 0 });
     }
+    const locale = getLocale$5(c);
     const parentId = await resolveParentId(c, slugOrId);
     if (!parentId) return c.json({ products: [], source: "database", count: 0 });
     const sql = `
       SELECT
-        p.*,
-        s.id   AS subcategory_id,
-        s.name AS subcategory_name,
-        s.slug AS subcategory_slug,
-        pc.id  AS parent_id,
-        pc.name AS parent_name,
-        pc.slug AS parent_slug
+        p.id,
+        COALESCE(pt.title, p.title)               AS title,
+        COALESCE(pt.slug,  p.slug)                AS slug,
+        COALESCE(pt.description, p.description)   AS description,
+        COALESCE(pt.content,     p.content)       AS content,
+        p.image_url,
+        p.created_at,
+        p.updated_at,
+
+        s.id                                      AS subcategory_id,
+        COALESCE(sct.name, s.name)                AS subcategory_name,
+        COALESCE(sct.slug, s.slug)                AS subcategory_slug,
+
+        pc.id                                     AS parent_id,
+        COALESCE(pct.name, pc.name)               AS parent_name,
+        COALESCE(pct.slug, pc.slug)               AS parent_slug
       FROM products p
-      JOIN subcategories s      ON s.id = p.subcategory_id
-      JOIN parent_categories pc ON pc.id = s.parent_id
+      LEFT JOIN products_translations pt
+        ON pt.product_id = p.id AND pt.locale = ?
+      JOIN subcategories s
+        ON s.id = p.subcategory_id
+      LEFT JOIN subcategories_translations sct
+        ON sct.sub_id = s.id AND sct.locale = ?
+      JOIN parent_categories pc
+        ON pc.id = s.parent_id
+      LEFT JOIN parent_categories_translations pct
+        ON pct.parent_id = pc.id AND pct.locale = ?
       WHERE pc.id = ?
       ORDER BY p.created_at DESC
     `;
-    const res = await c.env.DB.prepare(sql).bind(parentId).all();
+    const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, parentId).all();
     const products = res?.results ?? [];
-    return c.json({ products, count: products.length, source: "database" });
+    return c.json({ products, count: products.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching products by parent category:", err);
     return c.json({ error: "Failed to fetch products by parent category" }, 500);
