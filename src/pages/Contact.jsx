@@ -83,14 +83,7 @@ function ContactPage() {
     contactPoint: [
       {
         "@type": "ContactPoint",
-        telephone: "+84 383 655 628",
-        contactType: "customer service",
-        areaServed: ["VN", "Global"],
-        availableLanguage: ["vi", "en"],
-      },
-      {
-        "@type": "ContactPoint",
-        telephone: "+84 905 926 612",
+        telephone: "+84 7755 68646",
         contactType: "customer service",
         areaServed: ["VN", "Global"],
         availableLanguage: ["vi", "en"],
@@ -210,10 +203,10 @@ function ContactPage() {
               </p>
               <p>140 Nguyen Xi Street, Binh Thanh District, Ho Chi Minh City, Vietnam</p>
               <p>
-                <strong>Mobile phone / Whatsapp:</strong> +84 383 655 628 (Ms. Amy) / +84 905 926 612 (Ms. Jenny)
+                <strong>Mobile phone / Whatsapp:</strong> +84 7755 68646
               </p>
               <p>
-                <strong>Email:</strong> info@allxone.com
+                <strong>Email:</strong> info@itxeasy.com
               </p>
             </div>
 
@@ -237,7 +230,7 @@ function ContactPage() {
                 value={form.full_name}
                 onChange={handleChange}
                 className="border px-4 py-2 rounded-md"
-                maxLength={120}
+                maxLength={120}om
                 autoComplete="name"
               />
               <input

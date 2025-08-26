@@ -76,10 +76,6 @@ export default function Footer() {
       {/* NỀN: xanh nhạt → trắng → vàng nhạt */}
       <div className="absolute inset-0 bg-gradient-to-r from-green-50 via-white to-yellow-50" />
 
-      {/* HÌNH TRÒN TRANG TRÍ GÓC */}
-      <div className="pointer-events-none absolute -top-10 -left-10 h-40 w-40 rounded-full bg-green-100/40 blur-2xl" />
-      <div className="pointer-events-none absolute -bottom-10 -right-10 h-44 w-44 rounded-full bg-yellow-100/50 blur-2xl" />
-
       {/* CONTENT */}
       <div className="relative max-w-7xl mx-auto px-4 py-12 md:py-16 text-gray-700">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-12">
@@ -120,7 +116,7 @@ export default function Footer() {
                   href="tel:+84383655628"
                   className="hover:underline underline-offset-4"
                 >
-                  Tel: +84 383 655 628
+                  Tel: +84 7755 68646
                 </a>
               </div>
               <div className="flex items-center gap-3 rounded-xl bg-white shadow-sm border border-gray-100 p-3 hover:shadow-md transition-shadow">
@@ -129,7 +125,7 @@ export default function Footer() {
                   href="mailto:support@allxone.com"
                   className="hover:underline underline-offset-4"
                 >
-                  Email: support@allxone.com
+                  Email: info@itxeasy.com
                 </a>
               </div>
             </div>

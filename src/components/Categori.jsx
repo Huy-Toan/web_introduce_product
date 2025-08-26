@@ -317,7 +317,7 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
                       aria-label={name}
                     >
                       {/* Image */}
-                      <div className="w-full aspect-[4/5] sm:aspect-[3/4] overflow-hidden">
+                      <div className="w-full aspect-[5/6] sm:aspect-[3/4] overflow-hidden">
                         <img
                           src={img}
                           alt={name}

@@ -187,7 +187,7 @@ export default function Banner({ locale: localeProp }) {
           <button
             aria-label="Prev"
             onClick={() => { setPaused(true); prev(); }}
-            className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur text-white items-center justify-center"
+            className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full hover:bg-black/60 backdrop-blur text-white items-center justify-center"
           >
             <ChevronLeft />
           </button>

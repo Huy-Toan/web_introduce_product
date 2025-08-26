@@ -5,6 +5,8 @@ import "./index.css";
 import "./i18n.js";
 import { TProvider } from "./context/TContext";
 
+import LocaleSwitcherGT from "./components/LocaleSwitcherGT.jsx";
+import TestTranslateBox from "./components/TestTranslate.jsx";
 import HomePage from "./pages/Home";
 import AboutPage from "./pages/AboutUs";
 import FieldPage from "./pages/Field";
@@ -24,6 +26,7 @@ createRoot(document.getElementById("root")).render(
     <StrictMode>
         <TProvider>
             <BrowserRouter>
+                <LocaleSwitcherGT />
                 <ScrollToTop />
                 <GlobalWhatsApp />
                 <Routes>

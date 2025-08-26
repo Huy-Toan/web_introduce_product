@@ -100,7 +100,7 @@ function NewsDetail({ newsData }) {
         jsonLd={jsonLd}
       />
 
-      <div className="space-y-12 mt-12">
+      <div className="space-y-12">
         <div className="card">
           {/* Tiêu đề */}
           <div className="mb-8">
@@ -149,7 +149,7 @@ function NewsDetail({ newsData }) {
 
 
           {/* Nội dung Markdown */}
-          <article className="prose prose-neutral max-w-none">
+          <article className="prose prose-neutral max-w-none text-justify">
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkBreaks]}
               rehypePlugins={[

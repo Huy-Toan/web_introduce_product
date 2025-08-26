@@ -307,11 +307,17 @@ export default function ProductDetailPage() {
         <div className="card p-4 space-y-6">
           <div className="md:flex gap-10">
             <div className="md:w-1/2 flex-shrink-0 mb-6 md:mb-0">
-              <div className="w-full h-[520px] md:h-[560px] rounded-md border border-gray-200 bg-white overflow-hidden">
+              <div
+                className="
+                  w-full rounded-md border border-gray-200 bg-white overflow-hidden
+                  aspect-square         
+                  md:aspect-auto md:h-[420px] lg:h-[480px]
+                "
+              >
                 <img
                   src={imageSrc}
                   alt={product.title}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full md:object-cover"
                   onError={(e) => {
                     e.currentTarget.onerror = null;
                     e.currentTarget.src = "/banner.jpg";
@@ -319,6 +325,7 @@ export default function ProductDetailPage() {
                 />
               </div>
             </div>
+
 
             <div className="md:w-2/3 lg:w-3/4">
               <h1 className="text-2xl font-semibold mb-3">{product.title}</h1>
@@ -405,7 +412,7 @@ export default function ProductDetailPage() {
                       onClick={() => handleRelatedClick(rel)}
                       className="shrink-0 w-1/2 md:w-1/4 snap-start cursor-pointer rounded-md border border-gray-200 overflow-hidden hover:shadow group transition"
                     >
-                      <div className="w-full aspect-[3/4] overflow-hidden bg-white">
+                      <div className="w-full aspect-[5/6] overflow-hidden bg-white">
                         <img
                           src={relImg}
                           alt={relTitle}
@@ -413,8 +420,8 @@ export default function ProductDetailPage() {
                           loading="lazy"
                         />
                       </div>
-                      <div className="px-3 py-2 text-center">
-                        <div className="font-medium text-gray-900 line-clamp-2">{relTitle}</div>
+                      <div className="px-3 py-3 text-center">
+                        <div className="font-medium text-xl text-gray-900 line-clamp-2">{relTitle}</div>
                       </div>
                     </div>
                   );

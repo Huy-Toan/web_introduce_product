@@ -109,10 +109,10 @@ function TopNavigation() {
                   onClick={() => handlePageNavigation(page)}
                   className={`px-3 py-2 rounded-md text-lg font-medium transition-colors cursor-pointer
                   hover:underline hover:underline-offset-4 hover:decoration-2 ${transparentNav
-                      ? (active ? "text-white font-semibold" : "text-white")
+                      ? (active ? "text-white" : "text-white")
                       : (active
                         ? "text-blue-700 bg-blue-50"
-                        : "text-gray-600 hover:text-gray-900 hover:bg-yellow-100")
+                        : "text-gray-600 hover:text-blue-700 hover:bg-blue-50")
                     }`}
                 >
                   {labelFor(page)}

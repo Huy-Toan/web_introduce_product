@@ -9,7 +9,7 @@ const truncateText = (s = "", max = 70) => {
 
 function SidebarNews({ newsItems = [], onSelectNews, currentNewsId }) {
   return (
-    <aside className="w-full md:w-80 bg-white p-0 border rounded-md shadow-sm self-start mt-12 overflow-hidden">
+    <aside className="w-full md:w-80 bg-white p-0 border rounded-md shadow-sm self-start overflow-hidden">
       <div className="bg-gradient-to-r from-yellow-400 to-yellow-500 text-white text-center py-4 px-6 font-bold text-lg">
         NEW POSTS
       </div>

@@ -1,6 +1,7 @@
 // src/components/AboutSection.jsx
 import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router";
+import MarkdownOnly from "./MarkdownOnly"
 
 const SUPPORTED = ["vi", "en"];
 const DEFAULT_LOCALE = "vi";
@@ -27,6 +28,11 @@ function truncateText(text, maxLength = 120) {
     return truncated.substring(0, lastSpaceIndex) + "...";
   }
   return truncated + "...";
+}
+
+function TruncatedMarkdown({ text, maxLength = 120 }) {
+  const truncated = truncateText(text, maxLength);
+  return <MarkdownOnly value={truncated} />;
 }
 
 const AboutSection = ({ locale: localeProp }) => {
@@ -107,7 +113,7 @@ const AboutSection = ({ locale: localeProp }) => {
               <>
                 <h1
                   className="text-xl font-semibold mb-6 tracking-wide"
-                  style={{ color: '#16a34a' }} // Tailwind green-600
+                  style={{ color: '#16a34a' }} 
                 >
                   {t.tagline}
                 </h1>
@@ -118,14 +124,14 @@ const AboutSection = ({ locale: localeProp }) => {
                 </h2>
 
                 <div className="space-y-4 text-gray-700 leading-relaxed">
-                  <p>{truncateText(first.content, 150)}</p>
+                  <TruncatedMarkdown text={first.content} maxLength={150} />
 
                   {second && (
                     <div className="mt-6">
                       <p className="font-semibold italic text-green-800 mb-2">
                         {second.title}:
                       </p>
-                      <p>{truncateText(second.content, 100)}</p>
+                      <TruncatedMarkdown text={second.content} maxLength={150} />
                     </div>
                   )}
                 </div>
