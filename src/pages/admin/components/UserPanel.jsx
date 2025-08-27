@@ -200,8 +200,9 @@ const UsersPanel = () => {
                   onChange={handleChange}
                   className="border rounded px-3 py-2 w-full"
                 >
-                  <option value="user">User</option>
                   <option value="admin">Admin</option>
+                    <option value="content_manager">Content Manager</option>
+                    <option value="user_manager">User Manager</option>
                 </select>
               </div>
               <div className="flex justify-end space-x-2 pt-4">

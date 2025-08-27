@@ -397,11 +397,19 @@ const adminOnlyPaths = [
     "/api/editor-upload",
     "/api/translate",
 ];
+
+
+const protectContent = async (c, next) => {
+    const method = c.req.method;
+    if (method === "GET" || method === "OPTIONS") return next();
+    await requireAdminAuth(c, async () => {
+        await requirePerm("content.manage")(c, next);
+    });
+};
+
 for (const path of adminOnlyPaths) {
-    app.use(path, requireAdminAuth);
-    app.use(`${path}/*`, requireAdminAuth);
-    app.use(path, requirePerm("content.manage"));
-    app.use(`${path}/*`, requirePerm("content.manage"));
+    app.use(path, protectContent);
+    app.use(`${path}/*`, protectContent);
 }
 app.use("/api/users", requireAdminAuth);
 app.use("/api/users/*", requireAdminAuth);

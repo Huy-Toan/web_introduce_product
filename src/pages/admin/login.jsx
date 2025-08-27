@@ -54,11 +54,7 @@ function AdminLogin() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md bg-white p-8 rounded shadow">
-          {from !== "/admin/dashboard" && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-600">
-            Bạn sẽ được chuyển về: <strong>{from}</strong>
-          </div>
-        )}
+
 
         <form onSubmit={handleLogin} className="space-y-4">
           <input

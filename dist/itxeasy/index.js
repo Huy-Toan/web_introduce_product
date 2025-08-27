@@ -34250,26 +34250,26 @@ const verifyAdmin = async (c) => {
 };
 const serveAdminLogin = async (c) => {
   const user = await verifyAdmin(c);
-  if (user) return c.redirect("/api/admin/dashboard", 302);
+  if (user) return c.redirect("/admin/dashboard", 302);
   const res = await c.env.ASSETS.fetch(c.req.raw);
   const headers = new Headers(res.headers);
   headers.set("Cache-Control", "no-store");
   return new Response(res.body, { ...res, headers });
 };
-app.get("/api/admin/login", serveAdminLogin);
-app.get("/api/admin/login/", serveAdminLogin);
+app.get("/admin/login", serveAdminLogin);
+app.get("/admin/login/", serveAdminLogin);
 const redirectAdminRoot = async (c) => {
   const user = await verifyAdmin(c);
-  if (!user) return c.redirect("/api/admin/login", 302);
-  return c.redirect("/api/admin/dashboard", 302);
+  if (!user) return c.redirect("/admin/login", 302);
+  return c.redirect("/admin/dashboard", 302);
 };
-app.get("/api/admin", redirectAdminRoot);
-app.get("/api/admin/", redirectAdminRoot);
-app.route("/api/admin/api", app$1);
-app.get("/api/admin/*", async (c) => {
-  if (c.req.path.startsWith("/api/admin/api")) return c.notFound();
+app.get("/admin", redirectAdminRoot);
+app.get("/admin/", redirectAdminRoot);
+app.route("/admin/api", app$1);
+app.get("/admin/*", async (c) => {
+  if (c.req.path.startsWith("/admin/api")) return c.notFound();
   const user = await verifyAdmin(c);
-  if (!user) return c.redirect("/api/admin/login", 302);
+  if (!user) return c.redirect("/admin/login", 302);
   return c.env.ASSETS.fetch(c.req.raw);
 });
 const adminOnlyPaths = [
@@ -34286,11 +34286,16 @@ const adminOnlyPaths = [
   "/api/editor-upload",
   "/api/translate"
 ];
+const protectContent = async (c, next) => {
+  const method = c.req.method;
+  if (method === "GET" || method === "OPTIONS") return next();
+  await requireAdminAuth(c, async () => {
+    await requirePerm("content.manage")(c, next);
+  });
+};
 for (const path of adminOnlyPaths) {
-  app.use(path, requireAdminAuth);
-  app.use(`${path}/*`, requireAdminAuth);
-  app.use(path, requirePerm("content.manage"));
-  app.use(`${path}/*`, requirePerm("content.manage"));
+  app.use(path, protectContent);
+  app.use(`${path}/*`, protectContent);
 }
 app.use("/api/users", requireAdminAuth);
 app.use("/api/users/*", requireAdminAuth);
