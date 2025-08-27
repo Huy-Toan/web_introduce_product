@@ -72,7 +72,7 @@ export default function LocaleSwitcherGT() {
                       setLang(code);
                       setOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-2 text-sm
+                    className={`w-full text-left px-3 py-2 text-sm cursor-pointer
                                 hover:bg-neutral-200 
                                 ${active ? "bg-neutral-100 dark:bg-neutral-200 font-medium" : ""}`}
                   >

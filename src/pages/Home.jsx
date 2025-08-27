@@ -9,9 +9,20 @@ import NewsSection from "../components/NewsSection";
 import FieldHighlightsSection from "../components/FieldSection";
 import CerPartnersSection from "../components/Cer_PartnerSection";
 import UserChatBox from "../components/UserChatBox";
-import { getSiteOrigin, getCanonicalBase, isNonCanonicalHost } from "../lib/siteUrl";
+import { getSiteOrigin, getCanonicalBase } from "../lib/siteUrl";
 
 import SEO, { stripMd } from "../components/SEOhead";
+
+// 🔰 NEW imports (section bổ sung - Tailwind thuần)
+import SectionHeader from "../components/home/SectionHeader";
+import FeaturesStrip from "../components/home/FeatureStrip";
+import ParallaxCTA from "../components/home/ParallaxCTA";
+import Testimonials from "../components/home/Testimonials";
+import StatsStrip from "../components/home/StatsStrip";
+import CallBarHome from "../components/home/CallBarHome";
+import ProjectsGrid from "../components/home/ProjectsGrid";
+import ContactSection from "../components/home/ContactSection";
+import CTASection from "../components/home/CTASection";
 
 export default function HomePage() {
   // (Enrich SEO) Lấy nhanh danh mục / sản phẩm / tin tức / lĩnh vực
@@ -33,7 +44,7 @@ export default function HomePage() {
           .map(x => ({ name: x?.name || x?.title, slug: x?.slug || x?.id }))
           .filter(x => x.name && x.slug);
         setCats(items.slice(0, 8));
-      } catch { }
+      } catch {}
     })();
 
     // Tin tức
@@ -53,7 +64,7 @@ export default function HomePage() {
           }))
           .filter(n => n.title && n.slug);
         setNews(items.slice(0, 4));
-      } catch { }
+      } catch {}
     })();
 
     // Lĩnh vực (fields)
@@ -70,7 +81,7 @@ export default function HomePage() {
           }))
           .filter(f => f.name);
         setFields(items.slice(0, 6));
-      } catch { }
+      } catch {}
     })();
 
     // Sản phẩm nổi bật (thử nhiều endpoint cho chắc)
@@ -91,7 +102,7 @@ export default function HomePage() {
           }))
           .filter(p => p.title && p.slug);
         setProducts(items.slice(0, 8));
-      } catch { }
+      } catch {}
     })();
 
     return () => ac.abort();
@@ -110,8 +121,7 @@ export default function HomePage() {
 
   const ogImage = import.meta.env.VITE_OG_HOME || `${SITE_URL}/og-home.jpg`;
 
-  // Keywords mở rộng từ dữ liệu
-  const keywords = useMemo(() => {
+  const keywords = React.useMemo(() => {
     const kCats = cats.map(c => c.name);
     const kProds = products.map(p => p.title);
     const kFields = fields.map(f => f.name);
@@ -122,8 +132,7 @@ export default function HomePage() {
     return Array.from(new Set([...base, ...kCats, ...kProds, ...kFields].filter(Boolean)));
   }, [cats, products, fields, BRAND]);
 
-  // Organization
-  const organizationLd = useMemo(() => ({
+  const organizationLd = React.useMemo(() => ({
     "@context": "https://schema.org",
     "@type": "Organization",
     name: BRAND,
@@ -138,8 +147,7 @@ export default function HomePage() {
     }]
   }), [BRAND, SITE_URL]);
 
-  // WebSite + SearchAction
-  const webSiteLd = useMemo(() => ({
+  const webSiteLd = React.useMemo(() => ({
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: BRAND,
@@ -151,8 +159,7 @@ export default function HomePage() {
     }
   }), [BRAND, SITE_URL]);
 
-  // WebPage (Home)
-  const webPageLd = useMemo(() => ({
+  const webPageLd = React.useMemo(() => ({
     "@context": "https://schema.org",
     "@type": "WebPage",
     name: pageTitle,
@@ -161,8 +168,7 @@ export default function HomePage() {
     isPartOf: { "@type": "WebSite", name: BRAND, url: SITE_URL }
   }), [pageTitle, pageDesc, canonical, BRAND, SITE_URL]);
 
-  // ItemList: Danh mục
-  const categoriesLd = useMemo(() => cats.length ? ({
+  const categoriesLd = React.useMemo(() => cats.length ? ({
     "@context": "https://schema.org",
     "@type": "ItemList",
     name: "Product Categories",
@@ -173,8 +179,7 @@ export default function HomePage() {
     }))
   }) : null, [cats, SITE_URL]);
 
-  // ItemList: Sản phẩm
-  const productsLd = useMemo(() => products.length ? ({
+  const productsLd = React.useMemo(() => products.length ? ({
     "@context": "https://schema.org",
     "@type": "ItemList",
     name: "Featured Products",
@@ -198,8 +203,7 @@ export default function HomePage() {
     }))
   }) : null, [products, SITE_URL, BRAND]);
 
-  // ItemList: Lĩnh vực (dịch vụ)
-  const fieldsLd = useMemo(() => fields.length ? ({
+  const fieldsLd = React.useMemo(() => fields.length ? ({
     "@context": "https://schema.org",
     "@type": "ItemList",
     name: "Services",
@@ -216,7 +220,7 @@ export default function HomePage() {
     }))
   }) : null, [fields, BRAND, SITE_URL]);
 
-  const newsLd = useMemo(() => news.length ? ({
+  const newsLd = React.useMemo(() => news.length ? ({
     "@context": "https://schema.org",
     "@type": "ItemList",
     name: "Latest News",
@@ -236,10 +240,9 @@ export default function HomePage() {
     }))
   }) : null, [news, SITE_URL, BRAND]);
 
-  const jsonLd = useMemo(() => {
+  const jsonLd = React.useMemo(() => {
     return [organizationLd, webSiteLd, webPageLd, categoriesLd, productsLd, fieldsLd, newsLd].filter(Boolean);
   }, [organizationLd, webSiteLd, webPageLd, categoriesLd, productsLd, fieldsLd, newsLd]);
-  /* =========================================================== */
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -255,13 +258,64 @@ export default function HomePage() {
         jsonLd={jsonLd}
       />
 
+      {/* Header / Slider */}
       <TopNavigation />
       <Banner />
-      <ProductCategories />
+
+      {/* Feature badges (Feature One) */}
+      <FeaturesStrip />
+
+      {/* About */}
       <AboutSection />
-      <FieldHighlightsSection />
+
+      {/* Services / Categories */}
+      <section className="py-12 md:py-16 bg-neutral-50">
+        <div className="container mx-auto px-4">
+          <SectionHeader kicker="What We’re Doing" title="Services We’re offering" />
+          <ProductCategories items={cats} />
+        </div>
+      </section>
+
+      {/* Brand / Partners */}
       <CerPartnersSection />
-      <NewsSection />
+
+      {/* Unbeatable / Parallax CTA */}
+      <ParallaxCTA />
+
+      {/* Fields (Healthy Food) */}
+      <section className="py-12 md:py-16 bg-white">
+        <div className="container mx-auto px-4">
+          <FieldHighlightsSection items={fields} />
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <Testimonials />
+
+      {/* Counters */}
+      <StatsStrip />
+
+      {/* Call bar */}
+      <CallBarHome phone="+1 (246) 333-0088" subtitle="Lorem ipsum dolor sit am cons sid" />
+
+      {/* Projects */}
+      <ProjectsGrid items={products} />
+
+      {/* Contact */}
+      <ContactSection />
+
+      {/* News / Blog */}
+      <section className="py-12 md:py-16 bg-neutral-50">
+        <div className="container mx-auto px-4">
+          <SectionHeader kicker="From the Blog Post" title="Latest News & Articles" />
+          <NewsSection items={news} />
+        </div>
+      </section>
+
+      {/* Final CTA */}
+      <CTASection />
+
+      {/* Chat + Footer */}
       <UserChatBox />
       <Footer />
     </div>

@@ -16,13 +16,13 @@ directory = "./dist/client"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "react-fullstack-db"
+database_name = "p-site-db"
 database_id = "15c19695-b012-40df-a7dd-f0f51d7373dd"
 
 # R2 Bucket để lưu ảnh
 [[r2_buckets]]
 binding = "IMAGES"
-bucket_name = "react-fullstack-images"
+bucket_name = "p-site-image"
 
 [placement]
 mode = "smart"
