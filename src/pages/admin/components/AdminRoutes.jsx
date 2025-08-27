@@ -47,7 +47,7 @@ export default function AdminRoute({ children, roles = ['superadmin', 'admin', '
     }
 
     if (status === 'fail') {
-        return <Navigate to="/api/admin/login" replace state={{ from: location }} />;
+        return <Navigate to="/admin/login" replace state={{ from: location }} />;
     }
 
     return children;

@@ -46,7 +46,7 @@ export default function RequireAuth({ children }) {
 
   if (status === 'fail') {
     // Ghi nhớ nơi user đang vào để login xong quay lại
-    return <Navigate to="/api/admin/login" replace state={{ from: location }} />;
+      return <Navigate to="/admin/login" replace state={{ from: location }} />;
   }
 
   return children;

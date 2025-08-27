@@ -6,7 +6,7 @@ function AdminLogin() {
   const location = useLocation();
 
   // Đường cần quay lại sau khi login
-  const from = location.state?.from?.pathname || "/api/admin/dashboard";
+    const from = location.state?.from?.pathname || "/admin/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,7 +16,7 @@ function AdminLogin() {
     useEffect(() => {
         const token = getToken();
         if (token && isTokenStillValid(token)) {
-            navigate("/api/admin/dashboard", { replace: true });
+            navigate("/admin/dashboard", { replace: true });
         }
     }, [navigate]);
 
@@ -54,7 +54,7 @@ function AdminLogin() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md bg-white p-8 rounded shadow">
-        {from !== "/api/admin/dashboard" && (
+          {from !== "/admin/dashboard" && (
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-600">
             Bạn sẽ được chuyển về: <strong>{from}</strong>
           </div>

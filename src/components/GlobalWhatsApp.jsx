@@ -8,7 +8,7 @@ export default function GlobalWhatsApp() {
     const { pathname } = useLocation();
 
     // Ẩn CTA ở khu vực admin
-    if (pathname.startsWith("/api/admin")) return null;
+    if (pathname.startsWith("/admin")) return null;
 
     // Prefill theo trang
     let msg;

@@ -157,7 +157,7 @@ const AdminDashboard = () => {
     } finally {
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
-      navigate('/api/admin/login', { replace: true });
+        navigate('/admin/login', { replace: true });
     }
   }
 

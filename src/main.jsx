@@ -43,24 +43,24 @@ createRoot(document.getElementById("root")).render(
                     <Route path="/news" element={<News />} />
                     <Route path="/chat" element={<UserChat />} />
                     <Route
-                        path="/api/admin"
+                        path="/admin"
                         element={
                             <RequireAuth>
-                                <Navigate to="/api/admin/dashboard" replace />
+                                <Navigate to="/admin/dashboard" replace />
                             </RequireAuth>
                         }
                     />
                     <Route
-                        path="/api/admin/"
+                        path="/admin/"
                         element={
                             <RequireAuth>
-                                <Navigate to="/api/admin/dashboard" replace />
+                                <Navigate to="/admin/dashboard" replace />
                             </RequireAuth>
                         }
                     />
-                    <Route path="/api/admin/login" element={<AdminLogin />} />
+                    <Route path="/admin/login" element={<AdminLogin />} />
                     <Route
-                        path="/api/admin/dashboard"
+                        path="/admin/dashboard"
                         element={
                             <AdminRoute>
                                 <AdminDashboard />

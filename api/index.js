@@ -351,31 +351,31 @@ const verifyAdmin = async (c) => {
 
 const serveAdminLogin = async (c) => {
     const user = await verifyAdmin(c);
-    if (user) return c.redirect("/api/admin/dashboard", 302);
+    if (user) return c.redirect("/admin/dashboard", 302);
     const res = await c.env.ASSETS.fetch(c.req.raw);
     const headers = new Headers(res.headers);
     headers.set("Cache-Control", "no-store");
     return new Response(res.body, { ...res, headers });
 };
 
-app.get("/api/admin/login", serveAdminLogin);
-app.get("/api/admin/login/", serveAdminLogin);
+app.get("/admin/login", serveAdminLogin);
+app.get("/admin/login/", serveAdminLogin);
 
 const redirectAdminRoot = async (c) => {
     const user = await verifyAdmin(c);
-    if (!user) return c.redirect("/api/admin/login", 302);
-    return c.redirect("/api/admin/dashboard", 302);
+    if (!user) return c.redirect("/admin/login", 302);
+    return c.redirect("/admin/dashboard", 302);
 };
 
-app.get("/api/admin", redirectAdminRoot);
-app.get("/api/admin/", redirectAdminRoot);
+app.get("/admin", redirectAdminRoot);
+app.get("/admin/", redirectAdminRoot);
 
-app.route("/api/admin/api", adminRouter);
+app.route("/admin/api", adminRouter);
 
-app.get("/api/admin/*", async (c) => {
-    if (c.req.path.startsWith("/api/admin/api")) return c.notFound();
+app.get("/admin/*", async (c) => {
+    if (c.req.path.startsWith("/admin/api")) return c.notFound();
     const user = await verifyAdmin(c);
-    if (!user) return c.redirect("/api/admin/login", 302);
+    if (!user) return c.redirect("/admin/login", 302);
     // Serve SPA assets for admin pages
     return c.env.ASSETS.fetch(c.req.raw);
 });
