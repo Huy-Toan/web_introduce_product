@@ -5355,9 +5355,11 @@ const auth = async (c, next) => {
   }
 };
 const rolePermissions = {
-  superadmin: ["users.manage"],
-  admin: ["users.manage"],
-  user_manager: ["users.manage"]
+  superadmin: ["users.manage", "content.manage"],
+  admin: ["users.manage", "content.manage"],
+  user_manager: ["users.manage"],
+  editor: ["content.manage"],
+  content_manager: ["content.manage"]
 };
 const requireAdminAuth = async (c, next) => {
   await auth(c, async () => {
@@ -33037,6 +33039,8 @@ contactRouter.delete("/:id", async (c) => {
   }
 });
 const userRouter = new Hono2();
+userRouter.use("*", requireAdminAuth);
+userRouter.use("*", requirePerm("users.manage"));
 const bad = (c, msg = "Bad Request", code = 400) => c.json({ ok: false, error: msg }, code);
 const ok = (c, data = {}, code = 200) => c.json({ ok: true, ...data }, code);
 const isEmail = (s = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
@@ -33977,6 +33981,9 @@ app$1.use("*", requireAdminAuth);
 app$1.post("/users", requirePerm("users.manage"), (c) => {
   return c.json({ message: "User created" });
 });
+app$1.post("/content", requirePerm("content.manage"), (c) => {
+  return c.json({ message: "Content updated" });
+});
 const enc = new TextEncoder();
 const getKey = (secret) => enc.encode(secret);
 const GRAPH = "https://graph.facebook.com/v20.0";
@@ -34265,6 +34272,30 @@ app.get("/api/admin/*", async (c) => {
   if (!user) return c.redirect("/api/admin/login", 302);
   return c.env.ASSETS.fetch(c.req.raw);
 });
+const adminOnlyPaths = [
+  "/api/banners",
+  "/api/about",
+  "/api/news",
+  "/api/fields",
+  "/api/contacts",
+  "/api/products",
+  "/api/parent_categories",
+  "/api/sub_categories",
+  "/api/cer-partners",
+  "/api/upload-image",
+  "/api/editor-upload",
+  "/api/translate"
+];
+for (const path of adminOnlyPaths) {
+  app.use(path, requireAdminAuth);
+  app.use(`${path}/*`, requireAdminAuth);
+  app.use(path, requirePerm("content.manage"));
+  app.use(`${path}/*`, requirePerm("content.manage"));
+}
+app.use("/api/users", requireAdminAuth);
+app.use("/api/users/*", requireAdminAuth);
+app.use("/api/users", requirePerm("users.manage"));
+app.use("/api/users/*", requirePerm("users.manage"));
 app.route("/", seoRoot);
 app.route("/sitemaps", sitemaps);
 app.route("/api/seo", seoApp);

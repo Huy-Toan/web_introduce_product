@@ -38,9 +38,11 @@ export const auth = async (c, next) => {
 
 // Mapping role -> permissions
 const rolePermissions = {
-    superadmin: ["users.manage"],
-    admin: ["users.manage"],
+    superadmin: ["users.manage", "content.manage"],
+    admin: ["users.manage", "content.manage"],
     user_manager: ["users.manage"],
+    editor: ["content.manage"],
+    content_manager: ["content.manage"]
 };
 
 // Require authenticated admin (non-"user" role)

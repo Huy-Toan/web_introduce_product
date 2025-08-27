@@ -1,7 +1,13 @@
 // src/routes/UserRouter.js
 import { Hono } from "hono";
+import { requireAdminAuth, requirePerm } from "../auth/authMidleware.js";
+
 
 const userRouter = new Hono();
+
+// Require authenticated admin with proper permission for all user routes
+userRouter.use("*", requireAdminAuth);
+userRouter.use("*", requirePerm("users.manage"));
 
 const bad = (c, msg = "Bad Request", code = 400) =>
   c.json({ ok: false, error: msg }, code);

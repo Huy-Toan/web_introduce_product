@@ -11,4 +11,9 @@ app.post('/users', requirePerm('users.manage'), (c) => {
     return c.json({ message: 'User created' });
 });
 
+// Example route for editors/content managers
+app.post('/content', requirePerm('content.manage'), (c) => {
+    return c.json({ message: 'Content updated' });
+});
+
 export default app;

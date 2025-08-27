@@ -18,6 +18,7 @@ import cerPartnerRouter from "./routes/cer-partner";
 import translateRouter from "./routes/translate";
 import { seoRoot, sitemaps } from "./routes/seo-sitemap.js";
 import adminRouter from "./admin/admin.js";
+import { requireAdminAuth, requirePerm } from "./auth/authMidleware.js";
 import { jwtVerify } from "jose";
 import { getCookie } from "hono/cookie";
 const enc = new TextEncoder();
@@ -380,6 +381,32 @@ app.get("/api/admin/*", async (c) => {
 });
 
 /* ========================= 4) Routers hiện có ========================= */
+
+// Protect sensitive API routes with authentication/authorization
+const adminOnlyPaths = [
+    "/api/banners",
+    "/api/about",
+    "/api/news",
+    "/api/fields",
+    "/api/contacts",
+    "/api/products",
+    "/api/parent_categories",
+    "/api/sub_categories",
+    "/api/cer-partners",
+    "/api/upload-image",
+    "/api/editor-upload",
+    "/api/translate",
+];
+for (const path of adminOnlyPaths) {
+    app.use(path, requireAdminAuth);
+    app.use(`${path}/*`, requireAdminAuth);
+    app.use(path, requirePerm("content.manage"));
+    app.use(`${path}/*`, requirePerm("content.manage"));
+}
+app.use("/api/users", requireAdminAuth);
+app.use("/api/users/*", requireAdminAuth);
+app.use("/api/users", requirePerm("users.manage"));
+app.use("/api/users/*", requirePerm("users.manage"));
 app.route("/", seoRoot);          
 app.route("/sitemaps", sitemaps); 
 
