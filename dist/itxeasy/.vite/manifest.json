@@ -1,0 +1,30 @@
+{
+  "_index-D-DqjVHW.js": {
+    "file": "assets/index-D-DqjVHW.js",
+    "name": "index",
+    "isDynamicEntry": true,
+    "dynamicImports": [
+      "_server.edge-BO1qx7u-.js",
+      "_server.edge-BO1qx7u-.js"
+    ]
+  },
+  "_server.edge-BO1qx7u-.js": {
+    "file": "assets/server.edge-BO1qx7u-.js",
+    "name": "server.edge",
+    "isDynamicEntry": true,
+    "imports": [
+      "_index-D-DqjVHW.js"
+    ]
+  },
+  "api/index.js": {
+    "file": "index.js",
+    "name": "index",
+    "src": "api/index.js",
+    "isEntry": true,
+    "dynamicImports": [
+      "_index-D-DqjVHW.js",
+      "_index-D-DqjVHW.js",
+      "_index-D-DqjVHW.js"
+    ]
+  }
+}

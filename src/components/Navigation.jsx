@@ -1,173 +1,192 @@
-import { ChevronDown, Book, Menu, X } from "lucide-react";
+import { Menu, X, Globe2, ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { groupByGenre } from "../lib/utils";
-import { useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useT } from "../context/TContext";
 
+const SUPPORTED = ["vi", "en"];
+const DEFAULT_LOCALE = "vi";
+
+function getStoredLocale() {
+  const url = new URL(window.location.href);
+  const urlLc = (url.searchParams.get("locale") || "").toLowerCase();
+  const ls = (localStorage.getItem("locale") || "").toLowerCase();
+  return SUPPORTED.includes(urlLc) ? urlLc : (SUPPORTED.includes(ls) ? ls : DEFAULT_LOCALE);
+}
+
+function setLocaleOnDom(lc) {
+  try { document.documentElement.lang = lc; } catch { }
+}
 
 function TopNavigation() {
-  const [isGenreDropdownOpen, setIsGenreDropdownOpen] = useState(false);
+  const { t, i18n } = useT();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [genres, setGenres] = useState([]);
+  const [atTop, setAtTop] = useState(true);
+  const [locale, setLocale] = useState(i18n.language || getStoredLocale());
+  const [openLang, setOpenLang] = useState(false);
+
   const navigate = useNavigate();
-  const { genreId } = useParams();
-
-  const activeGenre = genreId ? decodeURIComponent(genreId) : null;
-
   const location = useLocation();
-    const pathname = location.pathname;
+  const pathname = location.pathname;
 
-    const isActive = (targetPath) => {
-    if (targetPath === "/") return pathname === "/";
-    return pathname.startsWith(targetPath);
-    };
-
+  // theo dõi scroll
   useEffect(() => {
-    const fetchGenres = async () => {
-      try {
-        const res = await fetch("/api/books");
-        const data = await res.json();
-        const booksArray = data.books || [];
-        const grouped = groupByGenre(booksArray);
-        setGenres(grouped);
-      } catch (err) {
-        console.error("Failed to load genres:", err);
-      }
-    };
-    fetchGenres();
+    const onScroll = () => setAtTop(window.scrollY <= 10);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const handleGenreClick = (genreName) => {
-    setIsGenreDropdownOpen(false);
-    setIsMobileMenuOpen(false);
-    navigate(`/genre/${encodeURIComponent(genreName)}`);
+  // cập nhật html lang & lưu localStorage khi locale đổi
+  useEffect(() => {
+    i18n.changeLanguage(locale);
+    localStorage.setItem("locale", locale);
+    setLocaleOnDom(locale);
+  }, [locale, i18n]);
+
+  // giữ query ?locale=... khi chuyển trang
+  const buildUrl = (path) => {
+    const url = new URL(window.location.origin + path);
+    url.searchParams.set("locale", locale);
+    return url.pathname + url.search;
+  };
+
+  const isActive = (targetPath) => {
+    if (targetPath === "/") return pathname === "/";
+    return pathname.startsWith(targetPath);
   };
 
   const handlePageNavigation = (pageName) => {
     setIsMobileMenuOpen(false);
-    if (pageName === "home") navigate("/");
-    else navigate(`/${pageName}`);
+    const path = pageName === "home" ? "/" : `/${pageName}`;
+    navigate(buildUrl(path));
   };
 
-  const totalBooks = genres.reduce((sum, genre) => sum + genre.books.length, 0);
+  const transparentNav = pathname === "/" && atTop;
+
+  const labelFor = (page) => t(`navigation.${page}`);
+
+  const pages = ["home", "about", "what_we_do", "product", "news", "contact"];
+
+  // khi user truy cập với ?locale=... khác localStorage → đồng bộ state
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const urlLc = (url.searchParams.get("locale") || "").toLowerCase();
+    if (SUPPORTED.includes(urlLc) && urlLc !== locale) {
+      setLocale(urlLc);
+    }
+  }, [location.search]);
 
   return (
-    <nav className="bg-white shadow-sm border-b border-gray-200 fixed top-0 left-0 right-0 z-50">
-      <div className="container max-w-7xl mx-auto">
+    <nav
+      className={`fixed top-0 left-0 right-0 z-50 transition-colors duration-300
+        ${transparentNav
+          ? "!bg-transparent border-transparent shadow-none"
+          : "bg-white border-b border-gray-200 shadow-sm"}`}
+    >
+      <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          <div className="flex items-center space-x-2">
-            <Book className="h-8 w-8 text-blue-600" />
-            <span className="text-xl font-semibold text-gray-900">BookLib</span>
+          {/* Logo */}
+          <div
+            className="flex items-center space-x-2 cursor-pointer"
+            onClick={() => handlePageNavigation("home")}
+            title="AllXone"
+          >
+            <img
+              src="https://allxone.vn/wp-content/uploads/2022/08/cropped-logo1-150x31.png"
+              alt="AllXone Logo"
+              className="h-8 w-auto"
+            />
           </div>
 
-          {/* Desktop */}
+          {/* Desktop menu */}
           <div className="hidden md:flex items-center space-x-6">
-            {["home", "about","product", "news", "contact"].map((page) => {
-            const path = page === "home" ? "/" : `/${page}`;
-            return (
+            {pages.map((page) => {
+              const path = page === "home" ? "/" : `/${page}`;
+              const active = isActive(path);
+              return (
                 <button
-                key={page}
-                onClick={() => handlePageNavigation(page)}
-                className={`px-3 py-2 rounded-md text-lg font-medium transition-colors ${
-                    isActive(path)
-                    ? "text-blue-700 bg-blue-50"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                }`}
+                  key={page}
+                  onClick={() => handlePageNavigation(page)}
+                  className={`px-3 py-2 rounded-md text-lg font-medium transition-colors cursor-pointer
+        hover:underline hover:underline-offset-4 hover:decoration-2 ${transparentNav
+                      ? (active ? "text-white" : "text-white")
+                      : (active
+                        ? "text-green-700 bg-green-50"
+                        : "text-gray-600 hover:text-green-700 hover:bg-green-50")
+                    }`}
                 >
-                {page === "home" ? "Home" : page === "about" ? "About Us" : page ==="contact" ? "Contact" : page === "news" ? "News" : "Products"}
+                  {labelFor(page)}
                 </button>
-            );
+              );
             })}
-
-            {/* Genres Dropdown */}
-            {/* <div className="relative">
-              <button
-                onClick={() => setIsGenreDropdownOpen(!isGenreDropdownOpen)}
-                className="flex items-center px-3 py-2 rounded-md text-lg font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
-              >
-                Genres
-                <ChevronDown className="ml-1 h-4 w-4" />
-              </button>
-
-              {isGenreDropdownOpen && (
-                <div className="absolute top-full left-0 mt-1 w-64 bg-white rounded-md shadow-lg border border-gray-200 z-50 max-h-80 overflow-y-auto">
-                  {genres.map((genre) => (
-                    <button
-                      key={genre.name}
-                      onClick={() => handleGenreClick(genre.name)}
-                      className={`w-full text-left px-4 py-2 text-base hover:bg-gray-50 flex items-center justify-between ${
-                        activeGenre === genre.name
-                          ? "bg-blue-50 text-blue-700"
-                          : "text-gray-700"
-                      }`}
-                    >
-                      <span>{genre.name}</span>
-                      <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
-                        {genre.books.length}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div> */}
           </div>
 
-          {/* Mobile Button */}
-          <div className="md:hidden">
+
+          {/* Mobile button */}
+          <div className="md:hidden flex items-center gap-1">
+            {/* Mobile language quick toggle */}
+            <button
+              onClick={() => {
+                const next = locale === "vi" ? "en" : "vi";
+                setLocale(next);
+                const url = new URL(window.location.href);
+                url.searchParams.set("locale", next);
+                navigate(url.pathname + url.search, { replace: true });
+              }}
+              className={`p-2 rounded-md text-sm font-medium ${transparentNav ? "text-white" : "text-gray-700 hover:bg-gray-50"
+                }`}
+              title={t('auto.dang_chuyen_doi_ngon_ngu')}
+            >
+              {locale.toUpperCase()}
+            </button>
+
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+              className={`p-2 rounded-md transition-colors ${transparentNav ? "text-white" : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                }`}
             >
               {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
             </button>
           </div>
         </div>
+      </div>
 
-        {/* Mobile Menu */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-200 py-2">
+      {/* Mobile menu */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden bg-white border-t border-gray-200 w-full">
+          <div className="px-4 py-2">
             <div className="space-y-1">
-              {["home", "about","product", "news", "contact"].map((page) => (
+              {pages.map((page) => (
                 <button
                   key={page}
                   onClick={() => handlePageNavigation(page)}
-                  className="w-full text-left px-4 py-3 text-sm text-gray-600 hover:bg-gray-50"
+                  className="w-full text-left px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-md"
                 >
-                  {page === "home" ? "Home" : page === "about" ? "About Us" : page ==="contact" ? "Contact" : page === "news" ? "News" : "Products"}
+                  {labelFor(page)}
                 </button>
               ))}
-            </div>
-
-            {/* <div className="border-t border-gray-100 mt-2 pt-2">
-              <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                Genres
+              {/* Mobile language choices */}
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {SUPPORTED.map((lc) => (
+                  <button
+                    key={lc}
+                    onClick={() => {
+                      setLocale(lc);
+                      const url = new URL(window.location.href);
+                      url.searchParams.set("locale", lc);
+                      // giữ nguyên màn hiện tại, chỉ đổi locale
+                      navigate(url.pathname + url.search, { replace: true });
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className={`px-3 py-2 border rounded-md ${lc === locale ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                  >
+                    {lc === "vi" ? t('auto.tieng_viet') : t('auto.tieng_anh')}
+                  </button>
+                ))}
               </div>
-              {genres.map((genre) => (
-                <button
-                  key={genre.name}
-                  onClick={() => handleGenreClick(genre.name)}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${
-                    activeGenre === genre.name
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-gray-700"
-                  }`}
-                >
-                  <span>{genre.name}</span>
-                  <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
-                    {genre.books.length}
-                  </span>
-                </button>
-              ))}
-            </div> */}
+            </div>
           </div>
-        )}
-      </div>
-
-      {isGenreDropdownOpen && (
-        <div
-          className="fixed inset-0 z-10"
-          onClick={() => setIsGenreDropdownOpen(false)}
-        />
+        </div>
       )}
     </nav>
   );

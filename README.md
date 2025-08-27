@@ -11,8 +11,6 @@
 
 ```bash
 # Fork dự án trên GitHub UI, sau đó clone về máy
-git clone https://github.com/Huy-Toan/library.git
-cd library
 
 # Cài đặt dependencies
 npm install

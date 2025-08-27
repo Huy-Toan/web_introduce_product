@@ -10,5 +10,6 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true
-  }
+  },
+  "exclude": ["functions"]
 }

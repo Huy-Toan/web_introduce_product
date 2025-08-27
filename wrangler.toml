@@ -1,7 +1,7 @@
 # For more details on how to configure Wrangler, refer to:
 # https://developers.cloudflare.com/workers/wrangler/configuration/
 
-name = "library"
+name = "itxeasy-export"
 main = "api/index.js"
 compatibility_flags = ["nodejs_compat"]
 compatibility_date = "2025-04-01"
@@ -17,7 +17,7 @@ directory = "./dist/client"
 [[d1_databases]]
 binding = "DB"
 database_name = "react-fullstack-db"
-database_id = "15c19695-b012-40df-a7dd-f0f51d7373dd"
+database_id = "b199ff5f-d589-480e-ae13-ed842514e70c"
 
 # R2 Bucket để lưu ảnh
 [[r2_buckets]]
@@ -26,6 +26,18 @@ bucket_name = "react-fullstack-images"
 
 [placement]
 mode = "smart"
+
+[ai]
+binding = "AI"
+
+[vars]
+JWT_SECRET = "kOIu0O//qZ7JP++tc7GSBBUmvdw+Fcm7sx/D533H0JQ="
+JWT_EXPIRES_IN = "900" 
+BRAND_NAME = "ITXEASY"
+ADMIN_EMAIL = "doanvanngoc061220@gmail.com"   
+FROM_EMAIL = "onboarding@resend.dev"         
+EMAIL_PROVIDER = "resend"
+CANONICAL_HOST = "itxeasy.dev.com"
 
 upload_source_maps = true
 

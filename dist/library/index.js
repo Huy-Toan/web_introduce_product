@@ -946,13 +946,13 @@ var getPattern = (label, next) => {
   }
   return null;
 };
-var tryDecode = (str, decoder) => {
+var tryDecode = (str, decoder2) => {
   try {
-    return decoder(str);
+    return decoder2(str);
   } catch {
     return str.replace(/(?:%[0-9A-Fa-f]{2})+/g, (match) => {
       try {
-        return decoder(match);
+        return decoder2(match);
       } catch {
         return match;
       }
@@ -2241,7 +2241,6 @@ const fallbackBooks = [
 ];
 booksRouter.get("/", async (c) => {
   const { genre, sort } = c.req.query();
-  console.log("Query params:", { genre, sort });
   try {
     if (c.env.DB_AVAILABLE) {
       let query = "SELECT * FROM books";
@@ -2325,8 +2324,8 @@ booksRouter.get("/", async (c) => {
         debug: { genre, sort, originalCount: fallbackBooks.length }
       });
     }
-  } catch (error) {
-    console.error("Error fetching books:", error);
+  } catch (error2) {
+    console.error("Error fetching books:", error2);
     return c.json({
       error: "Failed to fetch books",
       books: fallbackBooks,
@@ -2356,8 +2355,8 @@ booksRouter.get("/:id", async (c) => {
         source: "fallback"
       });
     }
-  } catch (error) {
-    console.error("Error fetching book:", error);
+  } catch (error2) {
+    console.error("Error fetching book:", error2);
     return c.json({ error: "Failed to fetch book" }, 500);
   }
 });
@@ -2383,8 +2382,8 @@ booksRouter.post("/", async (c) => {
     } else {
       throw new Error("Failed to insert book");
     }
-  } catch (error) {
-    console.error("Error adding book:", error);
+  } catch (error2) {
+    console.error("Error adding book:", error2);
     return c.json({ error: "Failed to add book" }, 500);
   }
 });
@@ -2410,8 +2409,8 @@ booksRouter.put("/:id", async (c) => {
     } else {
       return c.json({ error: "Book not found" }, 404);
     }
-  } catch (error) {
-    console.error("Error updating book:", error);
+  } catch (error2) {
+    console.error("Error updating book:", error2);
     return c.json({ error: "Failed to update book" }, 500);
   }
 });
@@ -2431,8 +2430,8 @@ booksRouter.delete("/:id", async (c) => {
     } else {
       return c.json({ error: "Book not found" }, 404);
     }
-  } catch (error) {
-    console.error("Lỗi khi xoá:", error);
+  } catch (error2) {
+    console.error("Lỗi khi xoá:", error2);
     return c.json({ error: "Failed to delete book" }, 500);
   }
 });
@@ -2521,8 +2520,8 @@ bookRelatedRouter.get("/", async (c) => {
         source: "fallback"
       });
     }
-  } catch (error) {
-    console.error("Error fetching related book data:", error);
+  } catch (error2) {
+    console.error("Error fetching related book data:", error2);
     return c.json({
       error: "Failed to fetch related books",
       bookId,
@@ -2570,12 +2569,53 @@ uploadImageRouter.post("/", async (c) => {
       url: publicUrl,
       fileName
     });
-  } catch (error) {
-    console.error("Upload error:", error);
+  } catch (error2) {
+    console.error("Upload error:", error2);
     return c.json({
       error: "Có lỗi xảy ra khi upload ảnh",
-      details: error.message
+      details: error2.message
     }, 500);
+  }
+});
+function uuidv4() {
+  return ("10000000-1000-4000-8000" + -1e11).replace(
+    /[018]/g,
+    (c) => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+  );
+}
+const editorUploadRouter = new Hono2();
+editorUploadRouter.post("/", async (c) => {
+  try {
+    const formData = await c.req.formData();
+    const file = formData.get("editormd-image-file");
+    if (!file || typeof file === "string") {
+      return c.json({ success: 0, message: "Không có file nào được upload" }, 400);
+    }
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+      return c.json({ success: 0, message: "Chỉ chấp nhận JPEG, PNG, GIF, WebP" }, 400);
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return c.json({ success: 0, message: "Ảnh vượt quá 5MB!" }, 400);
+    }
+    const ext = file.name.split(".").pop();
+    const fileName = `books/${uuidv4()}.${ext}`;
+    const r2 = c.env.IMAGES;
+    await r2.put(fileName, await file.arrayBuffer(), {
+      httpMetadata: { contentType: file.type }
+    });
+    const baseUrl = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
+    const publicUrl = `${baseUrl}/${fileName}`;
+    return c.json({
+      success: 1,
+      message: "OK",
+      url: publicUrl,
+      fileName
+      // giữ lại cho bạn dùng khi cần
+    });
+  } catch (error2) {
+    console.error("Upload error:", error2);
+    return c.json({ success: 0, message: error2.message }, 500);
   }
 });
 const aboutRouter = new Hono2();
@@ -2591,12 +2631,11 @@ aboutRouter.get("/", async (c) => {
   try {
     if (c.env.DB_AVAILABLE) {
       const result = await c.env.DB.prepare("SELECT * FROM about_us").all();
-      console.log("Fetched about us from database:", result.results);
       return c.json({ about: result.results, source: "database" });
     } else {
       return c.json({ about: fallbackAbout, source: "fallback" });
     }
-  } catch (error) {
+  } catch (error2) {
     return c.json({ error: "Failed to fetch about us" }, 500);
   }
 });
@@ -2650,7 +2689,10 @@ const fallbackNews = [
   {
     id: 1,
     title: "Website Launch",
+    slug: "website-launch",
     content: "We are excited to announce the launch of our new website!",
+    meta_description: "Announcement of our new website",
+    keywords: "launch,website",
     image_url: "/images/news/launch.jpg",
     published_at: "2025-08-01"
   }
@@ -2663,43 +2705,82 @@ newsRouter.get("/", async (c) => {
     } else {
       return c.json({ news: fallbackNews, source: "fallback" });
     }
-  } catch (error) {
+  } catch (error2) {
+    console.error(error2);
     return c.json({ error: "Failed to fetch news" }, 500);
   }
 });
-newsRouter.get("/:id", async (c) => {
-  const id = parseInt(c.req.param("id"));
+newsRouter.get("/:slug", async (c) => {
+  const id = c.req.param("slug");
   try {
-    const news = await c.env.DB.prepare("SELECT * FROM news WHERE id = ?").bind(id).first();
+    const news = await c.env.DB.prepare("SELECT * FROM news WHERE slug = ?").bind(id).first();
     if (!news) return c.json({ error: "News not found" }, 404);
     return c.json({ news });
   } catch (e) {
+    console.error(error);
     return c.json({ error: "Failed to fetch news" }, 500);
   }
 });
 newsRouter.post("/", async (c) => {
   try {
-    const { title: title2, content, image_url } = await c.req.json();
+    const {
+      title: title2,
+      slug,
+      content,
+      meta,
+      keywords,
+      image_url,
+      published_at
+    } = await c.req.json();
     const result = await c.env.DB.prepare(`
-      INSERT INTO news (title, content, image_url)
-      VALUES (?, ?, ?)
-    `).bind(title2, content, image_url || null).run();
+       INSERT INTO news (title, slug, content, meta_description, keywords, image_url, published_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      title2,
+      slug,
+      content,
+      meta || null,
+      keywords || null,
+      image_url || null,
+      published_at || null
+    ).run();
     const newItem = await c.env.DB.prepare("SELECT * FROM news WHERE id = ?").bind(result.meta.last_row_id).first();
     return c.json({ news: newItem }, 201);
   } catch (e) {
+    console.error(e);
     return c.json({ error: "Failed to create news" }, 500);
   }
 });
 newsRouter.put("/:id", async (c) => {
   const id = parseInt(c.req.param("id"));
-  const { title: title2, content, image_url } = await c.req.json();
+  const {
+    title: title2,
+    slug,
+    content,
+    meta,
+    keywords,
+    image_url,
+    published_at
+  } = await c.req.json();
   try {
     await c.env.DB.prepare(`
-      UPDATE news SET title = ?, content = ?, image_url = ? WHERE id = ?
-    `).bind(title2, content, image_url, id).run();
+      UPDATE news
+      SET title = ?, slug = ?, content = ?, meta_description = ?, keywords = ?, image_url = ?, published_at = ?
+      WHERE id = ?
+    `).bind(
+      title2,
+      slug,
+      content,
+      meta || null,
+      keywords || null,
+      image_url || null,
+      published_at || null,
+      id
+    ).run();
     const updated = await c.env.DB.prepare("SELECT * FROM news WHERE id = ?").bind(id).first();
     return c.json({ news: updated });
   } catch (e) {
+    console.error(e);
     return c.json({ error: "Failed to update news" }, 500);
   }
 });
@@ -2709,49 +2790,2137 @@ newsRouter.delete("/:id", async (c) => {
     await c.env.DB.prepare("DELETE FROM news WHERE id = ?").bind(id).run();
     return c.json({ success: true });
   } catch (e) {
+    console.error(e);
     return c.json({ error: "Failed to delete news" }, 500);
   }
 });
-function uuidv4() {
-  return ("10000000-1000-4000-8000" + -1e11).replace(
-    /[018]/g,
-    (c) => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-  );
+function cleanText(text) {
+  if (!text) return "";
+  return text.replace(/^\s*[-*•]\s*/gm, "").replace(/^\s*\d+\.\s*/gm, "").replace(/\n{3,}/g, "\n\n").trim();
 }
-const uploadAboutImageRouter = new Hono2();
-uploadAboutImageRouter.post("/", async (c) => {
+const seoApp = new Hono2();
+const slugify$2 = (str = "") => (str || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+const safeJSONParse = (raw) => {
   try {
-    const formData = await c.req.formData();
-    const file = formData.get("image");
-    if (!file || typeof file === "string") {
-      return c.json({ error: "Không có file nào được upload" }, 400);
+    return { ok: true, data: JSON.parse(raw) };
+  } catch (e) {
+    return { ok: false, error: e?.message || "JSON parse error" };
+  }
+};
+const tryExtractPlanningFromText = (txt = "") => {
+  const title2 = (txt.match(/TIÊU ĐỀ\s*:?\s*(.+)/i)?.[1] || "").trim();
+  const meta = (txt.match(/META DESCRIPTION\s*:?\s*([\s\S]*?)(?:\n|$)/i)?.[1] || "").trim();
+  const keywordsBlock = txt.match(/TỪ KHÓA[^\n]*\s*:\s*([\s\S]*?)(?:OUTLINE|$)/i)?.[1] || "";
+  const keywords = keywordsBlock.split("\n").map((l) => l.replace(/^\s*\d+\.\s*/, "").trim()).filter(Boolean);
+  const outlineBlock = txt.match(/OUTLINE\s*:\s*([\s\S]*)$/i)?.[1] || "";
+  const outline = outlineBlock.split("\n").map((l) => l.replace(/^\s*[-*•]\s*/, "").trim()).filter(Boolean);
+  return { title: title2, meta_description: meta, keywords, outline };
+};
+seoApp.post("/generate-content", async (c) => {
+  try {
+    const { keyword } = await c.req.json();
+    const ai = c.env.AI;
+    if (!keyword || typeof keyword !== "string" || !keyword.trim()) {
+      return c.json({ success: false, error: "Thiếu keyword" }, 400);
     }
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"];
-    if (!allowedTypes.includes(file.type)) {
-      return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP)" }, 400);
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      return c.json({ error: "Kích thước ảnh không được vượt quá 5MB!" }, 400);
-    }
-    const ext = file.name.split(".").pop();
-    const fileName = `about/${uuidv4()}.${ext}`;
-    const r2 = c.env.IMAGES;
-    await r2.put(fileName, await file.arrayBuffer(), {
-      httpMetadata: { contentType: file.type }
+    const planningMessages = [
+      { role: "system", content: "Bạn là content creator chuyên nghiệp, trả lời đúng định dạng yêu cầu." },
+      {
+        role: "user",
+        content: `Tôi cần viết bài về "${keyword}".
+
+Hãy trả lời CHỈ DẠNG JSON HỢP LỆ (không thêm chữ nào ngoài JSON):
+{
+  "title": "tiêu đề <= 60 ký tự, tự nhiên, không nhồi nhét",
+  "meta_description": "mô tả <= 160 ký tự, hấp dẫn, tự nhiên",
+  "keywords": ["5 từ khóa phụ, ngắn gọn", "..." ],
+  "outline": ["Danh sách mục chính để viết bài 1000+ từ"]
+}`
+      }
+    ];
+    const planResult = await ai.run("@cf/meta/llama-3.1-8b-instruct", {
+      messages: planningMessages,
+      max_tokens: 1400,
+      temperature: 0.6
     });
-    if (!c.env.PUBLIC_R2_URL) {
-      return c.json({ error: "Thiếu PUBLIC_R2_URL trong cấu hình môi trường" }, 500);
+    let planningJSON;
+    {
+      const parsed = safeJSONParse(planResult.response);
+      if (parsed.ok) {
+        planningJSON = parsed.data;
+      } else {
+        const fallback = tryExtractPlanningFromText(planResult.response || "");
+        planningJSON = fallback;
+      }
     }
-    const baseUrl = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
-    const publicUrl = `${baseUrl}/${fileName}`;
-    return c.json({
+    const title2 = (planningJSON?.title || "").trim();
+    const metaRaw = (planningJSON?.meta_description || "").trim();
+    const meta = metaRaw.length > 160 ? metaRaw.slice(0, 159) : metaRaw;
+    const keywordsArr = Array.isArray(planningJSON?.keywords) ? planningJSON.keywords : [];
+    const outline = Array.isArray(planningJSON?.outline) ? planningJSON.outline : [];
+    const part1Messages = [
+      ...planningMessages,
+      { role: "assistant", content: JSON.stringify(planningJSON) },
+      {
+        role: "user",
+        content: `Dựa vào JSON planning ở trên, hãy viết phần mở đầu hấp dẫn và 2-3 section đầu theo outline (~500-600 từ).
+Yêu cầu:
+- Dùng từ khóa "${keyword}" tự nhiên
+- Giọng văn rõ ràng, hữu ích
+- Trả về CHỈ DẠNG MARKDOWN (không JSON, không tiêu đề trùng lặp với title).`
+      }
+    ];
+    const part1Result = await ai.run("@cf/meta/llama-3.1-8b-instruct", {
+      messages: part1Messages,
+      max_tokens: 2400,
+      temperature: 0.7
+    });
+    const part2Messages = [
+      ...part1Messages,
+      { role: "assistant", content: part1Result.response },
+      {
+        role: "user",
+        content: `Viết tiếp các section còn lại theo outline và phần kết luận có call-to-action (~400-500 từ).
+Yêu cầu:
+- Kết nối mượt với phần trước
+- Giữ cùng tone/style
+- Trả về CHỈ DẠNG MARKDOWN.`
+      }
+    ];
+    const part2Result = await ai.run("@cf/meta/llama-3.1-8b-instruct", {
+      messages: part2Messages,
+      max_tokens: 2400,
+      temperature: 0.7
+    });
+    const clean = (s) => cleanText(s || "");
+    const contentMarkdown = [clean(part1Result.response), clean(part2Result.response)].filter(Boolean).join("\n\n");
+    const response = {
       success: true,
-      url: publicUrl,
-      fileName
+      data: {
+        title: title2 || keyword,
+        meta,
+        keywords: keywordsArr.join(", "),
+        slug: slugify$2(title2 || keyword),
+        content: contentMarkdown,
+        outline
+      },
+      raw_responses: {
+        planning: planningJSON,
+        part1: clean(part1Result.response),
+        part2: clean(part2Result.response)
+      },
+      generated_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    return c.json(response);
+  } catch (err) {
+    console.error("Content generation error:", err);
+    return c.json({
+      success: false,
+      error: "Content generation failed",
+      details: err?.message || String(err)
+    }, 500);
+  }
+});
+seoApp.post("/generate-seo", async (c) => {
+  try {
+    const { content } = await c.req.json();
+    const ai = c.env.AI;
+    if (!content || typeof content !== "string" || !content.trim()) {
+      return c.json({ success: false, error: "Thiếu content" }, 400);
+    }
+    const truncated = content.length > 8e3 ? content.slice(0, 8e3) : content;
+    const prompt = [
+      { role: "system", content: "Bạn là chuyên gia SEO. Luôn trả lời đúng JSON schema khi được yêu cầu." },
+      {
+        role: "user",
+        content: `Phân tích nội dung sau và trả lời CHỈ DẠNG JSON HỢP LỆ (không thêm chữ nào ngoài JSON).
+---CONTENT---
+${truncated}
+---YÊU CẦU---
+{
+  "title": "tiêu đề <= 60 ký tự, súc tích, tự nhiên",
+  "meta_description": "mô tả <= 160 ký tự, hấp dẫn, không nhồi nhét",
+  "keywords": ["5-8 keyword ngắn gọn"],
+  "focus_keyword": "từ khóa trọng tâm",
+  "score": 7,
+  "tips": ["3-5 gợi ý cải thiện cụ thể, ngắn gọn"],
+  "distribution": ["các kênh phân phối nội dung gợi ý, 2-4 mục"]
+}`
+      }
+    ];
+    const aiRes = await ai.run("@cf/meta/llama-3.1-8b-instruct", {
+      messages: prompt,
+      max_tokens: 1200,
+      temperature: 0.5
     });
-  } catch (error) {
-    console.error("Upload error:", error);
-    return c.json({ error: "Lỗi khi upload ảnh", details: error.message }, 500);
+    let extracted;
+    {
+      const parsed = safeJSONParse(aiRes.response);
+      if (parsed.ok) {
+        extracted = parsed.data;
+      } else {
+        const txt = aiRes.response || "";
+        const title3 = (txt.match(/TIÊU ĐỀ[^\n]*:\s*(.+)/i)?.[1] || "").trim();
+        const meta2 = (txt.match(/META DESCRIPTION[^\n]*:\s*([\s\S]*?)(?:\n|$)/i)?.[1] || "").trim();
+        const kwBlock = txt.match(/TỪ KHÓA[^\n]*:\s*([\s\S]*?)(?:\n\n|URL|$)/i)?.[1] || "";
+        const keywords = kwBlock.split("\n").map((l) => l.replace(/^\s*\d+\.\s*/, "").trim()).filter(Boolean);
+        extracted = {
+          title: title3,
+          meta_description: meta2,
+          keywords,
+          focus_keyword: keywords?.[0] || "",
+          score: 7,
+          tips: [],
+          distribution: []
+        };
+      }
+    }
+    const title2 = (extracted?.title || "").trim();
+    const metaRaw = (extracted?.meta_description || "").trim();
+    const meta = metaRaw.length > 160 ? metaRaw.slice(0, 159) : metaRaw;
+    const keywordsArr = Array.isArray(extracted?.keywords) ? extracted.keywords : [];
+    const focus_keyword = (extracted?.focus_keyword || keywordsArr[0] || "").trim();
+    const score = Number.isFinite(extracted?.score) ? Math.max(1, Math.min(10, Math.round(extracted.score))) : 7;
+    const tips = Array.isArray(extracted?.tips) ? extracted.tips : [];
+    const distribution = Array.isArray(extracted?.distribution) ? extracted.distribution : [];
+    const response = {
+      success: true,
+      data: {
+        title: title2,
+        meta,
+        keywords: keywordsArr.join(", "),
+        slug: slugify$2(title2),
+        focus_keyword,
+        score,
+        tips,
+        distribution
+      },
+      raw_responses: {
+        model_raw: cleanText(aiRes.response)
+      },
+      content_length: content.length,
+      generated_at: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    return c.json(response);
+  } catch (err) {
+    console.error("SEO analysis error:", err);
+    return c.json({
+      success: false,
+      error: "SEO analysis failed",
+      details: err?.message || String(err)
+    }, 500);
+  }
+});
+seoApp.get("/test", (c) => {
+  return c.json({
+    message: "SEO API working",
+    endpoints: [
+      "POST /generate-content - keyword → full content (title/meta/keywords/slug/content)",
+      "POST /generate-seo - content → SEO (title/meta/keywords/slug + score/tips)"
+    ],
+    timestamp: (/* @__PURE__ */ new Date()).toISOString()
+  });
+});
+const hasDB$1 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
+const slugify$1 = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+const categoriesRouter = new Hono2();
+categoriesRouter.get("/", async (c) => {
+  try {
+    if (!hasDB$1(c.env)) {
+      return c.json({ categories: [], source: "fallback", count: 0 });
+    }
+    const sql = `
+      SELECT id, name, slug, description, image_url, created_at
+      FROM categories
+      ORDER BY created_at DESC
+    `;
+    const result = await c.env.DB.prepare(sql).all();
+    const categories = result?.results ?? [];
+    return c.json({ categories, count: categories.length, source: "database" });
+  } catch (err) {
+    console.error("Error fetching categories:", err);
+    return c.json({ error: "Failed to fetch categories" }, 500);
+  }
+});
+categoriesRouter.get("/:idOrSlug", async (c) => {
+  const idOrSlug = c.req.param("idOrSlug");
+  try {
+    if (!hasDB$1(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const isNumeric = /^\d+$/.test(idOrSlug);
+    const sql = `
+      SELECT id, name, slug, description, image_url, created_at
+      FROM categories
+      WHERE ${isNumeric ? "id = ?" : "slug = ?"}
+      LIMIT 1
+    `;
+    const cat = await c.env.DB.prepare(sql).bind(isNumeric ? Number(idOrSlug) : idOrSlug).first();
+    if (!cat) return c.json({ error: "Category not found" }, 404);
+    return c.json({ category: cat, source: "database" });
+  } catch (err) {
+    console.error("Error fetching category:", err);
+    return c.json({ error: "Failed to fetch category" }, 500);
+  }
+});
+categoriesRouter.post("/", async (c) => {
+  try {
+    if (!hasDB$1(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const body = await c.req.json();
+    const { name, slug: rawSlug, description, image_url } = body || {};
+    if (!name?.trim()) {
+      return c.json({ error: "Missing required field: name" }, 400);
+    }
+    const slug = rawSlug?.trim() || slugify$1(name);
+    const sql = `
+      INSERT INTO categories (name, slug, description, image_url)
+      VALUES (?, ?, ?, ?)
+    `;
+    const res = await c.env.DB.prepare(sql).bind(name.trim(), slug, description || null, image_url || null).run();
+    if (!res.success) throw new Error("Insert failed");
+    const newId = res.meta?.last_row_id;
+    const cat = await c.env.DB.prepare(
+      `SELECT id, name, slug, description, image_url, created_at
+         FROM categories WHERE id = ?`
+    ).bind(newId).first();
+    return c.json({ category: cat, source: "database" }, 201);
+  } catch (err) {
+    console.error("Error creating category:", err);
+    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug already exists" : "Failed to create category";
+    return c.json({ error: msg }, 500);
+  }
+});
+categoriesRouter.put("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$1(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const body = await c.req.json();
+    const { name, slug, description, image_url } = body || {};
+    const sets = [];
+    const params = [];
+    if (name !== void 0) {
+      sets.push("name = ?");
+      params.push(name);
+    }
+    if (slug !== void 0) {
+      sets.push("slug = ?");
+      params.push(slug);
+    }
+    if (description !== void 0) {
+      sets.push("description = ?");
+      params.push(description);
+    }
+    if (image_url !== void 0) {
+      sets.push("image_url = ?");
+      params.push(image_url);
+    }
+    if (!sets.length) return c.json({ error: "No fields to update" }, 400);
+    const sql = `UPDATE categories SET ${sets.join(", ")} WHERE id = ?`;
+    params.push(id);
+    const res = await c.env.DB.prepare(sql).bind(...params).run();
+    if ((res.meta?.changes || 0) === 0) {
+      return c.json({ error: "Category not found" }, 404);
+    }
+    const cat = await c.env.DB.prepare(
+      `SELECT id, name, slug, description, image_url, created_at
+         FROM categories WHERE id = ?`
+    ).bind(id).first();
+    return c.json({ category: cat, source: "database" });
+  } catch (err) {
+    console.error("Error updating category:", err);
+    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug already exists" : "Failed to update category";
+    return c.json({ error: msg }, 500);
+  }
+});
+categoriesRouter.delete("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$1(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const existing = await c.env.DB.prepare("SELECT id FROM categories WHERE id = ?").bind(id).first();
+    if (!existing) return c.json({ error: "Category not found" }, 404);
+    const res = await c.env.DB.prepare("DELETE FROM categories WHERE id = ?").bind(id).run();
+    if ((res.meta?.changes || 0) > 0) {
+      return c.json({ success: true, message: "Category deleted successfully" });
+    }
+    return c.json({ error: "Category not found" }, 404);
+  } catch (err) {
+    console.error("Error deleting category:", err);
+    return c.json({ error: "Failed to delete category" }, 500);
+  }
+});
+categoriesRouter.get("/:slug/products", async (c) => {
+  const slug = c.req.param("slug");
+  try {
+    if (!hasDB$1(c.env)) {
+      return c.json({ products: [], source: "fallback", count: 0 });
+    }
+    const sql = `
+      SELECT p.*, c.name AS category_name, c.slug AS category_slug
+      FROM products p
+      JOIN categories c ON c.id = p.category_id
+      WHERE c.slug = ?
+      ORDER BY p.created_at DESC
+    `;
+    const res = await c.env.DB.prepare(sql).bind(slug).all();
+    const products = res?.results ?? [];
+    return c.json({ products, count: products.length, source: "database" });
+  } catch (err) {
+    console.error("Error fetching products by category:", err);
+    return c.json({ error: "Failed to fetch products by category" }, 500);
+  }
+});
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+function concat(...buffers) {
+  const size = buffers.reduce((acc, { length }) => acc + length, 0);
+  const buf = new Uint8Array(size);
+  let i = 0;
+  for (const buffer of buffers) {
+    buf.set(buffer, i);
+    i += buffer.length;
+  }
+  return buf;
+}
+function encodeBase64(input) {
+  if (Uint8Array.prototype.toBase64) {
+    return input.toBase64();
+  }
+  const CHUNK_SIZE = 32768;
+  const arr = [];
+  for (let i = 0; i < input.length; i += CHUNK_SIZE) {
+    arr.push(String.fromCharCode.apply(null, input.subarray(i, i + CHUNK_SIZE)));
+  }
+  return btoa(arr.join(""));
+}
+function decodeBase64(encoded) {
+  if (Uint8Array.fromBase64) {
+    return Uint8Array.fromBase64(encoded);
+  }
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+function decode(input) {
+  if (Uint8Array.fromBase64) {
+    return Uint8Array.fromBase64(typeof input === "string" ? input : decoder.decode(input), {
+      alphabet: "base64url"
+    });
+  }
+  let encoded = input;
+  if (encoded instanceof Uint8Array) {
+    encoded = decoder.decode(encoded);
+  }
+  encoded = encoded.replace(/-/g, "+").replace(/_/g, "/").replace(/\s/g, "");
+  try {
+    return decodeBase64(encoded);
+  } catch {
+    throw new TypeError("The input to be decoded is not correctly encoded.");
+  }
+}
+function encode(input) {
+  let unencoded = input;
+  if (typeof unencoded === "string") {
+    unencoded = encoder.encode(unencoded);
+  }
+  if (Uint8Array.prototype.toBase64) {
+    return unencoded.toBase64({ alphabet: "base64url", omitPadding: true });
+  }
+  return encodeBase64(unencoded).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+class JOSEError extends Error {
+  static code = "ERR_JOSE_GENERIC";
+  code = "ERR_JOSE_GENERIC";
+  constructor(message2, options) {
+    super(message2, options);
+    this.name = this.constructor.name;
+    Error.captureStackTrace?.(this, this.constructor);
+  }
+}
+class JWTClaimValidationFailed extends JOSEError {
+  static code = "ERR_JWT_CLAIM_VALIDATION_FAILED";
+  code = "ERR_JWT_CLAIM_VALIDATION_FAILED";
+  claim;
+  reason;
+  payload;
+  constructor(message2, payload, claim = "unspecified", reason = "unspecified") {
+    super(message2, { cause: { claim, reason, payload } });
+    this.claim = claim;
+    this.reason = reason;
+    this.payload = payload;
+  }
+}
+class JWTExpired extends JOSEError {
+  static code = "ERR_JWT_EXPIRED";
+  code = "ERR_JWT_EXPIRED";
+  claim;
+  reason;
+  payload;
+  constructor(message2, payload, claim = "unspecified", reason = "unspecified") {
+    super(message2, { cause: { claim, reason, payload } });
+    this.claim = claim;
+    this.reason = reason;
+    this.payload = payload;
+  }
+}
+class JOSENotSupported extends JOSEError {
+  static code = "ERR_JOSE_NOT_SUPPORTED";
+  code = "ERR_JOSE_NOT_SUPPORTED";
+}
+class JWSInvalid extends JOSEError {
+  static code = "ERR_JWS_INVALID";
+  code = "ERR_JWS_INVALID";
+}
+class JWTInvalid extends JOSEError {
+  static code = "ERR_JWT_INVALID";
+  code = "ERR_JWT_INVALID";
+}
+class JWSSignatureVerificationFailed extends JOSEError {
+  static code = "ERR_JWS_SIGNATURE_VERIFICATION_FAILED";
+  code = "ERR_JWS_SIGNATURE_VERIFICATION_FAILED";
+  constructor(message2 = "signature verification failed", options) {
+    super(message2, options);
+  }
+}
+function unusable(name, prop = "algorithm.name") {
+  return new TypeError(`CryptoKey does not support this operation, its ${prop} must be ${name}`);
+}
+function isAlgorithm(algorithm, name) {
+  return algorithm.name === name;
+}
+function getHashLength(hash) {
+  return parseInt(hash.name.slice(4), 10);
+}
+function getNamedCurve(alg) {
+  switch (alg) {
+    case "ES256":
+      return "P-256";
+    case "ES384":
+      return "P-384";
+    case "ES512":
+      return "P-521";
+    default:
+      throw new Error("unreachable");
+  }
+}
+function checkUsage(key, usage) {
+  if (usage && !key.usages.includes(usage)) {
+    throw new TypeError(`CryptoKey does not support this operation, its usages must include ${usage}.`);
+  }
+}
+function checkSigCryptoKey(key, alg, usage) {
+  switch (alg) {
+    case "HS256":
+    case "HS384":
+    case "HS512": {
+      if (!isAlgorithm(key.algorithm, "HMAC"))
+        throw unusable("HMAC");
+      const expected = parseInt(alg.slice(2), 10);
+      const actual = getHashLength(key.algorithm.hash);
+      if (actual !== expected)
+        throw unusable(`SHA-${expected}`, "algorithm.hash");
+      break;
+    }
+    case "RS256":
+    case "RS384":
+    case "RS512": {
+      if (!isAlgorithm(key.algorithm, "RSASSA-PKCS1-v1_5"))
+        throw unusable("RSASSA-PKCS1-v1_5");
+      const expected = parseInt(alg.slice(2), 10);
+      const actual = getHashLength(key.algorithm.hash);
+      if (actual !== expected)
+        throw unusable(`SHA-${expected}`, "algorithm.hash");
+      break;
+    }
+    case "PS256":
+    case "PS384":
+    case "PS512": {
+      if (!isAlgorithm(key.algorithm, "RSA-PSS"))
+        throw unusable("RSA-PSS");
+      const expected = parseInt(alg.slice(2), 10);
+      const actual = getHashLength(key.algorithm.hash);
+      if (actual !== expected)
+        throw unusable(`SHA-${expected}`, "algorithm.hash");
+      break;
+    }
+    case "Ed25519":
+    case "EdDSA": {
+      if (!isAlgorithm(key.algorithm, "Ed25519"))
+        throw unusable("Ed25519");
+      break;
+    }
+    case "ES256":
+    case "ES384":
+    case "ES512": {
+      if (!isAlgorithm(key.algorithm, "ECDSA"))
+        throw unusable("ECDSA");
+      const expected = getNamedCurve(alg);
+      const actual = key.algorithm.namedCurve;
+      if (actual !== expected)
+        throw unusable(expected, "algorithm.namedCurve");
+      break;
+    }
+    default:
+      throw new TypeError("CryptoKey does not support this operation");
+  }
+  checkUsage(key, usage);
+}
+function message(msg, actual, ...types) {
+  types = types.filter(Boolean);
+  if (types.length > 2) {
+    const last = types.pop();
+    msg += `one of type ${types.join(", ")}, or ${last}.`;
+  } else if (types.length === 2) {
+    msg += `one of type ${types[0]} or ${types[1]}.`;
+  } else {
+    msg += `of type ${types[0]}.`;
+  }
+  if (actual == null) {
+    msg += ` Received ${actual}`;
+  } else if (typeof actual === "function" && actual.name) {
+    msg += ` Received function ${actual.name}`;
+  } else if (typeof actual === "object" && actual != null) {
+    if (actual.constructor?.name) {
+      msg += ` Received an instance of ${actual.constructor.name}`;
+    }
+  }
+  return msg;
+}
+const invalidKeyInput = (actual, ...types) => {
+  return message("Key must be ", actual, ...types);
+};
+function withAlg(alg, actual, ...types) {
+  return message(`Key for the ${alg} algorithm must be `, actual, ...types);
+}
+function isCryptoKey(key) {
+  return key?.[Symbol.toStringTag] === "CryptoKey";
+}
+function isKeyObject(key) {
+  return key?.[Symbol.toStringTag] === "KeyObject";
+}
+const isKeyLike = (key) => {
+  return isCryptoKey(key) || isKeyObject(key);
+};
+const isDisjoint = (...headers) => {
+  const sources = headers.filter(Boolean);
+  if (sources.length === 0 || sources.length === 1) {
+    return true;
+  }
+  let acc;
+  for (const header of sources) {
+    const parameters = Object.keys(header);
+    if (!acc || acc.size === 0) {
+      acc = new Set(parameters);
+      continue;
+    }
+    for (const parameter of parameters) {
+      if (acc.has(parameter)) {
+        return false;
+      }
+      acc.add(parameter);
+    }
+  }
+  return true;
+};
+function isObjectLike(value) {
+  return typeof value === "object" && value !== null;
+}
+const isObject = (input) => {
+  if (!isObjectLike(input) || Object.prototype.toString.call(input) !== "[object Object]") {
+    return false;
+  }
+  if (Object.getPrototypeOf(input) === null) {
+    return true;
+  }
+  let proto = input;
+  while (Object.getPrototypeOf(proto) !== null) {
+    proto = Object.getPrototypeOf(proto);
+  }
+  return Object.getPrototypeOf(input) === proto;
+};
+const checkKeyLength = (alg, key) => {
+  if (alg.startsWith("RS") || alg.startsWith("PS")) {
+    const { modulusLength } = key.algorithm;
+    if (typeof modulusLength !== "number" || modulusLength < 2048) {
+      throw new TypeError(`${alg} requires key modulusLength to be 2048 bits or larger`);
+    }
+  }
+};
+function subtleMapping(jwk) {
+  let algorithm;
+  let keyUsages;
+  switch (jwk.kty) {
+    case "RSA": {
+      switch (jwk.alg) {
+        case "PS256":
+        case "PS384":
+        case "PS512":
+          algorithm = { name: "RSA-PSS", hash: `SHA-${jwk.alg.slice(-3)}` };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
+          break;
+        case "RS256":
+        case "RS384":
+        case "RS512":
+          algorithm = { name: "RSASSA-PKCS1-v1_5", hash: `SHA-${jwk.alg.slice(-3)}` };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
+          break;
+        case "RSA-OAEP":
+        case "RSA-OAEP-256":
+        case "RSA-OAEP-384":
+        case "RSA-OAEP-512":
+          algorithm = {
+            name: "RSA-OAEP",
+            hash: `SHA-${parseInt(jwk.alg.slice(-3), 10) || 1}`
+          };
+          keyUsages = jwk.d ? ["decrypt", "unwrapKey"] : ["encrypt", "wrapKey"];
+          break;
+        default:
+          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
+      }
+      break;
+    }
+    case "EC": {
+      switch (jwk.alg) {
+        case "ES256":
+          algorithm = { name: "ECDSA", namedCurve: "P-256" };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
+          break;
+        case "ES384":
+          algorithm = { name: "ECDSA", namedCurve: "P-384" };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
+          break;
+        case "ES512":
+          algorithm = { name: "ECDSA", namedCurve: "P-521" };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
+          break;
+        case "ECDH-ES":
+        case "ECDH-ES+A128KW":
+        case "ECDH-ES+A192KW":
+        case "ECDH-ES+A256KW":
+          algorithm = { name: "ECDH", namedCurve: jwk.crv };
+          keyUsages = jwk.d ? ["deriveBits"] : [];
+          break;
+        default:
+          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
+      }
+      break;
+    }
+    case "OKP": {
+      switch (jwk.alg) {
+        case "Ed25519":
+        case "EdDSA":
+          algorithm = { name: "Ed25519" };
+          keyUsages = jwk.d ? ["sign"] : ["verify"];
+          break;
+        case "ECDH-ES":
+        case "ECDH-ES+A128KW":
+        case "ECDH-ES+A192KW":
+        case "ECDH-ES+A256KW":
+          algorithm = { name: jwk.crv };
+          keyUsages = jwk.d ? ["deriveBits"] : [];
+          break;
+        default:
+          throw new JOSENotSupported('Invalid or unsupported JWK "alg" (Algorithm) Parameter value');
+      }
+      break;
+    }
+    default:
+      throw new JOSENotSupported('Invalid or unsupported JWK "kty" (Key Type) Parameter value');
+  }
+  return { algorithm, keyUsages };
+}
+const importJWK = async (jwk) => {
+  if (!jwk.alg) {
+    throw new TypeError('"alg" argument is required when "jwk.alg" is not present');
+  }
+  const { algorithm, keyUsages } = subtleMapping(jwk);
+  const keyData = { ...jwk };
+  delete keyData.alg;
+  delete keyData.use;
+  return crypto.subtle.importKey("jwk", keyData, algorithm, jwk.ext ?? (jwk.d ? false : true), jwk.key_ops ?? keyUsages);
+};
+const validateCrit = (Err, recognizedDefault, recognizedOption, protectedHeader, joseHeader) => {
+  if (joseHeader.crit !== void 0 && protectedHeader?.crit === void 0) {
+    throw new Err('"crit" (Critical) Header Parameter MUST be integrity protected');
+  }
+  if (!protectedHeader || protectedHeader.crit === void 0) {
+    return /* @__PURE__ */ new Set();
+  }
+  if (!Array.isArray(protectedHeader.crit) || protectedHeader.crit.length === 0 || protectedHeader.crit.some((input) => typeof input !== "string" || input.length === 0)) {
+    throw new Err('"crit" (Critical) Header Parameter MUST be an array of non-empty strings when present');
+  }
+  let recognized;
+  if (recognizedOption !== void 0) {
+    recognized = new Map([...Object.entries(recognizedOption), ...recognizedDefault.entries()]);
+  } else {
+    recognized = recognizedDefault;
+  }
+  for (const parameter of protectedHeader.crit) {
+    if (!recognized.has(parameter)) {
+      throw new JOSENotSupported(`Extension Header Parameter "${parameter}" is not recognized`);
+    }
+    if (joseHeader[parameter] === void 0) {
+      throw new Err(`Extension Header Parameter "${parameter}" is missing`);
+    }
+    if (recognized.get(parameter) && protectedHeader[parameter] === void 0) {
+      throw new Err(`Extension Header Parameter "${parameter}" MUST be integrity protected`);
+    }
+  }
+  return new Set(protectedHeader.crit);
+};
+function isJWK(key) {
+  return isObject(key) && typeof key.kty === "string";
+}
+function isPrivateJWK(key) {
+  return key.kty !== "oct" && typeof key.d === "string";
+}
+function isPublicJWK(key) {
+  return key.kty !== "oct" && typeof key.d === "undefined";
+}
+function isSecretJWK(key) {
+  return key.kty === "oct" && typeof key.k === "string";
+}
+let cache;
+const handleJWK = async (key, jwk, alg, freeze = false) => {
+  cache ||= /* @__PURE__ */ new WeakMap();
+  let cached = cache.get(key);
+  if (cached?.[alg]) {
+    return cached[alg];
+  }
+  const cryptoKey = await importJWK({ ...jwk, alg });
+  if (freeze)
+    Object.freeze(key);
+  if (!cached) {
+    cache.set(key, { [alg]: cryptoKey });
+  } else {
+    cached[alg] = cryptoKey;
+  }
+  return cryptoKey;
+};
+const handleKeyObject = (keyObject, alg) => {
+  cache ||= /* @__PURE__ */ new WeakMap();
+  let cached = cache.get(keyObject);
+  if (cached?.[alg]) {
+    return cached[alg];
+  }
+  const isPublic = keyObject.type === "public";
+  const extractable = isPublic ? true : false;
+  let cryptoKey;
+  if (keyObject.asymmetricKeyType === "x25519") {
+    switch (alg) {
+      case "ECDH-ES":
+      case "ECDH-ES+A128KW":
+      case "ECDH-ES+A192KW":
+      case "ECDH-ES+A256KW":
+        break;
+      default:
+        throw new TypeError("given KeyObject instance cannot be used for this algorithm");
+    }
+    cryptoKey = keyObject.toCryptoKey(keyObject.asymmetricKeyType, extractable, isPublic ? [] : ["deriveBits"]);
+  }
+  if (keyObject.asymmetricKeyType === "ed25519") {
+    if (alg !== "EdDSA" && alg !== "Ed25519") {
+      throw new TypeError("given KeyObject instance cannot be used for this algorithm");
+    }
+    cryptoKey = keyObject.toCryptoKey(keyObject.asymmetricKeyType, extractable, [
+      isPublic ? "verify" : "sign"
+    ]);
+  }
+  if (keyObject.asymmetricKeyType === "rsa") {
+    let hash;
+    switch (alg) {
+      case "RSA-OAEP":
+        hash = "SHA-1";
+        break;
+      case "RS256":
+      case "PS256":
+      case "RSA-OAEP-256":
+        hash = "SHA-256";
+        break;
+      case "RS384":
+      case "PS384":
+      case "RSA-OAEP-384":
+        hash = "SHA-384";
+        break;
+      case "RS512":
+      case "PS512":
+      case "RSA-OAEP-512":
+        hash = "SHA-512";
+        break;
+      default:
+        throw new TypeError("given KeyObject instance cannot be used for this algorithm");
+    }
+    if (alg.startsWith("RSA-OAEP")) {
+      return keyObject.toCryptoKey({
+        name: "RSA-OAEP",
+        hash
+      }, extractable, isPublic ? ["encrypt"] : ["decrypt"]);
+    }
+    cryptoKey = keyObject.toCryptoKey({
+      name: alg.startsWith("PS") ? "RSA-PSS" : "RSASSA-PKCS1-v1_5",
+      hash
+    }, extractable, [isPublic ? "verify" : "sign"]);
+  }
+  if (keyObject.asymmetricKeyType === "ec") {
+    const nist = /* @__PURE__ */ new Map([
+      ["prime256v1", "P-256"],
+      ["secp384r1", "P-384"],
+      ["secp521r1", "P-521"]
+    ]);
+    const namedCurve = nist.get(keyObject.asymmetricKeyDetails?.namedCurve);
+    if (!namedCurve) {
+      throw new TypeError("given KeyObject instance cannot be used for this algorithm");
+    }
+    if (alg === "ES256" && namedCurve === "P-256") {
+      cryptoKey = keyObject.toCryptoKey({
+        name: "ECDSA",
+        namedCurve
+      }, extractable, [isPublic ? "verify" : "sign"]);
+    }
+    if (alg === "ES384" && namedCurve === "P-384") {
+      cryptoKey = keyObject.toCryptoKey({
+        name: "ECDSA",
+        namedCurve
+      }, extractable, [isPublic ? "verify" : "sign"]);
+    }
+    if (alg === "ES512" && namedCurve === "P-521") {
+      cryptoKey = keyObject.toCryptoKey({
+        name: "ECDSA",
+        namedCurve
+      }, extractable, [isPublic ? "verify" : "sign"]);
+    }
+    if (alg.startsWith("ECDH-ES")) {
+      cryptoKey = keyObject.toCryptoKey({
+        name: "ECDH",
+        namedCurve
+      }, extractable, isPublic ? [] : ["deriveBits"]);
+    }
+  }
+  if (!cryptoKey) {
+    throw new TypeError("given KeyObject instance cannot be used for this algorithm");
+  }
+  if (!cached) {
+    cache.set(keyObject, { [alg]: cryptoKey });
+  } else {
+    cached[alg] = cryptoKey;
+  }
+  return cryptoKey;
+};
+const normalizeKey = async (key, alg) => {
+  if (key instanceof Uint8Array) {
+    return key;
+  }
+  if (isCryptoKey(key)) {
+    return key;
+  }
+  if (isKeyObject(key)) {
+    if (key.type === "secret") {
+      return key.export();
+    }
+    if ("toCryptoKey" in key && typeof key.toCryptoKey === "function") {
+      try {
+        return handleKeyObject(key, alg);
+      } catch (err) {
+        if (err instanceof TypeError) {
+          throw err;
+        }
+      }
+    }
+    let jwk = key.export({ format: "jwk" });
+    return handleJWK(key, jwk, alg);
+  }
+  if (isJWK(key)) {
+    if (key.k) {
+      return decode(key.k);
+    }
+    return handleJWK(key, key, alg, true);
+  }
+  throw new Error("unreachable");
+};
+const tag = (key) => key?.[Symbol.toStringTag];
+const jwkMatchesOp = (alg, key, usage) => {
+  if (key.use !== void 0) {
+    let expected;
+    switch (usage) {
+      case "sign":
+      case "verify":
+        expected = "sig";
+        break;
+      case "encrypt":
+      case "decrypt":
+        expected = "enc";
+        break;
+    }
+    if (key.use !== expected) {
+      throw new TypeError(`Invalid key for this operation, its "use" must be "${expected}" when present`);
+    }
+  }
+  if (key.alg !== void 0 && key.alg !== alg) {
+    throw new TypeError(`Invalid key for this operation, its "alg" must be "${alg}" when present`);
+  }
+  if (Array.isArray(key.key_ops)) {
+    let expectedKeyOp;
+    switch (true) {
+      case (usage === "sign" || usage === "verify"):
+      case alg === "dir":
+      case alg.includes("CBC-HS"):
+        expectedKeyOp = usage;
+        break;
+      case alg.startsWith("PBES2"):
+        expectedKeyOp = "deriveBits";
+        break;
+      case /^A\d{3}(?:GCM)?(?:KW)?$/.test(alg):
+        if (!alg.includes("GCM") && alg.endsWith("KW")) {
+          expectedKeyOp = usage === "encrypt" ? "wrapKey" : "unwrapKey";
+        } else {
+          expectedKeyOp = usage;
+        }
+        break;
+      case (usage === "encrypt" && alg.startsWith("RSA")):
+        expectedKeyOp = "wrapKey";
+        break;
+      case usage === "decrypt":
+        expectedKeyOp = alg.startsWith("RSA") ? "unwrapKey" : "deriveBits";
+        break;
+    }
+    if (expectedKeyOp && key.key_ops?.includes?.(expectedKeyOp) === false) {
+      throw new TypeError(`Invalid key for this operation, its "key_ops" must include "${expectedKeyOp}" when present`);
+    }
+  }
+  return true;
+};
+const symmetricTypeCheck = (alg, key, usage) => {
+  if (key instanceof Uint8Array)
+    return;
+  if (isJWK(key)) {
+    if (isSecretJWK(key) && jwkMatchesOp(alg, key, usage))
+      return;
+    throw new TypeError(`JSON Web Key for symmetric algorithms must have JWK "kty" (Key Type) equal to "oct" and the JWK "k" (Key Value) present`);
+  }
+  if (!isKeyLike(key)) {
+    throw new TypeError(withAlg(alg, key, "CryptoKey", "KeyObject", "JSON Web Key", "Uint8Array"));
+  }
+  if (key.type !== "secret") {
+    throw new TypeError(`${tag(key)} instances for symmetric algorithms must be of type "secret"`);
+  }
+};
+const asymmetricTypeCheck = (alg, key, usage) => {
+  if (isJWK(key)) {
+    switch (usage) {
+      case "decrypt":
+      case "sign":
+        if (isPrivateJWK(key) && jwkMatchesOp(alg, key, usage))
+          return;
+        throw new TypeError(`JSON Web Key for this operation be a private JWK`);
+      case "encrypt":
+      case "verify":
+        if (isPublicJWK(key) && jwkMatchesOp(alg, key, usage))
+          return;
+        throw new TypeError(`JSON Web Key for this operation be a public JWK`);
+    }
+  }
+  if (!isKeyLike(key)) {
+    throw new TypeError(withAlg(alg, key, "CryptoKey", "KeyObject", "JSON Web Key"));
+  }
+  if (key.type === "secret") {
+    throw new TypeError(`${tag(key)} instances for asymmetric algorithms must not be of type "secret"`);
+  }
+  if (key.type === "public") {
+    switch (usage) {
+      case "sign":
+        throw new TypeError(`${tag(key)} instances for asymmetric algorithm signing must be of type "private"`);
+      case "decrypt":
+        throw new TypeError(`${tag(key)} instances for asymmetric algorithm decryption must be of type "private"`);
+    }
+  }
+  if (key.type === "private") {
+    switch (usage) {
+      case "verify":
+        throw new TypeError(`${tag(key)} instances for asymmetric algorithm verifying must be of type "public"`);
+      case "encrypt":
+        throw new TypeError(`${tag(key)} instances for asymmetric algorithm encryption must be of type "public"`);
+    }
+  }
+};
+const checkKeyType = (alg, key, usage) => {
+  const symmetric = alg.startsWith("HS") || alg === "dir" || alg.startsWith("PBES2") || /^A(?:128|192|256)(?:GCM)?(?:KW)?$/.test(alg) || /^A(?:128|192|256)CBC-HS(?:256|384|512)$/.test(alg);
+  if (symmetric) {
+    symmetricTypeCheck(alg, key, usage);
+  } else {
+    asymmetricTypeCheck(alg, key, usage);
+  }
+};
+const subtleAlgorithm = (alg, algorithm) => {
+  const hash = `SHA-${alg.slice(-3)}`;
+  switch (alg) {
+    case "HS256":
+    case "HS384":
+    case "HS512":
+      return { hash, name: "HMAC" };
+    case "PS256":
+    case "PS384":
+    case "PS512":
+      return { hash, name: "RSA-PSS", saltLength: parseInt(alg.slice(-3), 10) >> 3 };
+    case "RS256":
+    case "RS384":
+    case "RS512":
+      return { hash, name: "RSASSA-PKCS1-v1_5" };
+    case "ES256":
+    case "ES384":
+    case "ES512":
+      return { hash, name: "ECDSA", namedCurve: algorithm.namedCurve };
+    case "Ed25519":
+    case "EdDSA":
+      return { name: "Ed25519" };
+    default:
+      throw new JOSENotSupported(`alg ${alg} is not supported either by JOSE or your javascript runtime`);
+  }
+};
+const getSignKey = async (alg, key, usage) => {
+  if (key instanceof Uint8Array) {
+    if (!alg.startsWith("HS")) {
+      throw new TypeError(invalidKeyInput(key, "CryptoKey", "KeyObject", "JSON Web Key"));
+    }
+    return crypto.subtle.importKey("raw", key, { hash: `SHA-${alg.slice(-3)}`, name: "HMAC" }, false, [usage]);
+  }
+  checkSigCryptoKey(key, alg, usage);
+  return key;
+};
+const verify = async (alg, key, signature, data) => {
+  const cryptoKey = await getSignKey(alg, key, "verify");
+  checkKeyLength(alg, cryptoKey);
+  const algorithm = subtleAlgorithm(alg, cryptoKey.algorithm);
+  try {
+    return await crypto.subtle.verify(algorithm, cryptoKey, signature, data);
+  } catch {
+    return false;
+  }
+};
+async function flattenedVerify(jws, key, options) {
+  if (!isObject(jws)) {
+    throw new JWSInvalid("Flattened JWS must be an object");
+  }
+  if (jws.protected === void 0 && jws.header === void 0) {
+    throw new JWSInvalid('Flattened JWS must have either of the "protected" or "header" members');
+  }
+  if (jws.protected !== void 0 && typeof jws.protected !== "string") {
+    throw new JWSInvalid("JWS Protected Header incorrect type");
+  }
+  if (jws.payload === void 0) {
+    throw new JWSInvalid("JWS Payload missing");
+  }
+  if (typeof jws.signature !== "string") {
+    throw new JWSInvalid("JWS Signature missing or incorrect type");
+  }
+  if (jws.header !== void 0 && !isObject(jws.header)) {
+    throw new JWSInvalid("JWS Unprotected Header incorrect type");
+  }
+  let parsedProt = {};
+  if (jws.protected) {
+    try {
+      const protectedHeader = decode(jws.protected);
+      parsedProt = JSON.parse(decoder.decode(protectedHeader));
+    } catch {
+      throw new JWSInvalid("JWS Protected Header is invalid");
+    }
+  }
+  if (!isDisjoint(parsedProt, jws.header)) {
+    throw new JWSInvalid("JWS Protected and JWS Unprotected Header Parameter names must be disjoint");
+  }
+  const joseHeader = {
+    ...parsedProt,
+    ...jws.header
+  };
+  const extensions = validateCrit(JWSInvalid, /* @__PURE__ */ new Map([["b64", true]]), options?.crit, parsedProt, joseHeader);
+  let b64 = true;
+  if (extensions.has("b64")) {
+    b64 = parsedProt.b64;
+    if (typeof b64 !== "boolean") {
+      throw new JWSInvalid('The "b64" (base64url-encode payload) Header Parameter must be a boolean');
+    }
+  }
+  const { alg } = joseHeader;
+  if (typeof alg !== "string" || !alg) {
+    throw new JWSInvalid('JWS "alg" (Algorithm) Header Parameter missing or invalid');
+  }
+  if (b64) {
+    if (typeof jws.payload !== "string") {
+      throw new JWSInvalid("JWS Payload must be a string");
+    }
+  } else if (typeof jws.payload !== "string" && !(jws.payload instanceof Uint8Array)) {
+    throw new JWSInvalid("JWS Payload must be a string or an Uint8Array instance");
+  }
+  let resolvedKey = false;
+  if (typeof key === "function") {
+    key = await key(parsedProt, jws);
+    resolvedKey = true;
+  }
+  checkKeyType(alg, key, "verify");
+  const data = concat(encoder.encode(jws.protected ?? ""), encoder.encode("."), typeof jws.payload === "string" ? encoder.encode(jws.payload) : jws.payload);
+  let signature;
+  try {
+    signature = decode(jws.signature);
+  } catch {
+    throw new JWSInvalid("Failed to base64url decode the signature");
+  }
+  const k = await normalizeKey(key, alg);
+  const verified = await verify(alg, k, signature, data);
+  if (!verified) {
+    throw new JWSSignatureVerificationFailed();
+  }
+  let payload;
+  if (b64) {
+    try {
+      payload = decode(jws.payload);
+    } catch {
+      throw new JWSInvalid("Failed to base64url decode the payload");
+    }
+  } else if (typeof jws.payload === "string") {
+    payload = encoder.encode(jws.payload);
+  } else {
+    payload = jws.payload;
+  }
+  const result = { payload };
+  if (jws.protected !== void 0) {
+    result.protectedHeader = parsedProt;
+  }
+  if (jws.header !== void 0) {
+    result.unprotectedHeader = jws.header;
+  }
+  if (resolvedKey) {
+    return { ...result, key: k };
+  }
+  return result;
+}
+async function compactVerify(jws, key, options) {
+  if (jws instanceof Uint8Array) {
+    jws = decoder.decode(jws);
+  }
+  if (typeof jws !== "string") {
+    throw new JWSInvalid("Compact JWS must be a string or Uint8Array");
+  }
+  const { 0: protectedHeader, 1: payload, 2: signature, length } = jws.split(".");
+  if (length !== 3) {
+    throw new JWSInvalid("Invalid Compact JWS");
+  }
+  const verified = await flattenedVerify({ payload, protected: protectedHeader, signature }, key, options);
+  const result = { payload: verified.payload, protectedHeader: verified.protectedHeader };
+  if (typeof key === "function") {
+    return { ...result, key: verified.key };
+  }
+  return result;
+}
+const epoch = (date) => Math.floor(date.getTime() / 1e3);
+const minute = 60;
+const hour = minute * 60;
+const day = hour * 24;
+const week = day * 7;
+const year = day * 365.25;
+const REGEX = /^(\+|\-)? ?(\d+|\d+\.\d+) ?(seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)(?: (ago|from now))?$/i;
+const secs = (str) => {
+  const matched = REGEX.exec(str);
+  if (!matched || matched[4] && matched[1]) {
+    throw new TypeError("Invalid time period format");
+  }
+  const value = parseFloat(matched[2]);
+  const unit = matched[3].toLowerCase();
+  let numericDate;
+  switch (unit) {
+    case "sec":
+    case "secs":
+    case "second":
+    case "seconds":
+    case "s":
+      numericDate = Math.round(value);
+      break;
+    case "minute":
+    case "minutes":
+    case "min":
+    case "mins":
+    case "m":
+      numericDate = Math.round(value * minute);
+      break;
+    case "hour":
+    case "hours":
+    case "hr":
+    case "hrs":
+    case "h":
+      numericDate = Math.round(value * hour);
+      break;
+    case "day":
+    case "days":
+    case "d":
+      numericDate = Math.round(value * day);
+      break;
+    case "week":
+    case "weeks":
+    case "w":
+      numericDate = Math.round(value * week);
+      break;
+    default:
+      numericDate = Math.round(value * year);
+      break;
+  }
+  if (matched[1] === "-" || matched[4] === "ago") {
+    return -numericDate;
+  }
+  return numericDate;
+};
+function validateInput(label, input) {
+  if (!Number.isFinite(input)) {
+    throw new TypeError(`Invalid ${label} input`);
+  }
+  return input;
+}
+const normalizeTyp = (value) => {
+  if (value.includes("/")) {
+    return value.toLowerCase();
+  }
+  return `application/${value.toLowerCase()}`;
+};
+const checkAudiencePresence = (audPayload, audOption) => {
+  if (typeof audPayload === "string") {
+    return audOption.includes(audPayload);
+  }
+  if (Array.isArray(audPayload)) {
+    return audOption.some(Set.prototype.has.bind(new Set(audPayload)));
+  }
+  return false;
+};
+function validateClaimsSet(protectedHeader, encodedPayload, options = {}) {
+  let payload;
+  try {
+    payload = JSON.parse(decoder.decode(encodedPayload));
+  } catch {
+  }
+  if (!isObject(payload)) {
+    throw new JWTInvalid("JWT Claims Set must be a top-level JSON object");
+  }
+  const { typ } = options;
+  if (typ && (typeof protectedHeader.typ !== "string" || normalizeTyp(protectedHeader.typ) !== normalizeTyp(typ))) {
+    throw new JWTClaimValidationFailed('unexpected "typ" JWT header value', payload, "typ", "check_failed");
+  }
+  const { requiredClaims = [], issuer, subject, audience, maxTokenAge } = options;
+  const presenceCheck = [...requiredClaims];
+  if (maxTokenAge !== void 0)
+    presenceCheck.push("iat");
+  if (audience !== void 0)
+    presenceCheck.push("aud");
+  if (subject !== void 0)
+    presenceCheck.push("sub");
+  if (issuer !== void 0)
+    presenceCheck.push("iss");
+  for (const claim of new Set(presenceCheck.reverse())) {
+    if (!(claim in payload)) {
+      throw new JWTClaimValidationFailed(`missing required "${claim}" claim`, payload, claim, "missing");
+    }
+  }
+  if (issuer && !(Array.isArray(issuer) ? issuer : [issuer]).includes(payload.iss)) {
+    throw new JWTClaimValidationFailed('unexpected "iss" claim value', payload, "iss", "check_failed");
+  }
+  if (subject && payload.sub !== subject) {
+    throw new JWTClaimValidationFailed('unexpected "sub" claim value', payload, "sub", "check_failed");
+  }
+  if (audience && !checkAudiencePresence(payload.aud, typeof audience === "string" ? [audience] : audience)) {
+    throw new JWTClaimValidationFailed('unexpected "aud" claim value', payload, "aud", "check_failed");
+  }
+  let tolerance;
+  switch (typeof options.clockTolerance) {
+    case "string":
+      tolerance = secs(options.clockTolerance);
+      break;
+    case "number":
+      tolerance = options.clockTolerance;
+      break;
+    case "undefined":
+      tolerance = 0;
+      break;
+    default:
+      throw new TypeError("Invalid clockTolerance option type");
+  }
+  const { currentDate } = options;
+  const now = epoch(currentDate || /* @__PURE__ */ new Date());
+  if ((payload.iat !== void 0 || maxTokenAge) && typeof payload.iat !== "number") {
+    throw new JWTClaimValidationFailed('"iat" claim must be a number', payload, "iat", "invalid");
+  }
+  if (payload.nbf !== void 0) {
+    if (typeof payload.nbf !== "number") {
+      throw new JWTClaimValidationFailed('"nbf" claim must be a number', payload, "nbf", "invalid");
+    }
+    if (payload.nbf > now + tolerance) {
+      throw new JWTClaimValidationFailed('"nbf" claim timestamp check failed', payload, "nbf", "check_failed");
+    }
+  }
+  if (payload.exp !== void 0) {
+    if (typeof payload.exp !== "number") {
+      throw new JWTClaimValidationFailed('"exp" claim must be a number', payload, "exp", "invalid");
+    }
+    if (payload.exp <= now - tolerance) {
+      throw new JWTExpired('"exp" claim timestamp check failed', payload, "exp", "check_failed");
+    }
+  }
+  if (maxTokenAge) {
+    const age = now - payload.iat;
+    const max = typeof maxTokenAge === "number" ? maxTokenAge : secs(maxTokenAge);
+    if (age - tolerance > max) {
+      throw new JWTExpired('"iat" claim timestamp check failed (too far in the past)', payload, "iat", "check_failed");
+    }
+    if (age < 0 - tolerance) {
+      throw new JWTClaimValidationFailed('"iat" claim timestamp check failed (it should be in the past)', payload, "iat", "check_failed");
+    }
+  }
+  return payload;
+}
+class JWTClaimsBuilder {
+  #payload;
+  constructor(payload) {
+    if (!isObject(payload)) {
+      throw new TypeError("JWT Claims Set MUST be an object");
+    }
+    this.#payload = structuredClone(payload);
+  }
+  data() {
+    return encoder.encode(JSON.stringify(this.#payload));
+  }
+  get iss() {
+    return this.#payload.iss;
+  }
+  set iss(value) {
+    this.#payload.iss = value;
+  }
+  get sub() {
+    return this.#payload.sub;
+  }
+  set sub(value) {
+    this.#payload.sub = value;
+  }
+  get aud() {
+    return this.#payload.aud;
+  }
+  set aud(value) {
+    this.#payload.aud = value;
+  }
+  set jti(value) {
+    this.#payload.jti = value;
+  }
+  set nbf(value) {
+    if (typeof value === "number") {
+      this.#payload.nbf = validateInput("setNotBefore", value);
+    } else if (value instanceof Date) {
+      this.#payload.nbf = validateInput("setNotBefore", epoch(value));
+    } else {
+      this.#payload.nbf = epoch(/* @__PURE__ */ new Date()) + secs(value);
+    }
+  }
+  set exp(value) {
+    if (typeof value === "number") {
+      this.#payload.exp = validateInput("setExpirationTime", value);
+    } else if (value instanceof Date) {
+      this.#payload.exp = validateInput("setExpirationTime", epoch(value));
+    } else {
+      this.#payload.exp = epoch(/* @__PURE__ */ new Date()) + secs(value);
+    }
+  }
+  set iat(value) {
+    if (typeof value === "undefined") {
+      this.#payload.iat = epoch(/* @__PURE__ */ new Date());
+    } else if (value instanceof Date) {
+      this.#payload.iat = validateInput("setIssuedAt", epoch(value));
+    } else if (typeof value === "string") {
+      this.#payload.iat = validateInput("setIssuedAt", epoch(/* @__PURE__ */ new Date()) + secs(value));
+    } else {
+      this.#payload.iat = validateInput("setIssuedAt", value);
+    }
+  }
+}
+async function jwtVerify(jwt, key, options) {
+  const verified = await compactVerify(jwt, key, options);
+  if (verified.protectedHeader.crit?.includes("b64") && verified.protectedHeader.b64 === false) {
+    throw new JWTInvalid("JWTs MUST NOT use unencoded payload");
+  }
+  const payload = validateClaimsSet(verified.protectedHeader, verified.payload, options);
+  const result = { payload, protectedHeader: verified.protectedHeader };
+  if (typeof key === "function") {
+    return { ...result, key: verified.key };
+  }
+  return result;
+}
+const sign = async (alg, key, data) => {
+  const cryptoKey = await getSignKey(alg, key, "sign");
+  checkKeyLength(alg, cryptoKey);
+  const signature = await crypto.subtle.sign(subtleAlgorithm(alg, cryptoKey.algorithm), cryptoKey, data);
+  return new Uint8Array(signature);
+};
+class FlattenedSign {
+  #payload;
+  #protectedHeader;
+  #unprotectedHeader;
+  constructor(payload) {
+    if (!(payload instanceof Uint8Array)) {
+      throw new TypeError("payload must be an instance of Uint8Array");
+    }
+    this.#payload = payload;
+  }
+  setProtectedHeader(protectedHeader) {
+    if (this.#protectedHeader) {
+      throw new TypeError("setProtectedHeader can only be called once");
+    }
+    this.#protectedHeader = protectedHeader;
+    return this;
+  }
+  setUnprotectedHeader(unprotectedHeader) {
+    if (this.#unprotectedHeader) {
+      throw new TypeError("setUnprotectedHeader can only be called once");
+    }
+    this.#unprotectedHeader = unprotectedHeader;
+    return this;
+  }
+  async sign(key, options) {
+    if (!this.#protectedHeader && !this.#unprotectedHeader) {
+      throw new JWSInvalid("either setProtectedHeader or setUnprotectedHeader must be called before #sign()");
+    }
+    if (!isDisjoint(this.#protectedHeader, this.#unprotectedHeader)) {
+      throw new JWSInvalid("JWS Protected and JWS Unprotected Header Parameter names must be disjoint");
+    }
+    const joseHeader = {
+      ...this.#protectedHeader,
+      ...this.#unprotectedHeader
+    };
+    const extensions = validateCrit(JWSInvalid, /* @__PURE__ */ new Map([["b64", true]]), options?.crit, this.#protectedHeader, joseHeader);
+    let b64 = true;
+    if (extensions.has("b64")) {
+      b64 = this.#protectedHeader.b64;
+      if (typeof b64 !== "boolean") {
+        throw new JWSInvalid('The "b64" (base64url-encode payload) Header Parameter must be a boolean');
+      }
+    }
+    const { alg } = joseHeader;
+    if (typeof alg !== "string" || !alg) {
+      throw new JWSInvalid('JWS "alg" (Algorithm) Header Parameter missing or invalid');
+    }
+    checkKeyType(alg, key, "sign");
+    let payload = this.#payload;
+    if (b64) {
+      payload = encoder.encode(encode(payload));
+    }
+    let protectedHeader;
+    if (this.#protectedHeader) {
+      protectedHeader = encoder.encode(encode(JSON.stringify(this.#protectedHeader)));
+    } else {
+      protectedHeader = encoder.encode("");
+    }
+    const data = concat(protectedHeader, encoder.encode("."), payload);
+    const k = await normalizeKey(key, alg);
+    const signature = await sign(alg, k, data);
+    const jws = {
+      signature: encode(signature),
+      payload: ""
+    };
+    if (b64) {
+      jws.payload = decoder.decode(payload);
+    }
+    if (this.#unprotectedHeader) {
+      jws.header = this.#unprotectedHeader;
+    }
+    if (this.#protectedHeader) {
+      jws.protected = decoder.decode(protectedHeader);
+    }
+    return jws;
+  }
+}
+class CompactSign {
+  #flattened;
+  constructor(payload) {
+    this.#flattened = new FlattenedSign(payload);
+  }
+  setProtectedHeader(protectedHeader) {
+    this.#flattened.setProtectedHeader(protectedHeader);
+    return this;
+  }
+  async sign(key, options) {
+    const jws = await this.#flattened.sign(key, options);
+    if (jws.payload === void 0) {
+      throw new TypeError("use the flattened module for creating JWS with b64: false");
+    }
+    return `${jws.protected}.${jws.payload}.${jws.signature}`;
+  }
+}
+class SignJWT {
+  #protectedHeader;
+  #jwt;
+  constructor(payload = {}) {
+    this.#jwt = new JWTClaimsBuilder(payload);
+  }
+  setIssuer(issuer) {
+    this.#jwt.iss = issuer;
+    return this;
+  }
+  setSubject(subject) {
+    this.#jwt.sub = subject;
+    return this;
+  }
+  setAudience(audience) {
+    this.#jwt.aud = audience;
+    return this;
+  }
+  setJti(jwtId) {
+    this.#jwt.jti = jwtId;
+    return this;
+  }
+  setNotBefore(input) {
+    this.#jwt.nbf = input;
+    return this;
+  }
+  setExpirationTime(input) {
+    this.#jwt.exp = input;
+    return this;
+  }
+  setIssuedAt(input) {
+    this.#jwt.iat = input;
+    return this;
+  }
+  setProtectedHeader(protectedHeader) {
+    this.#protectedHeader = protectedHeader;
+    return this;
+  }
+  async sign(key, options) {
+    const sig = new CompactSign(this.#jwt.data());
+    sig.setProtectedHeader(this.#protectedHeader);
+    if (Array.isArray(this.#protectedHeader?.crit) && this.#protectedHeader.crit.includes("b64") && this.#protectedHeader.b64 === false) {
+      throw new JWTInvalid("JWTs MUST NOT use unencoded payload");
+    }
+    return sig.sign(key, options);
+  }
+}
+const enc$1 = new TextEncoder();
+const getKey$1 = (secret) => enc$1.encode(secret);
+const nowSec$1 = () => Math.floor(Date.now() / 1e3);
+const bearer = (h) => h?.startsWith("Bearer ") ? h.slice(7) : null;
+const auth = async (c, next) => {
+  try {
+    const token = bearer(c.req.header("Authorization"));
+    if (!token) return c.json({ error: "Unauthorized" }, 401);
+    if (!c.env.DB_AVAILABLE) return c.json({ error: "Database not available" }, 503);
+    const { payload } = await jwtVerify(token, getKey$1(c.env.JWT_SECRET));
+    const { jti } = payload;
+    const row = await c.env.DB.prepare(
+      "SELECT revoked, expires_at FROM sessions WHERE jti = ?"
+    ).bind(jti).first();
+    if (!row) return c.json({ error: "Invalid session. Please log in again." }, 401);
+    if (row.revoked) return c.json({ error: "Token revoked. Please log in again." }, 401);
+    if (!row.expires_at || row.expires_at < nowSec$1()) return c.json({ error: "Token expired. Please log in again." }, 401);
+    c.set("user", payload);
+    await next();
+  } catch {
+    return c.json({ error: "Invalid or expired token" }, 401);
+  }
+};
+const enc = new TextEncoder();
+const getKey = (secret) => enc.encode(secret);
+const nowSec = () => Math.floor(Date.now() / 1e3);
+const authRouter = new Hono2();
+authRouter.post("/login", async (c) => {
+  try {
+    console.log("Login attempt started");
+    if (!c.env.DB_AVAILABLE) {
+      console.error("Database not available");
+      return c.json({ error: "Database not available" }, 503);
+    }
+    if (!c.env.JWT_SECRET) {
+      console.error("JWT_SECRET not configured");
+      return c.json({ error: "Server configuration error" }, 500);
+    }
+    const { email, password } = await c.req.json();
+    console.log("Login data received:", { email, hasPassword: !!password });
+    if (!email || !password) {
+      console.log("Missing email or password");
+      return c.json({ error: "Missing email/password" }, 400);
+    }
+    console.log("Querying user from database...");
+    const user = await c.env.DB.prepare(
+      "SELECT id, name, email, password, role FROM users WHERE email = ?"
+    ).bind(email).first();
+    console.log("User query result:", user ? { id: user.id, email: user.email, role: user.role } : "No user found");
+    if (!user) {
+      console.log("User not found for email:", email);
+      return c.json({ error: "Invalid credentials" }, 401);
+    }
+    console.log("Comparing passwords...");
+    console.log("Input password:", password);
+    console.log("Stored password:", user.password);
+    if (password !== user.password) {
+      console.log("Password mismatch");
+      return c.json({ error: "Invalid credentials" }, 401);
+    }
+    console.log("Password match successful, generating JWT...");
+    const maxAgeSec = Number(c.env.JWT_EXPIRES_IN ?? 900);
+    const jti = crypto.randomUUID();
+    const iat = nowSec();
+    const exp = iat + maxAgeSec;
+    console.log("JWT config:", { maxAgeSec, jti, iat, exp });
+    console.log("Ensuring sessions table exists...");
+    await c.env.DB.prepare(`
+            CREATE TABLE IF NOT EXISTS sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                jti TEXT NOT NULL UNIQUE,
+                expires_at INTEGER NOT NULL,
+                revoked INTEGER DEFAULT 0,
+                created_at INTEGER DEFAULT (strftime('%s','now'))
+            )
+        `).run();
+    console.log("Inserting session...");
+    const sessionResult = await c.env.DB.prepare(
+      "INSERT INTO sessions (user_id, jti, expires_at, revoked) VALUES (?, ?, ?, 0)"
+    ).bind(user.id, jti, exp).run();
+    console.log("Session insert result:", sessionResult);
+    console.log("Creating JWT token...");
+    const token = await new SignJWT({
+      sub: String(user.id),
+      email: user.email,
+      role: user.role,
+      // ← role lấy từ DB
+      name: user.name,
+      jti
+    }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setIssuedAt(iat).setExpirationTime(exp).sign(getKey(c.env.JWT_SECRET));
+    console.log("Login successful for user:", user.email);
+    return c.json({
+      access_token: token,
+      token_type: "Bearer",
+      expires_in: maxAgeSec,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+    });
+  } catch (e) {
+    console.error("Login error:", e);
+    console.error("Error name:", e.name);
+    console.error("Error message:", e.message);
+    console.error("Error stack:", e.stack);
+    return c.json({
+      error: "Login failed",
+      details: e.message,
+      type: e.name
+    }, 500);
+  }
+});
+authRouter.post("/admin/login", async (c) => {
+  try {
+    const url = new URL("/api/auth/login", c.req.url);
+    const res = await fetch(url.toString(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: await c.req.text()
+      // giữ nguyên body FE gửi lên
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return c.json({ message: data?.error || data?.message || "Login failed" }, res.status);
+    }
+    return c.json({ token: data.access_token }, 200);
+  } catch (err) {
+    console.error("Alias /admin/login error:", err);
+    return c.json({ message: "Internal server error" }, 500);
+  }
+});
+authRouter.get("/me", auth, (c) => {
+  return c.json({ authenticated: true, user: c.get("user") });
+});
+authRouter.post("/logout", auth, async (c) => {
+  try {
+    const { jti } = c.get("user");
+    await c.env.DB.prepare("UPDATE sessions SET revoked = 1 WHERE jti = ?").bind(jti).run();
+    return c.json({ success: true });
+  } catch (e) {
+    console.error("Logout error:", e);
+    return c.json({ error: "Logout failed" }, 500);
+  }
+});
+const hasDB = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
+const findProductByIdOrSlug = async (db, idOrSlug) => {
+  const isNumericId = /^\d+$/.test(idOrSlug);
+  const sql = `
+    SELECT p.*, c.name AS category_name, c.slug AS category_slug
+    FROM products p
+    LEFT JOIN categories c ON c.id = p.category_id
+    WHERE ${isNumericId ? "p.id = ?" : "p.slug = ?"}
+    LIMIT 1
+  `;
+  return db.prepare(sql).bind(isNumericId ? Number(idOrSlug) : idOrSlug).first();
+};
+const slugify = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+const productsRouter = new Hono2();
+productsRouter.get("/", async (c) => {
+  const { category_id, category_slug } = c.req.query();
+  try {
+    if (!hasDB(c.env)) {
+      const products2 = [];
+      return c.json({ products: products2, source: "fallback", count: products2.length });
+    }
+    const conds = [];
+    const params = [];
+    let joinCat = "";
+    if (category_id) {
+      conds.push("p.category_id = ?");
+      params.push(Number(category_id));
+    }
+    if (category_slug) {
+      joinCat = "LEFT JOIN categories c ON c.id = p.category_id";
+      conds.push("c.slug = ?");
+      params.push(category_slug);
+    }
+    const where = conds.length ? `WHERE ${conds.join(" AND ")}` : "";
+    const sql = `
+      SELECT p.*, c.name AS category_name, c.slug AS category_slug
+      FROM products p
+      LEFT JOIN categories c ON c.id = p.category_id
+      ${where}
+      ORDER BY p.created_at DESC
+    `;
+    const stmt = c.env.DB.prepare(sql).bind(...params);
+    const result = await stmt.all();
+    const products = result?.results ?? [];
+    return c.json({
+      products,
+      count: products.length,
+      source: "database",
+      debug: { sql, params }
+    });
+  } catch (err) {
+    console.error("Error fetching products:", err);
+    return c.json(
+      { error: "Failed to fetch products", source: "error_fallback" },
+      500
+    );
+  }
+});
+productsRouter.get("/:idOrSlug", async (c) => {
+  const idOrSlug = c.req.param("idOrSlug");
+  try {
+    if (!hasDB(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const product = await findProductByIdOrSlug(c.env.DB, idOrSlug);
+    if (!product) return c.json({ error: "Product not found" }, 404);
+    return c.json({ product, source: "database" });
+  } catch (err) {
+    console.error("Error fetching product:", err);
+    return c.json({ error: "Failed to fetch product" }, 500);
+  }
+});
+productsRouter.post("/", async (c) => {
+  try {
+    if (!hasDB(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const body = await c.req.json();
+    const {
+      title: title2,
+      slug: rawSlug,
+      description,
+      content,
+      image_url,
+      category_id
+    } = body || {};
+    console.log("Adding product:", body);
+    if (!title2 || !content) {
+      return c.json(
+        { error: "Missing required fields: title, content" },
+        400
+      );
+    }
+    const slug = rawSlug?.trim() || slugify(title2);
+    console.log("Generated slug:", slug);
+    const sql = `
+      INSERT INTO products (title, slug, description, content, image_url, category_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+    const runRes = await c.env.DB.prepare(sql).bind(
+      title2,
+      slug,
+      description || null,
+      content,
+      image_url || null,
+      typeof category_id === "number" ? category_id : null
+    ).run();
+    const newId = runRes.meta?.last_row_id;
+    const product = await c.env.DB.prepare(
+      `SELECT p.*, c.name AS category_name, c.slug AS category_slug
+         FROM products p
+         LEFT JOIN categories c ON c.id = p.category_id
+         WHERE p.id = ?`
+    ).bind(newId).first();
+    return c.json({ product, source: "database" }, 201);
+  } catch (err) {
+    console.error("Error adding product:", err);
+    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug already exists" : "Failed to add product";
+    console.error("Error details:", err);
+    return c.json({ error: msg }, 500);
+  }
+});
+productsRouter.put("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const body = await c.req.json();
+    const {
+      title: title2,
+      slug,
+      description,
+      content,
+      image_url,
+      category_id
+    } = body || {};
+    const sets = [];
+    const params = [];
+    if (title2 !== void 0) {
+      sets.push("title = ?");
+      params.push(title2);
+    }
+    if (slug !== void 0) {
+      sets.push("slug = ?");
+      params.push(slug);
+    }
+    if (description !== void 0) {
+      sets.push("description = ?");
+      params.push(description);
+    }
+    if (content !== void 0) {
+      sets.push("content = ?");
+      params.push(content);
+    }
+    if (image_url !== void 0) {
+      sets.push("image_url = ?");
+      params.push(image_url);
+    }
+    if (category_id !== void 0) {
+      sets.push("category_id = ?");
+      params.push(
+        category_id === null ? null : typeof category_id === "number" ? category_id : null
+      );
+    }
+    if (!sets.length) {
+      return c.json({ error: "No fields to update" }, 400);
+    }
+    const sql = `
+      UPDATE products
+      SET ${sets.join(", ")}
+      WHERE id = ?
+    `;
+    params.push(id);
+    const res = await c.env.DB.prepare(sql).bind(...params).run();
+    if ((res.meta?.changes || 0) === 0) {
+      return c.json({ error: "Product not found" }, 404);
+    }
+    const product = await c.env.DB.prepare(
+      `SELECT p.*, c.name AS category_name, c.slug AS category_slug
+         FROM products p
+         LEFT JOIN categories c ON c.id = p.category_id
+         WHERE p.id = ?`
+    ).bind(id).first();
+    return c.json({ product, source: "database" });
+  } catch (err) {
+    console.error("Error updating product:", err);
+    const msg = String(err?.message || "").toLowerCase().includes("unique") || String(err).toLowerCase().includes("unique") ? "Slug already exists" : "Failed to update product";
+    return c.json({ error: msg }, 500);
+  }
+});
+productsRouter.delete("/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB(c.env)) {
+      return c.json({ error: "Database not available" }, 503);
+    }
+    const existing = await c.env.DB.prepare("SELECT id FROM products WHERE id = ?").bind(id).first();
+    if (!existing) return c.json({ error: "Product not found" }, 404);
+    const res = await c.env.DB.prepare("DELETE FROM products WHERE id = ?").bind(id).run();
+    if ((res.meta?.changes || 0) > 0) {
+      return c.json({ success: true, message: "Product deleted successfully" });
+    }
+    return c.json({ error: "Product not found" }, 404);
+  } catch (err) {
+    console.error("Error deleting product:", err);
+    return c.json({ error: "Failed to delete product" }, 500);
+  }
+});
+const contactRouter = new Hono2();
+const bad$1 = (c, msg = "Bad Request", code = 400) => c.json({ ok: false, error: msg }, code);
+const ok$1 = (c, data = {}, code = 200) => c.json({ ok: true, ...data }, code);
+const isEmail$1 = (s = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+const validStatus = (s = "") => ["new", "reviewed", "closed"].includes(s);
+contactRouter.get("/", async (c) => {
+  try {
+    const result = await c.env.DB.prepare(
+      "SELECT * FROM contact_messages ORDER BY created_at DESC"
+    ).all();
+    return ok$1(c, { items: result.results });
+  } catch (e) {
+    console.error(e);
+    return bad$1(c, "Failed to fetch contacts", 500);
+  }
+});
+contactRouter.post("/", async (c) => {
+  try {
+    const body = await c.req.json();
+    const fullName = (body.full_name || "").trim();
+    const email = (body.email || "").trim();
+    const phone = (body.phone || "").trim();
+    const address = (body.address || "").trim();
+    const message2 = (body.message || "").trim();
+    if (!fullName || !email || !message2)
+      return bad$1(c, "fullName, email, message are required");
+    if (!isEmail$1(email)) return bad$1(c, "Invalid email");
+    const result = await c.env.DB.prepare(
+      `INSERT INTO contact_messages (full_name, email, phone, address, message)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind(fullName, email, phone, address, message2).run();
+    const newItem = await c.env.DB.prepare(
+      "SELECT * FROM contact_messages WHERE id = ?"
+    ).bind(result.meta.last_row_id).first();
+    return ok$1(c, { item: newItem }, 201);
+  } catch (e) {
+    console.error(e);
+    return bad$1(c, "Failed to create contact", 500);
+  }
+});
+contactRouter.patch("/:id/status", async (c) => {
+  const id = parseInt(c.req.param("id"), 10);
+  try {
+    const { status } = await c.req.json();
+    if (!validStatus(status))
+      return bad$1(c, "Invalid status (new|reviewed|closed)");
+    const res = await c.env.DB.prepare(
+      "UPDATE contact_messages SET status = ? WHERE id = ?"
+    ).bind(status, id).run();
+    if ((res.meta?.changes || 0) === 0) return bad$1(c, "Not found", 404);
+    const updated = await c.env.DB.prepare(
+      "SELECT * FROM contact_messages WHERE id = ?"
+    ).bind(id).first();
+    return ok$1(c, { item: updated });
+  } catch (e) {
+    console.error(e);
+    return bad$1(c, "Failed to update status", 500);
+  }
+});
+contactRouter.delete("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"), 10);
+  try {
+    const res = await c.env.DB.prepare(
+      "DELETE FROM contact_messages WHERE id = ?"
+    ).bind(id).run();
+    if ((res.meta?.changes || 0) === 0) return bad$1(c, "Not found", 404);
+    return ok$1(c, { deleted: true });
+  } catch (e) {
+    console.error(e);
+    return bad$1(c, "Failed to delete contact", 500);
+  }
+});
+const userRouter = new Hono2();
+const bad = (c, msg = "Bad Request", code = 400) => c.json({ ok: false, error: msg }, code);
+const ok = (c, data = {}, code = 200) => c.json({ ok: true, ...data }, code);
+const isEmail = (s = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+userRouter.get("/", async (c) => {
+  try {
+    const { results } = await c.env.DB.prepare(
+      "SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC"
+    ).all();
+    return ok(c, { items: results });
+  } catch (e) {
+    console.error(e);
+    return bad(c, "Failed to fetch users", 500);
+  }
+});
+userRouter.get("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"), 10);
+  try {
+    const user = await c.env.DB.prepare(
+      "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
+    ).bind(id).first();
+    if (!user) return bad(c, "Not found", 404);
+    return ok(c, { item: user });
+  } catch (e) {
+    console.error(e);
+    return bad(c, "Failed to fetch user", 500);
+  }
+});
+userRouter.post("/", async (c) => {
+  try {
+    const body = await c.req.json();
+    const name = (body.name || "").trim();
+    const email = (body.email || "").trim();
+    const password = (body.password || "").trim();
+    const role = (body.role || "user").trim();
+    if (!name || !email || !password)
+      return bad(c, "name, email, password are required");
+    if (!isEmail(email)) return bad(c, "Invalid email");
+    const result = await c.env.DB.prepare(
+      `INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`
+    ).bind(name, email, password, role).run();
+    const newUser = await c.env.DB.prepare(
+      "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
+    ).bind(result.meta.last_row_id).first();
+    return ok(c, { item: newUser }, 201);
+  } catch (e) {
+    console.error(e);
+    return bad(c, "Failed to create user", 500);
+  }
+});
+userRouter.put("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"), 10);
+  try {
+    const body = await c.req.json();
+    const fields = [];
+    const binds = [];
+    if (body.name) {
+      fields.push("name = ?");
+      binds.push(body.name.trim());
+    }
+    if (body.email) {
+      if (!isEmail(body.email.trim())) return bad(c, "Invalid email");
+      fields.push("email = ?");
+      binds.push(body.email.trim());
+    }
+    if (body.password) {
+      fields.push("password = ?");
+      binds.push(body.password.trim());
+    }
+    if (body.role) {
+      fields.push("role = ?");
+      binds.push(body.role.trim());
+    }
+    if (!fields.length) return bad(c, "No fields to update");
+    const res = await c.env.DB.prepare(
+      `UPDATE users SET ${fields.join(", ")} WHERE id = ?`
+    ).bind(...binds, id).run();
+    if ((res.meta?.changes || 0) === 0) return bad(c, "Not found", 404);
+    const updated = await c.env.DB.prepare(
+      "SELECT id, name, email, role, created_at FROM users WHERE id = ?"
+    ).bind(id).first();
+    return ok(c, { item: updated });
+  } catch (e) {
+    console.error(e);
+    return bad(c, "Failed to update user", 500);
+  }
+});
+userRouter.delete("/:id", async (c) => {
+  const id = parseInt(c.req.param("id"), 10);
+  try {
+    const res = await c.env.DB.prepare(
+      "DELETE FROM users WHERE id = ?"
+    ).bind(id).run();
+    if ((res.meta?.changes || 0) === 0) return bad(c, "Not found", 404);
+    return ok(c, { deleted: true });
+  } catch (e) {
+    console.error(e);
+    return bad(c, "Failed to delete user", 500);
   }
 });
 const app = new Hono2();
@@ -2761,8 +4930,8 @@ app.use("*", async (c, next) => {
       const testQuery = await c.env.DB.prepare("SELECT 1").first();
       c.env.DB_AVAILABLE = true;
       console.log("D1 Database connected successfully");
-    } catch (error) {
-      console.error("D1 Database connection error:", error);
+    } catch (error2) {
+      console.error("D1 Database connection error:", error2);
       c.env.DB_AVAILABLE = false;
     }
   } else {
@@ -2771,11 +4940,18 @@ app.use("*", async (c, next) => {
   }
   await next();
 });
+app.route("/api/auth", authRouter);
+app.route("/api/users", userRouter);
+app.route("/api/contacts", contactRouter);
 app.route("/api/books", booksRouter);
 app.route("/api/about", aboutRouter);
 app.route("/api/news", newsRouter);
+app.route("/api/seo", seoApp);
+app.route("/api/products", productsRouter);
+app.route("/api/categories", categoriesRouter);
 app.route("/api/books/:id/related", bookRelatedRouter);
 app.route("/api/upload-image", uploadImageRouter);
+app.route("/api/editor-upload", editorUploadRouter);
 app.get("/api/health", async (c) => {
   return c.json({
     status: "ok",

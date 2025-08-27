@@ -19,6 +19,16 @@
   --radius-DEFAULT: 0.5rem;
 }
 
+/* Ẩn scrollbar trên mọi trình duyệt */
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE và Edge */
+  scrollbar-width: none;     /* Firefox */
+}
+
+
 :root {
   font-synthesis: none;
   text-rendering: optimizeLegibility;

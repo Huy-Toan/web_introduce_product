@@ -1,280 +1,371 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { groupByGenre } from "../lib/utils";
-import { useNavigate } from "react-router";
+// src/components/Categori.jsx  (ProductCategories)
+import React, { useState, useRef, useEffect, useMemo } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
 
-function ProductCategories({ categories = [], onSelectCategory }) {
+const SUPPORTED = ["vi", "en"];
+const DEFAULT_LOCALE = "vi";
+
+function resolveLocale(propLocale, search) {
+  const fromProp = (propLocale || "").toLowerCase();
+  const urlLc = new URLSearchParams(search).get("locale")?.toLowerCase() || "";
+  const lsLc = (localStorage.getItem("locale") || "").toLowerCase();
+
+  if (SUPPORTED.includes(fromProp)) return fromProp;
+  if (SUPPORTED.includes(urlLc)) return urlLc;
+  if (SUPPORTED.includes(lsLc)) return lsLc;
+  return DEFAULT_LOCALE;
+}
+
+function normalizeParentsPayload(data) {
+  // Hỗ trợ nhiều kiểu payload khác nhau từ BE
+  const list =
+    data?.parents ??
+    data?.parent_categories ??
+    data?.items ??
+    (Array.isArray(data) ? data : []);
+  return Array.isArray(list) ? list : [];
+}
+
+function ProductCategories({ categories = [], onSelectCategory, locale: localeProp }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // locale
+  const locale = useMemo(
+    () => resolveLocale(localeProp, location.search),
+    [localeProp, location.search]
+  );
+
+  // i18n text
+  const t = useMemo(
+    () =>
+      locale === "vi"
+        ? {
+          heading: "Danh mục sản phẩm",
+          sub: "Chọn một danh mục để xem các sản phẩm liên quan",
+          empty: "Chưa có danh mục.",
+          ctaAll: "Xem tất cả sản phẩm",
+          prev: "Trước",
+          next: "Sau",
+        }
+        : {
+          heading: "Product Categories",
+          sub: "Select a category to view related products",
+          empty: "No categories yet.",
+          ctaAll: "Browse all products",
+          prev: "Prev",
+          next: "Next",
+        },
+    [locale]
+  );
+
+  // data từ API (khi không truyền props)
+  const [cats, setCats] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // slider states
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAutoPlay, setIsAutoPlay] = useState(true);
-  const [genres, setGenres] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [itemsPerView, setItemsPerView] = useState(4);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [translateX, setTranslateX] = useState(0);
   const sliderRef = useRef(null);
+  const containerRef = useRef(null);
   const intervalRef = useRef(null);
-  const navigate = useNavigate();
 
-  // Fetch genres from API
+  // đồng bộ <html lang> + lưu
   useEffect(() => {
-    const fetchGenres = async () => {
+    try {
+      document.documentElement.lang = locale;
+      localStorage.setItem("locale", locale);
+    } catch { }
+  }, [locale]);
+
+  // Fetch categories theo locale
+  useEffect(() => {
+    const ac = new AbortController();
+    (async () => {
       try {
         setLoading(true);
-        const res = await fetch("/api/books");
+        const res = await fetch(`/api/parent_categories?locale=${encodeURIComponent(locale)}`, {
+          cache: "no-store",
+          signal: ac.signal,
+        });
         const data = await res.json();
-        const booksArray = data.books || [];
-        const grouped = groupByGenre(booksArray);
-        
-        // Convert grouped object to array format
-        const genreArray = Object.entries(grouped).map(([name, genreData]) => ({
-          id: name,
-          name: genreData.name || name,
-          books: genreData.books || genreData,
-          count: genreData.count || (genreData.books ? genreData.books.length : 0)
-        }));
-        
-        setGenres(genreArray);
+        const list = normalizeParentsPayload(data);
+        setCats(
+          list.map((c) => ({
+            id: c.id,
+            name: c.name ?? c.title ?? c.slug ?? "Category",
+            slug: c.slug ?? (c.id != null ? String(c.id) : ""),
+            image_url: c.image_url && c.image_url !== "null" ? c.image_url : null,
+          }))
+        );
       } catch (err) {
-        console.error("Failed to load genres:", err);
-        // Fallback to empty array if API fails
-        setGenres([]);
+        if (err.name !== "AbortError") {
+          console.error("Failed to load parents:", err);
+          setCats([]);
+        }
       } finally {
         setLoading(false);
       }
-    };
-    
-    fetchGenres();
-  }, []);
+    })();
+    return () => ac.abort();
+  }, [locale]);
 
   // Responsive items per view
-  const [itemsPerView, setItemsPerView] = useState(4);
-  
   useEffect(() => {
     const updateItemsPerView = () => {
-      if (window.innerWidth < 640) { 
-        setItemsPerView(1);
-      } else if (window.innerWidth < 1024) { 
-        setItemsPerView(2);
-      } else { 
-        setItemsPerView(4);
-      }
+      if (window.innerWidth < 640) setItemsPerView(1);
+      else if (window.innerWidth < 1024) setItemsPerView(2);
+      else setItemsPerView(3);
     };
-
     updateItemsPerView();
-    window.addEventListener('resize', updateItemsPerView);
-    return () => window.removeEventListener('resize', updateItemsPerView);
+    window.addEventListener("resize", updateItemsPerView);
+    return () => window.removeEventListener("resize", updateItemsPerView);
   }, []);
 
-  // Sử dụng categories từ props hoặc genres từ API
-  const displayCategories = categories.length > 0 ? categories : genres;
-  const maxIndex = Math.max(0, displayCategories.length - itemsPerView);
+  // ưu tiên props; nếu không có thì dùng cats từ API
+  const displayCategories = categories.length > 0 ? categories : cats;
 
-  // Auto play slider
-  useEffect(() => {
-    if (isAutoPlay && displayCategories.length > itemsPerView) {
-      intervalRef.current = setInterval(() => {
-        setCurrentIndex(prev => prev >= maxIndex ? 0 : prev + 1);
-      }, 4000);
-    }
-    
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [isAutoPlay, maxIndex, itemsPerView, displayCategories.length]);
-
+  // Next/Prev (có circular)
   const goToNext = () => {
-    setCurrentIndex(prev => prev >= maxIndex ? 0 : prev + 1);
+    setCurrentIndex((prev) => {
+      if (displayCategories.length <= itemsPerView) {
+        return displayCategories.length ? (prev + 1) % displayCategories.length : 0;
+      }
+      return prev >= displayCategories.length - itemsPerView ? 0 : prev + 1;
+    });
   };
-
   const goToPrev = () => {
-    setCurrentIndex(prev => prev <= 0 ? maxIndex : prev - 1);
+    setCurrentIndex((prev) => {
+      if (displayCategories.length <= itemsPerView) {
+        return prev <= 0 ? Math.max(0, displayCategories.length - 1) : prev - 1;
+      }
+      return prev <= 0 ? Math.max(0, displayCategories.length - itemsPerView) : prev - 1;
+    });
+  };
+  const goToSlide = (index) => {
+    if (displayCategories.length <= itemsPerView) setCurrentIndex(index);
+    else setCurrentIndex(Math.min(index, Math.max(0, displayCategories.length - itemsPerView)));
   };
 
-  const goToSlide = (index) => {
-    setCurrentIndex(Math.min(index, maxIndex));
+  // Auto play
+  useEffect(() => {
+    if (isAutoPlay && displayCategories.length > 0) {
+      intervalRef.current = setInterval(goToNext, 4000);
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [isAutoPlay, itemsPerView, displayCategories.length]);
+
+  // Swipe handlers
+  const handleStart = (clientX) => {
+    setIsDragging(true);
+    setStartX(clientX);
+    setIsAutoPlay(false);
+  };
+  const handleMove = (clientX) => {
+    if (!isDragging) return;
+    setTranslateX(clientX - startX);
+  };
+  const handleEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    if (Math.abs(translateX) > 50) (translateX > 0 ? goToPrev() : goToNext());
+    setTranslateX(0);
+    setIsAutoPlay(true);
+  };
+
+  // Global mouse events for dragging
+  useEffect(() => {
+    if (!isDragging) return;
+    const handleMouseMoveGlobal = (e) => handleMove(e.clientX);
+    const handleMouseUpGlobal = () => handleEnd();
+    document.addEventListener("mousemove", handleMouseMoveGlobal);
+    document.addEventListener("mouseup", handleMouseUpGlobal);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMoveGlobal);
+      document.removeEventListener("mouseup", handleMouseUpGlobal);
+    };
+  }, [isDragging, startX, translateX]);
+
+  const handleMouseEnter = () => setIsAutoPlay(false);
+  const handleMouseLeave = () => {
+    if (!isDragging) setIsAutoPlay(true);
   };
 
   const handleCategoryClick = (category) => {
-    // Navigate to product page with genre query parameter
-    const genreName = category.name || category.title;
-    if (genreName) {
-      // Use encodeURIComponent to handle special characters and spaces
-      window.location.href = `/product?genre=${encodeURIComponent(genreName)}`;
-    } else {
-      window.location.href = '/product';
-    }
-    
-    // Call onSelectCategory if provided
-    if (onSelectCategory) {
-      onSelectCategory(category);
-    }
+    const slug = category.slug || category.id;
+    navigate(`/product/${encodeURIComponent(slug)}?locale=${locale}`);
+    onSelectCategory?.(category);
   };
 
-  const handleMouseEnter = () => setIsAutoPlay(false);
-  const handleMouseLeave = () => setIsAutoPlay(true);
-
-  // Loading state
   if (loading) {
     return (
       <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-800 mb-4">Our Book Categories</h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Loading our wide range of book genres...
-            </p>
-          </div>
           <div className="flex justify-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
           </div>
         </div>
       </section>
     );
   }
 
-  // Empty state
   if (displayCategories.length === 0) {
     return (
       <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-800 mb-4">Our Book Categories</h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              No categories available at the moment.
-            </p>
-          </div>
+          <p className="text-center text-gray-600">{t.empty}</p>
         </div>
       </section>
     );
   }
+
+  const totalSlides =
+    displayCategories.length <= itemsPerView
+      ? displayCategories.length
+      : Math.max(1, displayCategories.length - itemsPerView + 1);
+
+  const baseTranslate =
+    displayCategories.length <= itemsPerView
+      ? `translateX(-${currentIndex * (100 / Math.max(itemsPerView, displayCategories.length))}%)`
+      : `translateX(-${currentIndex * (100 / itemsPerView)}%)`;
 
   return (
     <section className="py-16 bg-gray-50 overflow-hidden">
       <div className="container mx-auto px-4">
         {/* Header */}
-        <div className="text-center mb-8 sm:mb-12">
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-3 sm:mb-4">Our Book Categories</h2>
+        <div className="text-center mb-8 sm:mb-12 not-prose">
+          {/* ép màu xanh lá */}
+          <h2 className="text-2xl sm:text-3xl font-bold !text-green-600 mb-3 sm:mb-4">
+            {t.heading}
+          </h2>
           <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto px-4">
-            Discover our wide range of book genres and collections
+            {t.sub}
           </p>
         </div>
 
+
         {/* Slider Container */}
-        <div 
-          className="relative max-w-6xl mx-auto"
+        <div
+          ref={containerRef}
+          className={`relative max-w-6xl mx-auto select-none ${isDragging ? "cursor-grabbing" : "cursor-grab"
+            }`}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            handleStart(e.clientX);
+          }}
+          onTouchStart={(e) => handleStart(e.touches[0].clientX)}
+          onTouchMove={(e) => {
+            e.preventDefault();
+            handleMove(e.touches[0].clientX);
+          }}
+          onTouchEnd={handleEnd}
         >
           {/* Navigation Buttons */}
-          {displayCategories.length > itemsPerView && (
-            <>
-              <button
-                onClick={goToPrev}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white hover:bg-gray-50 shadow-lg rounded-full p-3 transition-all duration-300 hover:shadow-xl"
-                disabled={currentIndex === 0}
-              >
-                <ChevronLeft className="h-6 w-6 text-gray-600" />
-              </button>
-              
-              <button
-                onClick={goToNext}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white hover:bg-gray-50 shadow-lg rounded-full p-3 transition-all duration-300 hover:shadow-xl"
-                disabled={currentIndex === maxIndex}
-              >
-                <ChevronRight className="h-6 w-6 text-gray-600" />
-              </button>
-            </>
-          )}
+          <button
+            onClick={goToPrev}
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white cursor-pointer hover:bg-gray-50 shadow-lg rounded-full p-3 transition-all duration-300 hover:shadow-xl pointer-events-auto"
+            aria-label={t.prev}
+            title={t.prev}
+          >
+            <ChevronLeft className="h-6 w-6 text-gray-600" />
+          </button>
+
+          <button
+            onClick={goToNext}
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white cursor-pointer hover:bg-gray-50 shadow-lg rounded-full p-3 transition-all duration-300 hover:shadow-xl pointer-events-auto"
+            aria-label={t.next}
+            title={t.next}
+          >
+            <ChevronRight className="h-6 w-6 text-gray-600" />
+          </button>
 
           {/* Slider Track */}
           <div className="overflow-hidden rounded-lg">
-            <div 
+            <div
               ref={sliderRef}
-              className="flex transition-transform duration-500 ease-in-out gap-3 sm:gap-4 lg:gap-6"
-              style={{ 
-                transform: `translateX(-${currentIndex * (100 / itemsPerView)}%)`,
-                width: `${(displayCategories.length / itemsPerView) * 100}%`
+              className="flex transition-transform duration-500 ease-in-out pointer-events-none"
+              style={{
+                transform: `${baseTranslate} ${isDragging ? `translateX(${translateX * 0.3}px)` : ""}`,
+                transition: isDragging ? "none" : "transform 0.5s ease-in-out",
               }}
             >
-              {displayCategories.map((category, index) => (
-                <div
-                  key={category.id || category.name || index}
-                  className="flex-shrink-0"
-                  style={{ width: `${100 / displayCategories.length}%` }}
-                >
+              {displayCategories.map((category, index) => {
+                const name = category.name || category.title || category.slug || "Category";
+                const img =
+                  category.image_url && category.image_url !== "null"
+                    ? category.image_url
+                    : "/banner.jpg";
+                return (
                   <div
-                    onClick={() => handleCategoryClick(category)}
-                    className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2 group h-full mx-1 sm:mx-2 lg:mx-3"
+                    key={category.id || category.slug || name || index}
+                    className="flex-shrink-0 px-2"
+                    style={{ width: `${100 / itemsPerView}%` }}
                   >
-                    <div className="p-4 sm:p-5 lg:p-6 text-center h-full flex flex-col">
-                      {/* Image/Icon Container */}
-                      <div className="w-16 h-16 sm:w-18 sm:h-18 lg:w-20 lg:h-20 mx-auto mb-3 sm:mb-4 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center group-hover:from-blue-200 group-hover:to-blue-300 transition-all duration-300">
-                        <span className="text-2xl sm:text-3xl">📚</span>
+                    <div
+                      onClick={() => handleCategoryClick(category)}
+                      className="bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-2 group h-full pointer-events-auto overflow-hidden"
+                      title={name}
+                      aria-label={name}
+                    >
+                      {/* Image */}
+                      <div className="w-full aspect-[5/6] sm:aspect-[3/4] overflow-hidden">
+                        <img
+                          src={img}
+                          alt={name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = "/banner.jpg";
+                          }}
+                        />
                       </div>
-                      
-                      {/* Category Name */}
-                      <h3 className="text-sm sm:text-base lg:text-base font-bold text-gray-800 mb-2 group-hover:text-blue-600 transition-colors line-clamp-2">
-                        {category.name || category.title}
-                      </h3>
-                      
-                      {/* Description - Hidden on mobile */}
-                      <p className="hidden sm:block text-gray-600 text-xs sm:text-sm leading-relaxed mb-3 flex-grow">
-                        {category.description || `Books in ${category.name || category.title} genre`}
-                      </p>
-                      
-                      {/* Book Count */}
-                      {(category.books || category.count) && (
-                        <div className="text-xs text-blue-600 font-medium mb-3">
-                          {category.count || (category.books ? category.books.length : 0)} books
-                        </div>
-                      )}
-                      
-                      {/* View Books Link */}
-                      <div className="inline-flex items-center text-blue-600 font-medium group-hover:text-blue-700 transition-colors text-xs sm:text-sm">
-                        <span className="mr-1">View Books</span>
-                        <svg 
-                          className="w-3 h-3 transform group-hover:translate-x-1 transition-transform" 
-                          fill="none" 
-                          stroke="currentColor" 
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
+
+                      {/* Content */}
+                      <div className="p-3 text-center">
+                        <h3 className="text-sm font-semibold text-gray-800 group-hover:text-green-600 transition-colors line-clamp-2">
+                          {name}
+                        </h3>
                       </div>
+
+                      <div className="h-1 bg-gradient-to-r from-green-400 to-green-600 rounded-b-2xl transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
                     </div>
-                    
-                    {/* Hover Effect Border */}
-                    <div className="h-1 bg-gradient-to-r from-blue-400 to-blue-600 rounded-b-2xl transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
-          {/* Dots Indicators */}
-          {displayCategories.length > itemsPerView && (
-            <div className="flex justify-center mt-8 space-x-2">
-              {Array.from({ length: maxIndex + 1 }).map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => goToSlide(index)}
-                  className={`w-3 h-3 rounded-full transition-all duration-300 ${
-                    index === currentIndex 
-                      ? 'bg-blue-600 w-8' 
-                      : 'bg-gray-300 hover:bg-gray-400'
+          {/* Dots */}
+          <div className="flex justify-center mt-8 space-x-2">
+            {Array.from({ length: totalSlides }).map((_, index) => (
+              <button
+                key={index}
+                onClick={() => goToSlide(index)}
+                className={`w-3 h-3 rounded-full transition-all duration-300 pointer-events-auto ${index === currentIndex ? "bg-green-600 w-8" : "bg-gray-300 hover:bg-gray-400"
                   }`}
-                />
-              ))}
-            </div>
-          )}
+                aria-label={(locale === "vi" ? "Trang " : "Page ") + (index + 1)}
+              />
+            ))}
+          </div>
         </div>
 
-        {/* Call to Action */}
+        {/* CTA */}
         <div className="text-center mt-8 sm:mt-12">
-          <button 
-            onClick={() => window.location.href = "/product"}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 sm:px-8 py-2 sm:py-3 rounded-lg font-semibold transition-colors duration-300 shadow-lg hover:shadow-xl text-sm sm:text-base"
+          <button
+            onClick={() => navigate(`/product?locale=${locale}`)}
+            className="bg-gradient-to-r cursor-pointer from-yellow-500 to-yellow-600 text-white px-8 py-3 rounded-full font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all duration-300 transform hover:-translate-y-1 shadow-lg hover:shadow-xl"
           >
-            Browse All Books
+            {t.ctaAll}
           </button>
         </div>
       </div>

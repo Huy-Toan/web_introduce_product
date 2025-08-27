@@ -1,4 +1,3 @@
-import React from 'react';
 import { Edit2, Trash2 } from 'lucide-react';
 
 const AboutCard = ({ about, onEdit, onDelete }) => {
@@ -9,13 +8,11 @@ const AboutCard = ({ about, onEdit, onDelete }) => {
         <img
         src={about.image_url}
         alt={about.title}
-        className="w-48 h-48 object-contain bg-gray-100 flex-shrink-0"
+        className="w-48 h-full object-contain bg-gray-100 flex-shrink-0"
         onError={(e) => {
-            e.target.src = 'fallback_url.jpg';
+            e.target.src = '/banner.jpg';
         }}
         />
-
-
 
       {/* Nội dung ở giữa */}
       <div className="flex-1 p-4">
@@ -29,14 +26,14 @@ const AboutCard = ({ about, onEdit, onDelete }) => {
       <div className="flex flex-col gap-2 p-4">
         <button
           onClick={() => onEdit(about)}
-          className="bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-3 rounded flex items-center justify-center gap-1"
+          className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 px-3 rounded flex items-center justify-center gap-1"
         >
           <Edit2 size={16} />
           Sửa
         </button>
         <button
           onClick={() => onDelete(about.id)}
-          className="bg-red-100 hover:bg-red-200 text-red-700 py-2 px-3 rounded flex items-center justify-center gap-1"
+          className="cursor-pointer bg-red-100 hover:bg-red-200 text-red-700 py-2 px-3 rounded flex items-center justify-center gap-1"
         >
           <Trash2 size={16} />
           Xóa
