@@ -17,7 +17,7 @@ directory = "./dist/client"
 [[d1_databases]]
 binding = "DB"
 database_name = "react-fullstack-db"
-database_id = "15c19695-b012-40df-a7dd-f0f51d7373dd"
+database_id = "b199ff5f-d589-480e-ae13-ed842514e70c"
 
 # R2 Bucket để lưu ảnh
 [[r2_buckets]]
