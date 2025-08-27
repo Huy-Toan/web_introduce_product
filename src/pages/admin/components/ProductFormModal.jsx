@@ -9,8 +9,8 @@ const IMPORT_TUNE = {
   tries: 6,
   delay0: 400,
   backoff: 1.6,
-  mode: 'strict',            
-  require_locales: 'en', 
+  mode: 'strict',
+  require_locales: 'en',
 };
 
 const slugify = (s = '') =>
@@ -147,7 +147,7 @@ async function translateMarkdown(md, source, target) {
 
 const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id);
-  const [isR2Importing, setIsR2Importing] = useState(false);   
+  const [isR2Importing, setIsR2Importing] = useState(false);
 
   // Base (VI)
   const [base, setBase] = useState({
@@ -192,7 +192,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
   // Editors
   const editorVIRef = useRef(null);
-  const editorRefs = useRef({}); 
+  const editorRefs = useRef({});
 
   // Fetch subcategories
   useEffect(() => {
@@ -478,10 +478,11 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
     const ok = confirm(
       'Import sản phẩm từ file Excel.\n' +
-      '- Cột yêu cầu: title, content, subcategory_id.\n' +
+      '- Cột yêu cầu: title, content, subcategory_name (hoặc subcategory).\n' +
       '- Tùy chọn: description, image_url, slug.\n' +
       'Tiếp tục?'
     );
+
     if (!ok) { e.target.value = ''; return; }
 
     setIsImporting(true);
@@ -491,7 +492,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
       const q = new URLSearchParams({
         auto: '1',
-        targets: 'en',  
+        targets: 'en',
         source: 'vi',
         wait_ms: String(IMPORT_TUNE.wait_ms),
         tries: String(IMPORT_TUNE.tries),
@@ -650,12 +651,12 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               hidden
               onChange={handleImportSelected}
             />
-            
+
             <R2FolderImportButton
               apiUrl="/api/upload-image"
               folder=""
               concurrent={3}
-              className="inline-block"           
+              className="inline-block"
               onBusyChange={setIsR2Importing}       // NEW: nhận busy từ child
             />
 
