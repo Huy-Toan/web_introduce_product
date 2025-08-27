@@ -1,7 +1,6 @@
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { setAuth } from "../../../api/admin/auth";
-
+import { setAuth, getToken, isTokenStillValid } from "../../../api/admin/auth";
 function AdminLogin() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -13,6 +12,13 @@ function AdminLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false); // ✅ thêm
+
+    useEffect(() => {
+        const token = getToken();
+        if (token && isTokenStillValid(token)) {
+            navigate("/api/admin/dashboard", { replace: true });
+        }
+    }, [navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();

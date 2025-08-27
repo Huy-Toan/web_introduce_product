@@ -5207,49 +5207,195 @@ class SignJWT {
     return sig.sign(key, options);
   }
 }
-const enc$1 = new TextEncoder();
-const getKey$1 = (secret) => enc$1.encode(secret);
+var validCookieNameRegEx = /^[\w!#$%&'*.^`|~+-]+$/;
+var validCookieValueRegEx = /^[ !#-:<-[\]-~]*$/;
+var parse = (cookie, name) => {
+  if (cookie.indexOf(name) === -1) {
+    return {};
+  }
+  const pairs = cookie.trim().split(";");
+  const parsedCookie = {};
+  for (let pairStr of pairs) {
+    pairStr = pairStr.trim();
+    const valueStartPos = pairStr.indexOf("=");
+    if (valueStartPos === -1) {
+      continue;
+    }
+    const cookieName = pairStr.substring(0, valueStartPos).trim();
+    if (name !== cookieName || !validCookieNameRegEx.test(cookieName)) {
+      continue;
+    }
+    let cookieValue = pairStr.substring(valueStartPos + 1).trim();
+    if (cookieValue.startsWith('"') && cookieValue.endsWith('"')) {
+      cookieValue = cookieValue.slice(1, -1);
+    }
+    if (validCookieValueRegEx.test(cookieValue)) {
+      parsedCookie[cookieName] = decodeURIComponent_(cookieValue);
+      {
+        break;
+      }
+    }
+  }
+  return parsedCookie;
+};
+var _serialize = (name, value, opt = {}) => {
+  let cookie = `${name}=${value}`;
+  if (name.startsWith("__Secure-") && !opt.secure) {
+    throw new Error("__Secure- Cookie must have Secure attributes");
+  }
+  if (name.startsWith("__Host-")) {
+    if (!opt.secure) {
+      throw new Error("__Host- Cookie must have Secure attributes");
+    }
+    if (opt.path !== "/") {
+      throw new Error('__Host- Cookie must have Path attributes with "/"');
+    }
+    if (opt.domain) {
+      throw new Error("__Host- Cookie must not have Domain attributes");
+    }
+  }
+  if (opt && typeof opt.maxAge === "number" && opt.maxAge >= 0) {
+    if (opt.maxAge > 3456e4) {
+      throw new Error(
+        "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration."
+      );
+    }
+    cookie += `; Max-Age=${opt.maxAge | 0}`;
+  }
+  if (opt.domain && opt.prefix !== "host") {
+    cookie += `; Domain=${opt.domain}`;
+  }
+  if (opt.path) {
+    cookie += `; Path=${opt.path}`;
+  }
+  if (opt.expires) {
+    if (opt.expires.getTime() - Date.now() > 3456e7) {
+      throw new Error(
+        "Cookies Expires SHOULD NOT be greater than 400 days (34560000 seconds) in the future."
+      );
+    }
+    cookie += `; Expires=${opt.expires.toUTCString()}`;
+  }
+  if (opt.httpOnly) {
+    cookie += "; HttpOnly";
+  }
+  if (opt.secure) {
+    cookie += "; Secure";
+  }
+  if (opt.sameSite) {
+    cookie += `; SameSite=${opt.sameSite.charAt(0).toUpperCase() + opt.sameSite.slice(1)}`;
+  }
+  if (opt.priority) {
+    cookie += `; Priority=${opt.priority}`;
+  }
+  if (opt.partitioned) {
+    if (!opt.secure) {
+      throw new Error("Partitioned Cookie must have Secure attributes");
+    }
+    cookie += "; Partitioned";
+  }
+  return cookie;
+};
+var serialize = (name, value, opt) => {
+  value = encodeURIComponent(value);
+  return _serialize(name, value, opt);
+};
+var getCookie = (c, key, prefix) => {
+  const cookie = c.req.raw.headers.get("Cookie");
+  {
+    if (!cookie) {
+      return void 0;
+    }
+    let finalKey = key;
+    const obj2 = parse(cookie, finalKey);
+    return obj2[finalKey];
+  }
+};
+var setCookie = (c, name, value, opt) => {
+  let cookie;
+  if (opt?.prefix === "secure") {
+    cookie = serialize("__Secure-" + name, value, { path: "/", ...opt, secure: true });
+  } else if (opt?.prefix === "host") {
+    cookie = serialize("__Host-" + name, value, {
+      ...opt,
+      path: "/",
+      secure: true,
+      domain: void 0
+    });
+  } else {
+    cookie = serialize(name, value, { path: "/", ...opt });
+  }
+  c.header("Set-Cookie", cookie, { append: true });
+};
+const enc$2 = new TextEncoder();
+const getKey$2 = (secret) => enc$2.encode(secret);
 const nowSec$1 = () => Math.floor(Date.now() / 1e3);
 const bearer = (h) => h?.startsWith("Bearer ") ? h.slice(7) : null;
 const auth = async (c, next) => {
   try {
-    const token = bearer(c.req.header("Authorization"));
+    const token = bearer(c.req.header("Authorization")) || getCookie(c, "token");
     if (!token) return c.json({ error: "Unauthorized" }, 401);
-    if (!c.env.DB_AVAILABLE) return c.json({ error: "Database not available" }, 503);
-    const { payload } = await jwtVerify(token, getKey$1(c.env.JWT_SECRET));
+    if (!c.env.DB_AVAILABLE)
+      return c.json({ error: "Database not available" }, 503);
+    const { payload } = await jwtVerify(token, getKey$2(c.env.JWT_SECRET));
     const { jti } = payload;
     const row = await c.env.DB.prepare(
       "SELECT revoked, expires_at FROM sessions WHERE jti = ?"
     ).bind(jti).first();
-    if (!row) return c.json({ error: "Invalid session. Please log in again." }, 401);
-    if (row.revoked) return c.json({ error: "Token revoked. Please log in again." }, 401);
-    if (!row.expires_at || row.expires_at < nowSec$1()) return c.json({ error: "Token expired. Please log in again." }, 401);
+    if (!row)
+      return c.json({ error: "Invalid session. Please log in again." }, 401);
+    if (row.revoked)
+      return c.json({ error: "Token revoked. Please log in again." }, 401);
+    if (!row.expires_at || row.expires_at < nowSec$1())
+      return c.json({ error: "Token expired. Please log in again." }, 401);
     c.set("user", payload);
     await next();
   } catch {
     return c.json({ error: "Invalid or expired token" }, 401);
   }
 };
-const enc = new TextEncoder();
-const getKey = (secret) => enc.encode(secret);
+const rolePermissions = {
+  superadmin: ["users.manage"],
+  admin: ["users.manage"],
+  user_manager: ["users.manage"]
+};
+const requireAdminAuth = async (c, next) => {
+  await auth(c, async () => {
+    const user = c.get("user");
+    if (!user || !user.role || user.role === "user") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    await next();
+  });
+};
+const requirePerm = (perms) => async (c, next) => {
+  const user = c.get("user");
+  const needed = Array.isArray(perms) ? perms : [perms];
+  const permsOfRole = rolePermissions[user?.role] || [];
+  const ok2 = needed.every((p) => permsOfRole.includes(p));
+  if (!ok2) return c.json({ error: "Forbidden" }, 403);
+  await next();
+};
+const enc$1 = new TextEncoder();
+const getKey$1 = (secret) => enc$1.encode(secret);
 const nowSec = () => Math.floor(Date.now() / 1e3);
 const authRouter = new Hono2();
-authRouter.post("/login", async (c) => {
+async function performLogin(c, body) {
   try {
     console.log("Login attempt started");
     if (!c.env.DB_AVAILABLE) {
       console.error("Database not available");
-      return c.json({ error: "Database not available" }, 503);
+      return { error: "Database not available", code: 503 };
     }
     if (!c.env.JWT_SECRET) {
       console.error("JWT_SECRET not configured");
       return c.json({ error: "Server configuration error" }, 500);
     }
-    const { email, password } = await c.req.json();
+    const { email, password } = body;
     console.log("Login data received:", { email, hasPassword: !!password });
     if (!email || !password) {
       console.log("Missing email or password");
-      return c.json({ error: "Missing email/password" }, 400);
+      return { error: "Missing email/password", code: 400 };
     }
     console.log("Querying user from database...");
     const user = await c.env.DB.prepare(
@@ -5258,14 +5404,14 @@ authRouter.post("/login", async (c) => {
     console.log("User query result:", user ? { id: user.id, email: user.email, role: user.role } : "No user found");
     if (!user) {
       console.log("User not found for email:", email);
-      return c.json({ error: "Invalid credentials" }, 401);
+      return { error: "Invalid credentials", code: 401 };
     }
     console.log("Comparing passwords...");
     console.log("Input password:", password);
     console.log("Stored password:", user.password);
     if (password !== user.password) {
       console.log("Password mismatch");
-      return c.json({ error: "Invalid credentials" }, 401);
+      return { error: "Invalid credentials", code: 401 };
     }
     console.log("Password match successful, generating JWT...");
     const maxAgeSec = Number(c.env.JWT_EXPIRES_IN ?? 900);
@@ -5297,44 +5443,41 @@ authRouter.post("/login", async (c) => {
       // ← role lấy từ DB
       name: user.name,
       jti
-    }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setIssuedAt(iat).setExpirationTime(exp).sign(getKey(c.env.JWT_SECRET));
-    console.log("Login successful for user:", user.email);
-    return c.json({
-      access_token: token,
-      token_type: "Bearer",
-      expires_in: maxAgeSec,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+    }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setIssuedAt(iat).setExpirationTime(exp).sign(getKey$1(c.env.JWT_SECRET));
+    setCookie(c, "token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: maxAgeSec
     });
+    console.log("Login successful for user:", user.email);
+    return {
+      token,
+      maxAgeSec,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+    };
   } catch (e) {
     console.error("Login error:", e);
-    console.error("Error name:", e.name);
-    console.error("Error message:", e.message);
-    console.error("Error stack:", e.stack);
-    return c.json({
-      error: "Login failed",
-      details: e.message,
-      type: e.name
-    }, 500);
+    return { error: "Login failed", code: 500, details: e.message };
   }
+}
+authRouter.post("/login", async (c) => {
+  const body = await c.req.json();
+  const result = await performLogin(c, body);
+  if (result.error) return c.json({ error: result.error }, result.code);
+  return c.json({
+    access_token: result.token,
+    token_type: "Bearer",
+    expires_in: result.maxAgeSec,
+    user: result.user
+  });
 });
 authRouter.post("/admin/login", async (c) => {
-  try {
-    const url = new URL("/api/auth/login", c.req.url);
-    const res = await fetch(url.toString(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: await c.req.text()
-      // giữ nguyên body FE gửi lên
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return c.json({ message: data?.error || data?.message || "Login failed" }, res.status);
-    }
-    return c.json({ token: data.access_token }, 200);
-  } catch (err) {
-    console.error("Alias /admin/login error:", err);
-    return c.json({ message: "Internal server error" }, 500);
-  }
+  const body = await c.req.json();
+  const result = await performLogin(c, body);
+  if (result.error) return c.json({ message: result.error }, result.code);
+  return c.json({ token: result.token }, 200);
 });
 authRouter.get("/me", auth, (c) => {
   return c.json({ authenticated: true, user: c.get("user") });
@@ -7218,7 +7361,7 @@ var CFB = /* @__PURE__ */ function _CFB() {
   function get_fs() {
     return fs || (fs = {});
   }
-  function parse(file, options) {
+  function parse2(file, options) {
     if (file[0] == 80 && file[1] == 75) return parse_zip2(file, options);
     if ((file[0] | 32) == 109 && (file[1] | 32) == 105) return parse_mad(file, options);
     if (file.length < 512) throw new Error("CFB file size " + file.length + " < 512");
@@ -7499,7 +7642,7 @@ var CFB = /* @__PURE__ */ function _CFB() {
   }
   function read_file(filename2, options) {
     get_fs();
-    return parse(fs.readFileSync(filename2), options);
+    return parse2(fs.readFileSync(filename2), options);
   }
   function read(blob, options) {
     var type = options && options.type;
@@ -7510,11 +7653,11 @@ var CFB = /* @__PURE__ */ function _CFB() {
       case "file":
         return read_file(blob, options);
       case "base64":
-        return parse(s2a(Base64_decode(blob)), options);
+        return parse2(s2a(Base64_decode(blob)), options);
       case "binary":
-        return parse(s2a(blob), options);
+        return parse2(s2a(blob), options);
     }
-    return parse(
+    return parse2(
       /*::typeof blob == 'string' ? new Buffer(blob, 'utf-8') : */
       blob,
       options
@@ -8700,7 +8843,7 @@ var CFB = /* @__PURE__ */ function _CFB() {
   }
   exports.find = find;
   exports.read = read;
-  exports.parse = parse;
+  exports.parse = parse2;
   exports.write = write;
   exports.writeFile = write_file;
   exports.utils = {
@@ -33829,6 +33972,13 @@ ${parentItems.map((i) => `  <url><loc>${esc(i.loc)}</loc>${i.lastmod ? `<lastmod
     "cache-control": "public, s-maxage=3600"
   });
 });
+const app$1 = new Hono2();
+app$1.use("*", requireAdminAuth);
+app$1.post("/users", requirePerm("users.manage"), (c) => {
+  return c.json({ message: "User created" });
+});
+const enc = new TextEncoder();
+const getKey = (secret) => enc.encode(secret);
 const GRAPH = "https://graph.facebook.com/v20.0";
 const app = new Hono2();
 app.use("*", async (c, next) => {
@@ -34075,6 +34225,46 @@ app.get("/wa/history", async (c) => {
     })
   );
 });
+const verifyAdmin = async (c) => {
+  const token = getCookie(c, "token");
+  if (!token || !c.env.JWT_SECRET) return null;
+  try {
+    const { payload } = await jwtVerify(token, getKey(c.env.JWT_SECRET));
+    const { jti } = payload;
+    const row = await c.env.DB?.prepare(
+      "SELECT revoked, expires_at FROM sessions WHERE jti = ?"
+    ).bind(jti).first();
+    if (!row || row.revoked || !row.expires_at || row.expires_at < Date.now() / 1e3)
+      return null;
+    return payload;
+  } catch {
+    return null;
+  }
+};
+const serveAdminLogin = async (c) => {
+  const user = await verifyAdmin(c);
+  if (user) return c.redirect("/api/admin/dashboard", 302);
+  const res = await c.env.ASSETS.fetch(c.req.raw);
+  const headers = new Headers(res.headers);
+  headers.set("Cache-Control", "no-store");
+  return new Response(res.body, { ...res, headers });
+};
+app.get("/api/admin/login", serveAdminLogin);
+app.get("/api/admin/login/", serveAdminLogin);
+const redirectAdminRoot = async (c) => {
+  const user = await verifyAdmin(c);
+  if (!user) return c.redirect("/api/admin/login", 302);
+  return c.redirect("/api/admin/dashboard", 302);
+};
+app.get("/api/admin", redirectAdminRoot);
+app.get("/api/admin/", redirectAdminRoot);
+app.route("/api/admin/api", app$1);
+app.get("/api/admin/*", async (c) => {
+  if (c.req.path.startsWith("/api/admin/api")) return c.notFound();
+  const user = await verifyAdmin(c);
+  if (!user) return c.redirect("/api/admin/login", 302);
+  return c.env.ASSETS.fetch(c.req.raw);
+});
 app.route("/", seoRoot);
 app.route("/sitemaps", sitemaps);
 app.route("/api/seo", seoApp);
@@ -34092,6 +34282,7 @@ app.route("/api/cer-partners", cerPartnerRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
+app.route("/api/admin", app$1);
 app.get(
   "/api/health",
   (c) => c.json({

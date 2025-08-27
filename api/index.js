@@ -17,6 +17,11 @@ import fieldRouter from "./routes/field";
 import cerPartnerRouter from "./routes/cer-partner";
 import translateRouter from "./routes/translate";
 import { seoRoot, sitemaps } from "./routes/seo-sitemap.js";
+import adminRouter from "./admin/admin.js";
+import { jwtVerify } from "jose";
+import { getCookie } from "hono/cookie";
+const enc = new TextEncoder();
+const getKey = (secret) => enc.encode(secret);
 
 const GRAPH = "https://graph.facebook.com/v20.0";
 const app = new Hono();
@@ -323,6 +328,57 @@ app.get("/wa/history", async (c) => {
     );
 });
 
+// ======== Admin page guard and redirects ========
+const verifyAdmin = async (c) => {
+    const token = getCookie(c, "token");
+    if (!token || !c.env.JWT_SECRET) return null;
+    try {
+        const { payload } = await jwtVerify(token, getKey(c.env.JWT_SECRET));
+        const { jti } = payload;
+        const row = await c.env.DB?.prepare(
+            "SELECT revoked, expires_at FROM sessions WHERE jti = ?"
+        )
+            .bind(jti)
+            .first();
+        if (!row || row.revoked || !row.expires_at || row.expires_at < Date.now() / 1000)
+            return null;
+        return payload;
+    } catch {
+        return null;
+    }
+};
+
+const serveAdminLogin = async (c) => {
+    const user = await verifyAdmin(c);
+    if (user) return c.redirect("/api/admin/dashboard", 302);
+    const res = await c.env.ASSETS.fetch(c.req.raw);
+    const headers = new Headers(res.headers);
+    headers.set("Cache-Control", "no-store");
+    return new Response(res.body, { ...res, headers });
+};
+
+app.get("/api/admin/login", serveAdminLogin);
+app.get("/api/admin/login/", serveAdminLogin);
+
+const redirectAdminRoot = async (c) => {
+    const user = await verifyAdmin(c);
+    if (!user) return c.redirect("/api/admin/login", 302);
+    return c.redirect("/api/admin/dashboard", 302);
+};
+
+app.get("/api/admin", redirectAdminRoot);
+app.get("/api/admin/", redirectAdminRoot);
+
+app.route("/api/admin/api", adminRouter);
+
+app.get("/api/admin/*", async (c) => {
+    if (c.req.path.startsWith("/api/admin/api")) return c.notFound();
+    const user = await verifyAdmin(c);
+    if (!user) return c.redirect("/api/admin/login", 302);
+    // Serve SPA assets for admin pages
+    return c.env.ASSETS.fetch(c.req.raw);
+});
+
 /* ========================= 4) Routers hiện có ========================= */
 app.route("/", seoRoot);          
 app.route("/sitemaps", sitemaps); 
@@ -342,7 +398,7 @@ app.route("/api/cer-partners", cerPartnerRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
-
+app.route("/api/admin", adminRouter);
 /* ====================== 5) Health check ====================== */
 app.get("/api/health", (c) =>
     c.json({

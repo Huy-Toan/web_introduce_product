@@ -17,9 +17,9 @@ import ProductDetailPage from "./pages/ProductDetail";
 import News from "./pages/News";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import ScrollToTop from "./components/ScrollTop";
-import GlobalWhatsApp from "./components/GlobalWhatsApp";;
+import GlobalWhatsApp from "./components/GlobalWhatsApp";
 import News_Detail from "./pages/NewsDetail";
-import RequireAuth from "./pages/admin/components/RequireAuth";
+import AdminRoute from "./pages/admin/components/AdminRoutes.jsx";
 import UserChat from "./pages/UserChat";
 
 createRoot(document.getElementById("root")).render(
@@ -45,9 +45,9 @@ createRoot(document.getElementById("root")).render(
                     <Route
                         path="/api/admin/dashboard"
                         element={
-                            <RequireAuth>
+                            <AdminRoute>
                                 <AdminDashboard />
-                            </RequireAuth>
+                            </AdminRoute>
                         }
                     />
                 </Routes>
