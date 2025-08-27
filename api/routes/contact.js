@@ -34,8 +34,7 @@ contactRouter.post("/", async (c) => {
     const address = (body.address || "").trim();
     const message = (body.message || "").trim();
 
-    if (!fullName || !email || !message)
-      return bad(c, "fullName, email, message are required");
+    if (!fullName || !email || !message) return bad(c, "fullName, email, message are required");
     if (!isEmail(email)) return bad(c, "Invalid email");
 
     // Lưu DB
@@ -48,9 +47,10 @@ contactRouter.post("/", async (c) => {
       "SELECT * FROM contact_messages WHERE id = ?"
     ).bind(result.meta.last_row_id).first();
 
-    // Soạn mail
+    // --------- Soạn mail ----------
     const brand = c.env.BRAND_NAME || "Website";
-    const admin = c.env.ADMIN_EMAIL || "admin@example.com";
+    const contactTo = c.env.CONTACT_TO || "info@itxeasy.com"; // nơi nhận trong công ty
+    // from sẽ do helper lấy từ c.env.FROM_EMAIL = no-reply@itxeasy.com
 
     const adminHtml = `
       <div>
@@ -62,7 +62,7 @@ contactRouter.post("/", async (c) => {
         <p><b>Message:</b></p>
         <pre style="white-space:pre-wrap;">${message}</pre>
         <hr/>
-        <p>Created at: ${newItem.created_at} — Status: ${newItem.status} — ID: ${newItem.id}</p>
+        <p>Created at: ${newItem?.created_at ?? ""} — Status: ${newItem?.status ?? ""} — ID: ${newItem?.id ?? ""}</p>
       </div>
     `;
     const adminText =
@@ -92,25 +92,29 @@ Cảm ơn bạn đã liên hệ ${brand}. Chúng tôi sẽ phản hồi sớm nh
 Nội dung:
 ${message}`;
 
-    // Gửi mail (không để lỗi mail làm fail API — vẫn trả 201)
+    // --------- Gửi mail (không làm fail API nếu lỗi mail) ----------
     try {
       await Promise.all([
+        // Mail về nội bộ: to = info@, reply-to = email khách
         sendEmailResend(c, {
-          to: admin,
+          to: contactTo,
           subject: `[${brand}] New contact from ${fullName}`,
           html: adminHtml,
           text: adminText,
-          replyTo: email, // Admin bấm Reply là trả lời thẳng người gửi
+          replyTo: email,
         }),
+        // Mail xác nhận cho khách: to = khách, reply-to = info@
         sendEmailResend(c, {
           to: email,
           subject: `Cảm ơn bạn đã liên hệ ${brand}`,
           html: userHtml,
           text: userText,
+          replyTo: contactTo,
         }),
       ]);
     } catch (mailErr) {
       console.error("Email error:", mailErr);
+      // vẫn tiếp tục trả 201
     }
 
     return ok(c, { item: newItem }, 201);
@@ -119,7 +123,6 @@ ${message}`;
     return bad(c, "Failed to create contact", 500);
   }
 });
-
 // PATCH: đổi trạng thái
 contactRouter.patch("/:id/status", async (c) => {
   const id = parseInt(c.req.param("id"), 10);
