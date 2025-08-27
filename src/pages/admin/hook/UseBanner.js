@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-
+import { getToken } from '../../../../api/admin/auth';
 const useBanner = () => {
   const [banners, setBanners] = useState([]);
   const [bannerLoading, setBannerLoading] = useState(false);
@@ -8,10 +8,14 @@ const useBanner = () => {
   const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
   const [bannerToEdit, setBannerToEdit] = useState(null);
 
+    const authHeaders = () => {
+        const token = getToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+    };
   const fetchBanner = useCallback(async () => {
     try {
       setBannerLoading(true);
-      const res = await fetch(`/api/banners`);
+        const res = await fetch(`/api/banners`);
       const data = await res.json();
       if (!res.ok || data.ok === false) {
         console.error(data.error || "Failed to load banners");
@@ -49,7 +53,7 @@ const useBanner = () => {
   const handleAddBanner = async (newItem) => {
     const res = await fetch('/api/banners', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(newItem),
     });
     const data = await res.json();
@@ -64,7 +68,7 @@ const useBanner = () => {
   const handleUpdateBanner = async (updatedItem) => {
     const res = await fetch(`/api/banners/${updatedItem.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(updatedItem),
     });
     const data = await res.json();
@@ -78,7 +82,7 @@ const useBanner = () => {
 
   const handleDeleteBanner = async (id) => {
     if (!window.confirm('Bạn có chắc chắn muốn xóa mục này?')) return;
-    const res = await fetch(`/api/banners/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/banners/${id}`, { method: 'DELETE', headers: authHeaders() });
     const data = await res.json();
     if (!res.ok || data.ok === false) {
       alert(data.error || 'Xóa thất bại');

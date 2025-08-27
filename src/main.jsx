@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./index.css";
 import "./i18n.js";
 import { TProvider } from "./context/TContext";
@@ -17,9 +17,10 @@ import ProductDetailPage from "./pages/ProductDetail";
 import News from "./pages/News";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import ScrollToTop from "./components/ScrollTop";
-import GlobalWhatsApp from "./components/GlobalWhatsApp";;
+import GlobalWhatsApp from "./components/GlobalWhatsApp";
 import News_Detail from "./pages/NewsDetail";
-import RequireAuth from "./pages/admin/components/RequireAuth";
+import AdminRoute from "./pages/admin/components/AdminRoutes.jsx";
+import RequireAuth from "./pages/admin/components/RequireAuth.jsx";
 import UserChat from "./pages/UserChat";
 
 createRoot(document.getElementById("root")).render(
@@ -41,13 +42,29 @@ createRoot(document.getElementById("root")).render(
                     <Route path="/contact" element={<ContactPage />} />
                     <Route path="/news" element={<News />} />
                     <Route path="/chat" element={<UserChat />} />
-                    <Route path="/api/admin/login" element={<AdminLogin />} />
                     <Route
-                        path="/api/admin/dashboard"
+                        path="/admin"
                         element={
                             <RequireAuth>
-                                <AdminDashboard />
+                                <Navigate to="/admin/dashboard" replace />
                             </RequireAuth>
+                        }
+                    />
+                    <Route
+                        path="/admin/"
+                        element={
+                            <RequireAuth>
+                                <Navigate to="/admin/dashboard" replace />
+                            </RequireAuth>
+                        }
+                    />
+                    <Route path="/admin/login" element={<AdminLogin />} />
+                    <Route
+                        path="/admin/dashboard"
+                        element={
+                            <AdminRoute>
+                                <AdminDashboard />
+                            </AdminRoute>
                         }
                     />
                 </Routes>

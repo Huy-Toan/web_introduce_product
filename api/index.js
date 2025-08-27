@@ -17,6 +17,12 @@ import fieldRouter from "./routes/field";
 import cerPartnerRouter from "./routes/cer-partner";
 import translateRouter from "./routes/translate";
 import { seoRoot, sitemaps } from "./routes/seo-sitemap.js";
+import adminRouter from "./admin/admin.js";
+import { requireAdminAuth, requirePerm } from "./auth/authMidleware.js";
+import { jwtVerify } from "jose";
+import { getCookie } from "hono/cookie";
+const enc = new TextEncoder();
+const getKey = (secret) => enc.encode(secret);
 
 const GRAPH = "https://graph.facebook.com/v20.0";
 const app = new Hono();
@@ -323,7 +329,92 @@ app.get("/wa/history", async (c) => {
     );
 });
 
+// ======== Admin page guard and redirects ========
+const verifyAdmin = async (c) => {
+    const token = getCookie(c, "token");
+    if (!token || !c.env.JWT_SECRET) return null;
+    try {
+        const { payload } = await jwtVerify(token, getKey(c.env.JWT_SECRET));
+        const { jti } = payload;
+        const row = await c.env.DB?.prepare(
+            "SELECT revoked, expires_at FROM sessions WHERE jti = ?"
+        )
+            .bind(jti)
+            .first();
+        if (!row || row.revoked || !row.expires_at || row.expires_at < Date.now() / 1000)
+            return null;
+        return payload;
+    } catch {
+        return null;
+    }
+};
+
+const serveAdminLogin = async (c) => {
+    const user = await verifyAdmin(c);
+    if (user) return c.redirect("/admin/dashboard", 302);
+    const res = await c.env.ASSETS.fetch(c.req.raw);
+    const headers = new Headers(res.headers);
+    headers.set("Cache-Control", "no-store");
+    return new Response(res.body, { ...res, headers });
+};
+
+app.get("/admin/login", serveAdminLogin);
+app.get("/admin/login/", serveAdminLogin);
+
+const redirectAdminRoot = async (c) => {
+    const user = await verifyAdmin(c);
+    if (!user) return c.redirect("/admin/login", 302);
+    return c.redirect("/admin/dashboard", 302);
+};
+
+app.get("/admin", redirectAdminRoot);
+app.get("/admin/", redirectAdminRoot);
+
+app.route("/admin/api", adminRouter);
+
+app.get("/admin/*", async (c) => {
+    if (c.req.path.startsWith("/admin/api")) return c.notFound();
+    const user = await verifyAdmin(c);
+    if (!user) return c.redirect("/admin/login", 302);
+    // Serve SPA assets for admin pages
+    return c.env.ASSETS.fetch(c.req.raw);
+});
+
 /* ========================= 4) Routers hiện có ========================= */
+
+// Protect sensitive API routes with authentication/authorization
+const adminOnlyPaths = [
+    "/api/banners",
+    "/api/about",
+    "/api/news",
+    "/api/fields",
+    "/api/contacts",
+    "/api/products",
+    "/api/parent_categories",
+    "/api/sub_categories",
+    "/api/cer-partners",
+    "/api/upload-image",
+    "/api/editor-upload",
+    "/api/translate",
+];
+
+
+const protectContent = async (c, next) => {
+    const method = c.req.method;
+    if (method === "GET" || method === "OPTIONS") return next();
+    await requireAdminAuth(c, async () => {
+        await requirePerm("content.manage")(c, next);
+    });
+};
+
+for (const path of adminOnlyPaths) {
+    app.use(path, protectContent);
+    app.use(`${path}/*`, protectContent);
+}
+app.use("/api/users", requireAdminAuth);
+app.use("/api/users/*", requireAdminAuth);
+app.use("/api/users", requirePerm("users.manage"));
+app.use("/api/users/*", requirePerm("users.manage"));
 app.route("/", seoRoot);          
 app.route("/sitemaps", sitemaps); 
 

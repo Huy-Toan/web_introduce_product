@@ -1,18 +1,24 @@
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { setAuth } from "../../../api/admin/auth";
-
+import { setAuth, getToken, isTokenStillValid } from "../../../api/admin/auth";
 function AdminLogin() {
   const navigate = useNavigate();
   const location = useLocation();
 
   // Đường cần quay lại sau khi login
-  const from = location.state?.from?.pathname || "/api/admin/dashboard";
+    const from = location.state?.from?.pathname || "/admin/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false); // ✅ thêm
+
+    useEffect(() => {
+        const token = getToken();
+        if (token && isTokenStillValid(token)) {
+            navigate("/admin/dashboard", { replace: true });
+        }
+    }, [navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -48,11 +54,7 @@ function AdminLogin() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <div className="w-full max-w-md bg-white p-8 rounded shadow">
-        {from !== "/api/admin/dashboard" && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-600">
-            Bạn sẽ được chuyển về: <strong>{from}</strong>
-          </div>
-        )}
+
 
         <form onSubmit={handleLogin} className="space-y-4">
           <input

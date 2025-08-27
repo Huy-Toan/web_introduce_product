@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-
+import { getToken } from '../../../../api/admin/auth';
 const useAbout = () => {
   const [about, setAbout] = useState([]);
   const [aboutLoading, setAboutLoading] = useState(false);
@@ -8,10 +8,15 @@ const useAbout = () => {
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [aboutToEdit, setAboutToEdit] = useState(null);
 
+    const authHeaders = () => {
+        const token = getToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+    };
+
   const fetchAbout = async () => {
     try {
       setAboutLoading(true);
-      const res = await fetch(`/api/about`);
+        const res = await fetch(`/api/about`);
       const data = await res.json();
 
       setAbout(data.about || []);
@@ -42,7 +47,7 @@ const useAbout = () => {
   const handleAddAbout = async (newItem) => {
     const res = await fetch('/api/about', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(newItem),
     });
     if (res.ok) {
@@ -54,7 +59,7 @@ const useAbout = () => {
   const handleUpdateAbout = async (updatedItem) => {
     const res = await fetch(`/api/about/${updatedItem.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(updatedItem),
     });
     if (res.ok) {
@@ -65,7 +70,7 @@ const useAbout = () => {
 
   const handleDeleteAbout = async (id) => {
     if (confirm('Bạn có chắc chắn muốn xóa mục này?')) {
-      const res = await fetch(`/api/about/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/about/${id}`, { method: 'DELETE', headers: authHeaders() });
       if (res.ok) fetchAbout();
     }
   };
