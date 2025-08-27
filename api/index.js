@@ -398,7 +398,7 @@ app.route("/api/cer-partners", cerPartnerRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
-app.route("/api/admin", adminRouter);
+
 /* ====================== 5) Health check ====================== */
 app.get("/api/health", (c) =>
     c.json({

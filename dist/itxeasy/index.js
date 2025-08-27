@@ -34282,7 +34282,6 @@ app.route("/api/cer-partners", cerPartnerRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
-app.route("/api/admin", app$1);
 app.get(
   "/api/health",
   (c) => c.json({

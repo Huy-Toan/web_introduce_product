@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./index.css";
 import "./i18n.js";
 import { TProvider } from "./context/TContext";
@@ -20,6 +20,7 @@ import ScrollToTop from "./components/ScrollTop";
 import GlobalWhatsApp from "./components/GlobalWhatsApp";
 import News_Detail from "./pages/NewsDetail";
 import AdminRoute from "./pages/admin/components/AdminRoutes.jsx";
+import RequireAuth from "./pages/admin/components/RequireAuth.jsx";
 import UserChat from "./pages/UserChat";
 
 createRoot(document.getElementById("root")).render(
@@ -41,6 +42,22 @@ createRoot(document.getElementById("root")).render(
                     <Route path="/contact" element={<ContactPage />} />
                     <Route path="/news" element={<News />} />
                     <Route path="/chat" element={<UserChat />} />
+                    <Route
+                        path="/api/admin"
+                        element={
+                            <RequireAuth>
+                                <Navigate to="/api/admin/dashboard" replace />
+                            </RequireAuth>
+                        }
+                    />
+                    <Route
+                        path="/api/admin/"
+                        element={
+                            <RequireAuth>
+                                <Navigate to="/api/admin/dashboard" replace />
+                            </RequireAuth>
+                        }
+                    />
                     <Route path="/api/admin/login" element={<AdminLogin />} />
                     <Route
                         path="/api/admin/dashboard"
