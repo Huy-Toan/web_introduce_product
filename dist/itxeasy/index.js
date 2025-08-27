@@ -32746,18 +32746,32 @@ var Resend = class {
     });
   }
 };
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 async function sendEmailResend(c, { to, subject, html, text, replyTo }) {
   const apiKey = c.env.RESEND_API_KEY;
   if (!apiKey) throw new Error("Missing RESEND_API_KEY");
+  const configuredFrom = c.env.FROM_EMAIL || "no-reply@itxeasy.com";
+  const from = /@itxeasy\.com$/i.test(configuredFrom) ? `ITXEASY <${configuredFrom}>` : "ITXEASY <no-reply@itxeasy.com>";
+  const toArr = Array.isArray(to) ? to : [to].filter(Boolean);
+  if (!toArr.length || !subject || !(html || text)) {
+    throw new Error("Missing to/subject/body");
+  }
+  toArr.forEach((mail) => {
+    if (!EMAIL_RE.test(String(mail))) {
+      throw new Error(`Invalid recipient: ${mail}`);
+    }
+  });
   const resend = new Resend(apiKey);
-  const from = c.env.FROM_EMAIL || "onboarding@resend.dev";
   const payload = {
     from,
-    to: Array.isArray(to) ? to : [to],
+    to: toArr,
     subject,
     html,
     ...text ? { text } : {},
-    ...replyTo ? { reply_to: Array.isArray(replyTo) ? replyTo : [replyTo] } : {}
+    // mặc định reply_to là info@itxeasy.com
+    reply_to: Array.isArray(replyTo) ? replyTo : [replyTo || "info@itxeasy.com"]
+    // headers tuỳ chọn
+    // headers: { 'List-Unsubscribe': '<mailto:unsubscribe@itxeasy.com>' },
   };
   const { data, error } = await resend.emails.send(payload);
   if (error) throw new Error(error.message || "Resend failed");
@@ -32787,8 +32801,7 @@ contactRouter.post("/", async (c) => {
     const phone2 = (body.phone || "").trim();
     const address = (body.address || "").trim();
     const message2 = (body.message || "").trim();
-    if (!fullName || !email || !message2)
-      return bad$1(c, "fullName, email, message are required");
+    if (!fullName || !email || !message2) return bad$1(c, "fullName, email, message are required");
     if (!isEmail$1(email)) return bad$1(c, "Invalid email");
     const result = await c.env.DB.prepare(
       `INSERT INTO contact_messages (full_name, email, phone, address, message)
@@ -32798,7 +32811,7 @@ contactRouter.post("/", async (c) => {
       "SELECT * FROM contact_messages WHERE id = ?"
     ).bind(result.meta.last_row_id).first();
     const brand = c.env.BRAND_NAME || "Website";
-    const admin = c.env.ADMIN_EMAIL || "admin@example.com";
+    const contactTo = c.env.CONTACT_TO || "info@itxeasy.com";
     const adminHtml = `
       <div>
         <h2>New contact message</h2>
@@ -32809,7 +32822,7 @@ contactRouter.post("/", async (c) => {
         <p><b>Message:</b></p>
         <pre style="white-space:pre-wrap;">${message2}</pre>
         <hr/>
-        <p>Created at: ${newItem.created_at} — Status: ${newItem.status} — ID: ${newItem.id}</p>
+        <p>Created at: ${newItem?.created_at ?? ""} — Status: ${newItem?.status ?? ""} — ID: ${newItem?.id ?? ""}</p>
       </div>
     `;
     const adminText = `New contact from ${fullName}
@@ -32837,19 +32850,21 @@ Nội dung:
 ${message2}`;
     try {
       await Promise.all([
+        // Mail về nội bộ: to = info@, reply-to = email khách
         sendEmailResend(c, {
-          to: admin,
+          to: contactTo,
           subject: `[${brand}] New contact from ${fullName}`,
           html: adminHtml,
           text: adminText,
           replyTo: email
-          // Admin bấm Reply là trả lời thẳng người gửi
         }),
+        // Mail xác nhận cho khách: to = khách, reply-to = info@
         sendEmailResend(c, {
           to: email,
           subject: `Cảm ơn bạn đã liên hệ ${brand}`,
           html: userHtml,
-          text: userText
+          text: userText,
+          replyTo: contactTo
         })
       ]);
     } catch (mailErr) {
