@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getToken } from '../../../../api/admin/auth';
 
 const useField = () => {
   const [fields, setFields] = useState([]);
@@ -8,10 +9,15 @@ const useField = () => {
   const [isFieldModalOpen, setIsFieldModalOpen] = useState(false);
   const [fieldToEdit, setFieldToEdit] = useState(null);
 
+    const authHeaders = () => {
+        const token = getToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+    };
+
   const fetchFields = useCallback(async () => {
     try {
       setFieldLoading(true);
-      const res = await fetch('/api/fields');
+        const res = await fetch('/api/fields');
       const data = await res.json();
 
       if (!res.ok || data.ok === false) {
@@ -51,7 +57,7 @@ const useField = () => {
     // newItem: { name, content?, image_url? }
     const res = await fetch('/api/fields', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(newItem),
     });
     const data = await res.json();
@@ -67,7 +73,7 @@ const useField = () => {
     // updatedItem: { id, name?, content?, image_url? }
     const res = await fetch(`/api/fields/${updatedItem.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(updatedItem),
     });
     const data = await res.json();
@@ -81,7 +87,7 @@ const useField = () => {
 
   const handleDeleteField = async (id) => {
     if (!window.confirm('Bạn có chắc chắn muốn xóa mục này?')) return;
-    const res = await fetch(`/api/fields/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/fields/${id}`, { method: 'DELETE', headers: authHeaders() });
     const data = await res.json();
     if (!res.ok || data.ok === false) {
       alert(data.error || 'Xóa thất bại');

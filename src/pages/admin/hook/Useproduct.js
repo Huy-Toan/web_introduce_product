@@ -1,6 +1,6 @@
 // src/hooks/useProducts.js
 import { useEffect, useRef, useState } from 'react';
-
+import { getToken } from '../../../../api/admin/auth';
 /**
  * Hook quản lý sản phẩm + CRUD + subcategories.
  *
@@ -38,6 +38,10 @@ const useProducts = ({ initialSubSlug = '', initialSubId = '' } = {}) => {
   const productsControllerRef = useRef(null);
 
   // ===== Helpers =====
+    const authHeaders = () => {
+        const token = getToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+    };
   const safeAbort = (controllerRef) => {
     try {
       controllerRef.current?.abort?.();
@@ -79,7 +83,7 @@ const useProducts = ({ initialSubSlug = '', initialSubId = '' } = {}) => {
       const qs = params.toString();
       const url = `/api/products${qs ? `?${qs}` : ''}`;
 
-      const res = await fetch(url, { signal: controller.signal });
+        const res = await fetch(url, { signal: controller.signal });
       const data = await res.json();
 
       const list = Array.isArray(data?.products) ? data.products : [];
@@ -138,7 +142,7 @@ const useProducts = ({ initialSubSlug = '', initialSubId = '' } = {}) => {
     try {
       const res = await fetch('/api/products', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(newProduct),
       });
       if (!res.ok) {
@@ -159,7 +163,7 @@ const useProducts = ({ initialSubSlug = '', initialSubId = '' } = {}) => {
     try {
       const res = await fetch(`/api/products/${updatedProduct.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(updatedProduct),
       });
       if (!res.ok) {
@@ -179,7 +183,7 @@ const useProducts = ({ initialSubSlug = '', initialSubId = '' } = {}) => {
     if (!confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) return;
 
     try {
-      const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/products/${id}`, { method: 'DELETE', headers: authHeaders() });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         throw new Error(err?.error || 'Failed to delete product');

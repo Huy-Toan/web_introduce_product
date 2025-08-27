@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-
+import { getToken } from '../../../../api/admin/auth.js';
 const useNews = () => {
   const [news, setNews] = useState([]);
   const [newsloading, setLoading] = useState(false);
@@ -8,10 +8,16 @@ const useNews = () => {
   const [isNewsModalOpen, setIsModalOpen] = useState(false);
   const [newsToEdit, setNewsToEdit] = useState(null);
 
+
+    const authHeaders = () => {
+        const token = getToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+    };
+
   const fetchNews = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/news`);
+        const res = await fetch(`/api/news`);
       const data = await res.json();
 
       setNews(data.news || []);
@@ -44,7 +50,7 @@ const useNews = () => {
   const handleAddNews = async (newItem) => {
     const res = await fetch('/api/news', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(newItem),
     });
     if (res.ok) {
@@ -56,7 +62,7 @@ const useNews = () => {
   const handleUpdateNews = async (updatedItem) => {
     const res = await fetch(`/api/news/${updatedItem.id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
       body: JSON.stringify(updatedItem),
     });
     if (res.ok) {
@@ -67,7 +73,7 @@ const useNews = () => {
 
   const handleDeleteNews = async (id) => {
     if (confirm('Bạn có chắc chắn muốn xóa tin tức này?')) {
-      const res = await fetch(`/api/news/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/news/${id}`, { method: 'DELETE', headers: authHeaders() });
       if (res.ok) fetchNews();
     }
   };

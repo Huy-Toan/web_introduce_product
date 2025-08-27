@@ -1,6 +1,6 @@
 // src/hooks/useSubCategories.js
 import { useEffect, useState } from 'react';
-
+import { getToken } from '../../../../api/admin/auth';
 const useSubCategories = () => {
   const [subcategories, setSubcategories] = useState([]);
   const [subcategoriesLoading, setSubcategoriesLoading] = useState(false);
@@ -8,7 +8,10 @@ const useSubCategories = () => {
 
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
   const [subToEdit, setSubToEdit] = useState(null);
-
+    const authHeaders = () => {
+        const token = getToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+    };
   // Lưu bộ lọc hiện tại để reload sau khi CRUD
   const [currentParentFilter, setCurrentParentFilter] = useState({
     parent_id: undefined,
@@ -27,7 +30,7 @@ const useSubCategories = () => {
 
     try {
       setSubcategoriesLoading(true);
-      const res = await fetch(`/api/sub_categories${qs.toString() ? `?${qs.toString()}` : ''}`);
+        const res = await fetch(`/api/sub_categories${qs.toString() ? `?${qs.toString()}` : ''}`);
       const data = await res.json();
 
       setSubcategories(data.subcategories || []);
@@ -72,7 +75,7 @@ const useSubCategories = () => {
     try {
       const res = await fetch('/api/sub_categories', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(newItem),
       });
       if (!res.ok) {
@@ -95,7 +98,7 @@ const useSubCategories = () => {
     try {
       const res = await fetch(`/api/sub_categories/${updatedItem.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(updatedItem),
       });
       if (!res.ok) {
@@ -115,7 +118,10 @@ const useSubCategories = () => {
     if (!id) return;
     if (confirm('Bạn có chắc chắn muốn xóa danh mục con này?')) {
       try {
-        const res = await fetch(`/api/sub_categories/${id}`, { method: 'DELETE' });
+          const res = await fetch(`/api/sub_categories/${id}`, {
+              method: 'DELETE',
+              headers: authHeaders(),
+          });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err?.error || 'Failed to delete subcategory');

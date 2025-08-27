@@ -1,6 +1,6 @@
 // src/hooks/useCerPartner.js
 import { useState, useEffect, useCallback } from "react";
-
+import { getToken } from '../../../../api/admin/auth';
 const API_BASE = "/api/cer-partners";
 const normalizeType = (t) => (t || "").toString().trim().toLowerCase();
 
@@ -16,12 +16,15 @@ const useCerPartner = () => {
   const [currentTypeCerPartner, setCurrentTypeCerPartner] = useState("");
   const [isModalOpenCerPartner, setIsModalOpenCerPartner] = useState(false);
   const [editingItemCerPartner, setEditingItemCerPartner] = useState(null);
-
+    const authHeaders = () => {
+        const token = getToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+    };
   /** Lấy tất cả CerPartner */
   const getAllCerPartners = useCallback(async () => {
     try {
       setLoadingCerPartner(true);
-      const res = await fetch(API_BASE);
+        const res = await fetch(API_BASE);
       const data = await res.json();
       if (!res.ok || data.ok === false) {
         console.error(data.error || "Failed to load cer_partner");
@@ -56,7 +59,9 @@ const useCerPartner = () => {
       }
       try {
         setLoadingCerPartner(true);
-        const res = await fetch(`${API_BASE}/type/${encodeURIComponent(t)}`);
+          const res = await fetch(`${API_BASE}/type/${encodeURIComponent(t)}`, {
+              headers: authHeaders(),
+          });
         const data = await res.json();
         if (!res.ok || data.ok === false) {
           console.error(data.error || "Failed to load cer_partner by type");
@@ -102,7 +107,7 @@ const useCerPartner = () => {
   const createCerPartner = async (payload) => {
     const res = await fetch(API_BASE, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(payload),
     });
     const data = await res.json();
@@ -120,7 +125,7 @@ const useCerPartner = () => {
   const updateCerPartner = async (payload) => {
     const res = await fetch(`${API_BASE}/${payload.id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(payload),
     });
     const data = await res.json();
@@ -138,7 +143,10 @@ const useCerPartner = () => {
   const deleteCerPartner = async (id) => {
     if (!window.confirm("Bạn có chắc chắn muốn xoá mục này?"))
       return { ok: false, canceled: true };
-    const res = await fetch(`${API_BASE}/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API_BASE}/${id}`, {
+          method: "DELETE",
+          headers: authHeaders(),
+      });
     const data = await res.json();
     if (!res.ok || data.ok === false) {
       alert(data.error || "Xoá thất bại");

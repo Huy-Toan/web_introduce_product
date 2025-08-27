@@ -1,6 +1,6 @@
 // src/hooks/useParentCategories.js
 import { useState, useEffect } from 'react';
-
+import { getToken } from '../../../../api/admin/auth';
 const useParentCategories = () => {
   const [parents, setParents] = useState([]);
   const [parentsLoading, setParentsLoading] = useState(false);
@@ -8,7 +8,10 @@ const useParentCategories = () => {
 
   const [isParentModalOpen, setIsParentModalOpen] = useState(false);
   const [parentToEdit, setParentToEdit] = useState(null);
-
+    const authHeaders = () => {
+        const token = getToken();
+        return token ? { Authorization: `Bearer ${token}` } : {};
+    };
   // GET /api/parent_categories?limit=&offset=
   const fetchParents = async (opts = {}) => {
     const { limit, offset } = opts || {};
@@ -18,7 +21,7 @@ const useParentCategories = () => {
 
     try {
       setParentsLoading(true);
-      const res = await fetch(`/api/parent_categories${qs.toString() ? `?${qs.toString()}` : ''}`);
+        const res = await fetch(`/api/parent_categories${qs.toString() ? `?${qs.toString()}` : ''}`);
       const data = await res.json();
 
       setParents(data.parents || []);
@@ -56,7 +59,7 @@ const useParentCategories = () => {
     try {
       const res = await fetch('/api/parent_categories', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(newItem),
       });
       if (!res.ok) {
@@ -78,7 +81,7 @@ const useParentCategories = () => {
     try {
       const res = await fetch(`/api/parent_categories/${updatedItem.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(updatedItem),
       });
       if (!res.ok) {
@@ -98,7 +101,10 @@ const useParentCategories = () => {
     if (!id) return;
     if (confirm('Bạn có chắc chắn muốn xóa danh mục cha này? (Sẽ xóa cả danh mục con do ràng buộc CASCADE)')) {
       try {
-        const res = await fetch(`/api/parent_categories/${id}`, { method: 'DELETE' });
+          const res = await fetch(`/api/parent_categories/${id}`, {
+              method: 'DELETE',
+              headers: authHeaders(),
+          });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err?.error || 'Failed to delete parent category');
