@@ -32102,9 +32102,12 @@ async function translateContentInWorker(c, text, source, target) {
   if (!src) return "";
   const out = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
     messages: [
-      { role: "system", content: `Translate from ${source} to ${target}.
+      {
+        role: "system",
+        content: `Translate from ${source} to ${target}.
 Return PLAIN TEXT only (no markdown, no code fences, no labels).
-Keep short line breaks. Do not add headings or bullets.` },
+Keep short line breaks. Do not add headings or bullets.`
+      },
       { role: "user", content: src }
     ],
     temperature: 0
@@ -32152,6 +32155,59 @@ productsRouter.post("/import", async (c) => {
     let created = 0, updated = 0, skipped = 0;
     const errors = [];
     const locale = getLocale$3(c);
+    const subRes = await c.env.DB.prepare(`
+      SELECT
+        s.id                  AS id,
+        s.slug                AS s_slug,
+        s.name                AS s_name,
+        st.locale             AS t_locale,
+        st.slug               AS t_slug,
+        st.name               AS t_name
+      FROM subcategories s
+      LEFT JOIN subcategories_translations st
+        ON st.sub_id = s.id
+    `).all();
+    const subRows = subRes?.results || [];
+    const subById = /* @__PURE__ */ new Map();
+    const keyToId = /* @__PURE__ */ new Map();
+    const normalizeAscii = (s = "") => String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+    for (const r of subRows) {
+      const id = Number(r.id);
+      if (!Number.isFinite(id)) continue;
+      subById.set(id, r);
+      const keys2 = [r.s_name, r.s_slug, r.t_name, r.t_slug].filter(Boolean);
+      for (const k of keys2) {
+        keyToId.set(normalizeAscii(k), id);
+        keyToId.set(slugify(k), id);
+        keyToId.set(String(k).toLowerCase(), id);
+      }
+    }
+    const resolveSubcategoryId = (row) => {
+      const idRaw = row.subcategory_id;
+      if (idRaw != null && String(idRaw).trim() !== "") {
+        const n = Number(idRaw);
+        if (Number.isFinite(n) && subById.has(n)) return n;
+      }
+      const nameCandidates = [
+        row.subcategory_name,
+        row.subcategory,
+        row.subcat,
+        row.sub_category,
+        row.sub_cat_name,
+        row["subcategory(vi)"],
+        row["subcategory(en)"]
+      ].filter((v) => v != null && String(v).trim() !== "");
+      for (const v of nameCandidates) {
+        const s = String(v).trim();
+        const k1 = keyToId.get(normalizeAscii(s));
+        if (k1) return k1;
+        const k2 = keyToId.get(slugify(s));
+        if (k2) return k2;
+        const k3 = keyToId.get(s.toLowerCase());
+        if (k3) return k3;
+      }
+      return null;
+    };
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const title2 = toStr(row.title);
@@ -32164,23 +32220,15 @@ productsRouter.post("/import", async (c) => {
       slug = slugify(slug);
       const description = toStr(row.description);
       const image_url = toStr(row.image_url);
-      let subcategory_id = null;
-      if (row.subcategory_id != null && String(row.subcategory_id).trim() !== "") {
-        const idNum = Number(row.subcategory_id);
-        if (Number.isFinite(idNum)) subcategory_id = idNum;
-      } else if (row.subcategory) {
-        const subKey = toStr(row.subcategory);
-        if (subKey) {
-          const rs = await c.env.DB.prepare(`
-              SELECT s.id
-              FROM subcategories s
-              LEFT JOIN subcategories_translations st
-                ON st.sub_id = s.id AND st.locale = ?
-              WHERE s.slug = ? OR st.slug = ? OR s.name = ? OR st.name = ?
-              LIMIT 1
-            `).bind(locale, slugify(subKey), slugify(subKey), subKey, subKey).first();
-          if (rs?.id) subcategory_id = rs.id;
-        }
+      const subcategory_id = resolveSubcategoryId(row);
+      if (!subcategory_id) {
+        skipped++;
+        errors.push({
+          row: i + 1,
+          reason: "subcategory_not_found",
+          value: row.subcategory_name ?? row.subcategory ?? row.subcat ?? row.sub_category ?? row.sub_cat_name ?? row.subcategory_id ?? ""
+        });
+        continue;
       }
       if (dryRun) {
         created++;
@@ -32198,7 +32246,7 @@ productsRouter.post("/import", async (c) => {
           description || null,
           content,
           image_url || null,
-          subcategory_id == null ? null : Number(subcategory_id),
+          Number(subcategory_id),
           exists.id
         ).run();
         productId = exists.id;
@@ -32214,7 +32262,7 @@ productsRouter.post("/import", async (c) => {
           description || null,
           content,
           image_url || null,
-          subcategory_id == null ? null : Number(subcategory_id)
+          Number(subcategory_id)
         ).run();
         if (res.success) {
           productId = res.meta?.last_row_id;

@@ -1,8 +1,4 @@
-<<<<<<<< HEAD:dist/client/assets/index-CCQifFZ9.js
-import{R}from"./index-tLv_ho7m.js";var le=Object.defineProperty,D=Object.getOwnPropertySymbols,V=Object.prototype.hasOwnProperty,x=Object.prototype.propertyIsEnumerable,Y=(u,l,s)=>l in u?le(u,l,{enumerable:!0,configurable:!0,writable:!0,value:s}):u[l]=s,z=(u,l)=>{for(var s in l||(l={}))V.call(l,s)&&Y(u,s,l[s]);if(D)for(var s of D(l))x.call(l,s)&&Y(u,s,l[s]);return u},U=(u,l)=>{var s={};for(var c in u)V.call(u,c)&&l.indexOf(c)<0&&(s[c]=u[c]);if(u!=null&&D)for(var c of D(u))l.indexOf(c)<0&&x.call(u,c)&&(s[c]=u[c]);return s};/**
-========
-import{R}from"./index-C--_UD7v.js";var le=Object.defineProperty,D=Object.getOwnPropertySymbols,V=Object.prototype.hasOwnProperty,x=Object.prototype.propertyIsEnumerable,Y=(u,l,s)=>l in u?le(u,l,{enumerable:!0,configurable:!0,writable:!0,value:s}):u[l]=s,z=(u,l)=>{for(var s in l||(l={}))V.call(l,s)&&Y(u,s,l[s]);if(D)for(var s of D(l))x.call(l,s)&&Y(u,s,l[s]);return u},U=(u,l)=>{var s={};for(var c in u)V.call(u,c)&&l.indexOf(c)<0&&(s[c]=u[c]);if(u!=null&&D)for(var c of D(u))l.indexOf(c)<0&&x.call(u,c)&&(s[c]=u[c]);return s};/**
->>>>>>>> origin/feature/extra-function:dist/client/assets/index-CM9eECGi.js
+import{R}from"./index-UBk4WuRR.js";var le=Object.defineProperty,D=Object.getOwnPropertySymbols,V=Object.prototype.hasOwnProperty,x=Object.prototype.propertyIsEnumerable,Y=(u,l,s)=>l in u?le(u,l,{enumerable:!0,configurable:!0,writable:!0,value:s}):u[l]=s,z=(u,l)=>{for(var s in l||(l={}))V.call(l,s)&&Y(u,s,l[s]);if(D)for(var s of D(l))x.call(l,s)&&Y(u,s,l[s]);return u},U=(u,l)=>{var s={};for(var c in u)V.call(u,c)&&l.indexOf(c)<0&&(s[c]=u[c]);if(u!=null&&D)for(var c of D(u))l.indexOf(c)<0&&x.call(u,c)&&(s[c]=u[c]);return s};/**
  * @license QR Code generator library (TypeScript)
  * Copyright (c) Project Nayuki.
  * SPDX-License-Identifier: MIT
