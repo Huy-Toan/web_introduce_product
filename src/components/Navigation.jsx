@@ -89,18 +89,20 @@ function TopNavigation() {
 
     return (
         <header
-            className={`fixed top-0 left-0 right-0 z-50 bg-white border-b transition-shadow duration-300 ${scrolled ? "shadow-md" : "shadow-sm"}`}
+            className={`fixed top-0 left-0 right-0 z-50 bg-white transition-shadow duration-300 ${scrolled ? "shadow-md" : "shadow-sm"}`}
     >
             {/* Upper bar */}
             <div
-                className={`hidden md:block border-b overflow-hidden transition-all duration-300 ${scrolled ? "max-h-0 opacity-0" : "max-h-20 opacity-100"}`}
+                className={`hidden md:block bg-[#F5F2E8] overflow-hidden transition-all duration-300 ${scrolled ? "max-h-0 opacity-0" : "max-h-24 opacity-100"}`}
             >
-                <div className="max-w-7xl mx-auto px-4 flex items-center justify-between py-2">
-                    <div className="flex items-center space-x-2 text-green-700">
-                        <Phone className="h-5 w-5" />
-                        <div className="text-sm">
-                            <p className="text-xs text-gray-500">Call Anytime</p>
-                            <a href="tel:6668880000" className="font-medium text-gray-800">
+                <div className="max-w-7xl mx-auto px-4 flex items-center justify-between py-3">
+                    <div className="flex items-center space-x-2">
+                        <div className="p-3 bg-green-700 rounded-full text-white">
+                            <Phone className="h-5 w-5" />
+                        </div>
+                        <div className="text-base leading-tight">
+                            <p className="text-sm text-gray-500">Call Anytime</p>
+                            <a href="tel:6668880000" className="font-medium text-gray-800 text-lg leading-tight">
                                 666 888 0000
                             </a>
                         </div>
@@ -118,11 +120,13 @@ function TopNavigation() {
             />
           </div>
 
-                    <div className="flex items-center space-x-2 text-green-700">
-                        <Mail className="h-5 w-5" />
-                        <div className="text-sm">
-                            <p className="text-xs text-gray-500">Write Email</p>
-                            <a href="mailto:info@company.com" className="font-medium text-gray-800">
+                    <div className="flex items-center space-x-2">
+                        <div className="p-3 bg-green-700 rounded-full text-white">
+                            <Mail className="h-5 w-5" />
+                        </div>
+                        <div className="text-base leading-tight">
+                            <p className="text-sm text-gray-500">Write Email</p>
+                            <a href="mailto:info@company.com" className="font-medium text-gray-800 text-lg leading-tight">
                                 info@company.com
                             </a>
                         </div>
