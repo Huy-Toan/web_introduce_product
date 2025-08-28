@@ -2012,20 +2012,34 @@ var SmartRouter = class {
     let i = 0;
     let res;
     for (; i < len; i++) {
+<<<<<<< HEAD
       const router2 = routers[i];
       try {
         for (let i2 = 0, len2 = routes.length; i2 < len2; i2++) {
           router2.add(...routes[i2]);
         }
         res = router2.match(method, path);
+=======
+      const router = routers[i];
+      try {
+        for (let i2 = 0, len2 = routes.length; i2 < len2; i2++) {
+          router.add(...routes[i2]);
+        }
+        res = router.match(method, path);
+>>>>>>> 05698dd (update)
       } catch (e) {
         if (e instanceof UnsupportedPathError) {
           continue;
         }
         throw e;
       }
+<<<<<<< HEAD
       this.match = router2.match.bind(router2);
       this.#routers = [router2];
+=======
+      this.match = router.match.bind(router);
+      this.#routers = [router];
+>>>>>>> 05698dd (update)
       this.#routes = void 0;
       break;
     }
@@ -2286,16 +2300,28 @@ uploadImageRouter.post("/", async (c) => {
         contentDisposition: `inline; filename="${key.split("/").pop()}"`
       }
     });
+<<<<<<< HEAD
     if (!c.env.INTERNAL_R2_URL && !c.env.PUBLIC_R2_URL) {
       return c.json({ error: "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL" }, 500);
     }
     const storageBase = (c.env.INTERNAL_R2_URL || c.env.PUBLIC_R2_URL).replace(/\/+$/, "");
     const displayBase = (c.env.PUBLIC_R2_URL || storageBase).replace(/\/+$/, "");
+=======
+    if (!c.env.PUBLIC_R2_URL) {
+      return c.json({ error: "Thiếu PUBLIC_R2_URL trong cấu hình môi trường" }, 500);
+    }
+    const storageBase = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
+    const displayBase = (c.env.DISPLAY_BASE_URL || storageBase).replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const storageUrl = `${storageBase}/${key}`;
     const displayUrl = `${displayBase}/${key}`;
     return c.json({
       success: true,
       image_key: key,
+<<<<<<< HEAD
+=======
+      url: storageUrl,
+>>>>>>> 05698dd (update)
       displayUrl,
       fileName: key.split("/").pop(),
       alt: baseSlug,
@@ -2336,7 +2362,11 @@ editorUploadRouter.post("/", async (c) => {
     await r2.put(fileName, await file.arrayBuffer(), {
       httpMetadata: { contentType: file.type }
     });
+<<<<<<< HEAD
     const baseUrl2 = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const baseUrl2 = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const publicUrl = `${baseUrl2}/${fileName}`;
     return c.json({
       success: 1,
@@ -2349,6 +2379,7 @@ editorUploadRouter.post("/", async (c) => {
     return c.json({ success: 0, message: error.message }, 500);
   }
 });
+<<<<<<< HEAD
 const router = new Hono2();
 router.post("/", async (c) => {
   const { IMAGES, IMGPROC } = c.env;
@@ -2403,6 +2434,8 @@ function mimeFromKey(k) {
   if (ext === "gif") return "image/gif";
   return "image/jpeg";
 }
+=======
+>>>>>>> 05698dd (update)
 const DEFAULT_LOCALE$7 = "vi";
 const getLocale$7 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$7).toLowerCase();
 const hasDB$7 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
@@ -2450,7 +2483,11 @@ aboutRouter.get("/", async (c) => {
       ORDER BY a.id ASC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const about = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -2468,7 +2505,11 @@ aboutRouter.get("/:id", async (c) => {
     const locale = getLocale$7(c);
     const item = await getMergedAboutById(c.env.DB, id, locale);
     if (!item) return c.json({ error: "Not found" }, 404);
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const about = {
       ...item,
       image_url: item.image_url ? `${base}/${item.image_url}` : null
@@ -2701,7 +2742,11 @@ newsRouter.get("/", async (c) => {
     `;
     const params = [locale];
     const { results = [] } = await c.env.DB.prepare(sql).bind(...params).all();
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const news = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -2733,7 +2778,11 @@ newsRouter.get("/:idOrSlug", async (c) => {
     const raw = await getMergedNewsById(c.env.DB, newsId, locale);
     if (!raw) return c.json({ error: "Not found" }, 404);
     const translations = await getAllTranslations(c.env.DB, newsId);
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -3259,7 +3308,11 @@ parentsRouter.get("/", async (c) => {
     if (hasOffset) params.push(Number(offset));
     const result = await c.env.DB.prepare(baseSql).bind(...params).all();
     let parents = result?.results ?? [];
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const toFullUrl = (k) => k ? `${base}/${k}` : null;
     if (String(with_counts) === "1" && parents.length) {
       const ids = parents.map((p) => p.id);
@@ -3369,7 +3422,11 @@ parentsRouter.get("/:idOrSlug", async (c) => {
     `;
     const parent = await c.env.DB.prepare(sql).bind(locale, parentId).first();
     if (!parent) return c.json({ error: "Parent category not found" }, 404);
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const toFullUrl = (k) => k ? `${base}/${k}` : null;
     const outParent = {
       ...parent,
@@ -3625,7 +3682,11 @@ parentsRouter.get("/:slug/products", async (c) => {
     `;
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, parentId).all();
     const rawProducts = res?.results ?? [];
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const products = rawProducts.map((p) => ({
       ...p,
       image_url: p.image_url ? `${base}/${p.image_url}` : null
@@ -3660,7 +3721,11 @@ parentsRouter.get("/:idOrSlug/subcategories", async (c) => {
     `;
     const res = await c.env.DB.prepare(subsSql).bind(locale, parentId).all();
     const rawSubs = res?.results ?? [];
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const subcategories = rawSubs.map((s) => ({
       ...s,
       image_url: s.image_url ? `${base}/${s.image_url}` : null
@@ -3768,7 +3833,11 @@ subCategoriesRouter.get("/", async (c) => {
       }, {});
       subcategories = subcategories.map((s) => ({ ...s, product_count: counts[s.id] || 0 }));
     }
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     subcategories = subcategories.map((s) => ({
       ...s,
       image_url: s.image_url ? `${base}/${s.image_url}` : null
@@ -3819,7 +3888,11 @@ subCategoriesRouter.get("/:idOrSlug", async (c) => {
       const cnt = await c.env.DB.prepare(`SELECT COUNT(*) AS product_count FROM products WHERE subcategory_id = ?`).bind(raw.id).first();
       product_count = Number(cnt?.product_count || 0);
     }
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const subcategory = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null,
@@ -4089,7 +4162,11 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
     `;
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, subId).all();
     const rows = res?.results ?? [];
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const products = rows.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -31817,6 +31894,7 @@ const DEFAULT_LOCALE$3 = "vi";
 const getLocale$3 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$3).toLowerCase();
 const hasDB$3 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const slugify = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+<<<<<<< HEAD
 const withBase = (base, u) => {
   const s = String(u || "").trim();
   if (!s) return null;
@@ -31874,6 +31952,8 @@ function buildImagesView(images_json_text, base) {
   }
 }
 const productsRouter = new Hono2();
+=======
+>>>>>>> 05698dd (update)
 const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
   const isNumericId = /^\d+$/.test(idOrSlug);
   const sql = `
@@ -31884,8 +31964,11 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
       COALESCE(pt.description, p.description)   AS description,
       COALESCE(pt.content,     p.content)       AS content,
       p.image_url,
+<<<<<<< HEAD
       p.images_json,              -- NEW
       p.views,                    -- NEW
+=======
+>>>>>>> 05698dd (update)
       p.created_at,
       p.updated_at,
 
@@ -31904,6 +31987,10 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
   `;
   return isNumericId ? db.prepare(sql).bind(locale, locale, Number(idOrSlug)).first() : db.prepare(sql).bind(locale, locale, idOrSlug, idOrSlug).first();
 };
+<<<<<<< HEAD
+=======
+const productsRouter = new Hono2();
+>>>>>>> 05698dd (update)
 productsRouter.get("/", async (c) => {
   const { subcategory_id, sub_slug, limit, offset, q } = c.req.query();
   try {
@@ -31949,9 +32036,13 @@ productsRouter.get("/", async (c) => {
         COALESCE(pt.slug,  p.slug)                AS slug,
         COALESCE(pt.description, p.description)   AS description,
         COALESCE(pt.content,     p.content)       AS content,
+<<<<<<< HEAD
         p.image_url,
         p.images_json,             -- NEW
         p.views,                   -- NEW
+=======
+        p.image_url,                 -- KEY trong DB
+>>>>>>> 05698dd (update)
         p.created_at,
         p.updated_at,
 
@@ -31972,6 +32063,7 @@ productsRouter.get("/", async (c) => {
     `;
     const result = await c.env.DB.prepare(sql).bind(...params).all();
     const rows = result?.results ?? [];
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const products = rows.map((r) => {
       const { images, cover } = buildImagesView(r.images_json, base);
@@ -31986,6 +32078,13 @@ productsRouter.get("/", async (c) => {
         // NEW: url tuyệt đối
       };
     });
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const products = rows.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+>>>>>>> 05698dd (update)
     return c.json({
       products,
       count: products.length,
@@ -31998,6 +32097,7 @@ productsRouter.get("/", async (c) => {
     return c.json({ error: "Failed to fetch products" }, 500);
   }
 });
+<<<<<<< HEAD
 productsRouter.get("/:id/translations", async (c) => {
   const id = Number(c.req.param("id"));
   try {
@@ -32025,6 +32125,8 @@ productsRouter.get("/:id/translations", async (c) => {
     return c.json({ error: "Failed to get translations" }, 500);
   }
 });
+=======
+>>>>>>> 05698dd (update)
 productsRouter.get("/:idOrSlug", async (c) => {
   const idOrSlug = c.req.param("idOrSlug");
   try {
@@ -32032,6 +32134,7 @@ productsRouter.get("/:idOrSlug", async (c) => {
     const locale = getLocale$3(c);
     const raw = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
     if (!raw) return c.json({ error: "Product not found" }, 404);
+<<<<<<< HEAD
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(
       /\/+$/,
       ""
@@ -32045,6 +32148,12 @@ productsRouter.get("/:idOrSlug", async (c) => {
       // NEW
       cover_image: cover
       // NEW
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const product = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+>>>>>>> 05698dd (update)
     };
     return c.json({ product, source: "database", locale });
   } catch (err) {
@@ -32062,8 +32171,11 @@ productsRouter.post("/", async (c) => {
       description,
       content,
       image_url,
+<<<<<<< HEAD
       images_json,
       // NEW
+=======
+>>>>>>> 05698dd (update)
       subcategory_id,
       translations
     } = body || {};
@@ -32075,6 +32187,7 @@ productsRouter.post("/", async (c) => {
       const sub = await c.env.DB.prepare("SELECT id FROM subcategories WHERE id = ?").bind(Number(subcategory_id)).first();
       if (!sub) return c.json({ error: "subcategory_id not found" }, 400);
     }
+<<<<<<< HEAD
     let imagesJsonText = null;
     if (images_json !== void 0) {
       imagesJsonText = normalizeImagesInput(images_json);
@@ -32084,6 +32197,11 @@ productsRouter.post("/", async (c) => {
     const sql = `
       INSERT INTO products (title, slug, description, content, image_url, images_json, subcategory_id)
       VALUES (?, ?, ?, ?, ?, ?, ?)
+=======
+    const sql = `
+      INSERT INTO products (title, slug, description, content, image_url, subcategory_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+>>>>>>> 05698dd (update)
     `;
     const runRes = await c.env.DB.prepare(sql).bind(
       title2.trim(),
@@ -32091,7 +32209,10 @@ productsRouter.post("/", async (c) => {
       description || null,
       content,
       image_url || null,
+<<<<<<< HEAD
       imagesJsonText || null,
+=======
+>>>>>>> 05698dd (update)
       subcategory_id == null ? null : Number(subcategory_id)
     ).run();
     if (!runRes.success) throw new Error("Insert failed");
@@ -32140,8 +32261,11 @@ productsRouter.put("/:id", async (c) => {
       description,
       content,
       image_url,
+<<<<<<< HEAD
       images_json,
       // NEW
+=======
+>>>>>>> 05698dd (update)
       subcategory_id,
       translations
     } = body || {};
@@ -32171,10 +32295,13 @@ productsRouter.put("/:id", async (c) => {
       sets.push("image_url = ?");
       params.push(image_url);
     }
+<<<<<<< HEAD
     if (images_json !== void 0) {
       sets.push("images_json = ?");
       params.push(normalizeImagesInput(images_json));
     }
+=======
+>>>>>>> 05698dd (update)
     if (subcategory_id !== void 0) {
       sets.push("subcategory_id = ?");
       params.push(subcategory_id == null ? null : Number(subcategory_id));
@@ -32187,8 +32314,12 @@ productsRouter.put("/:id", async (c) => {
       `;
       params.push(id);
       const res = await c.env.DB.prepare(sql).bind(...params).run();
+<<<<<<< HEAD
       if ((res.meta?.changes || 0) === 0)
         return c.json({ error: "Product not found" }, 404);
+=======
+      if ((res.meta?.changes || 0) === 0) return c.json({ error: "Product not found" }, 404);
+>>>>>>> 05698dd (update)
     }
     if (translations && typeof translations === "object") {
       const upsertT = `
@@ -32260,6 +32391,35 @@ productsRouter.put("/:id/translations", async (c) => {
     return c.json({ error: "Failed to upsert translations" }, 500);
   }
 });
+<<<<<<< HEAD
+=======
+productsRouter.get("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
+    const sql = `
+      SELECT locale, title, slug, description, content
+      FROM products_translations
+      WHERE product_id = ?
+      ORDER BY locale ASC
+    `;
+    const { results = [] } = await c.env.DB.prepare(sql).bind(id).all();
+    const translations = {};
+    for (const row of results) {
+      translations[row.locale] = {
+        title: row.title || "",
+        slug: row.slug || "",
+        description: row.description || "",
+        content: row.content || ""
+      };
+    }
+    return c.json({ translations });
+  } catch (err) {
+    console.error("Error fetching product translations:", err);
+    return c.json({ error: "Failed to fetch translations" }, 500);
+  }
+});
+>>>>>>> 05698dd (update)
 productsRouter.delete("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
@@ -32276,6 +32436,7 @@ productsRouter.delete("/:id", async (c) => {
     return c.json({ error: "Failed to delete product" }, 500);
   }
 });
+<<<<<<< HEAD
 productsRouter.post("/:id/view", async (c) => {
   const id = Number(c.req.param("id"));
   try {
@@ -32289,6 +32450,8 @@ productsRouter.post("/:id/view", async (c) => {
     return c.json({ error: "Failed to update views" }, 500);
   }
 });
+=======
+>>>>>>> 05698dd (update)
 const toStr = (v) => v == null ? "" : String(v).trim();
 function csvToJson(text) {
   const lines = String(text || "").split(/\r?\n/).filter(Boolean);
@@ -32298,9 +32461,13 @@ function csvToJson(text) {
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(",");
     const obj = {};
+<<<<<<< HEAD
     headers.forEach(
       (h, idx) => obj[h] = cols[idx] != null ? cols[idx].trim() : ""
     );
+=======
+    headers.forEach((h, idx) => obj[h] = cols[idx] != null ? cols[idx].trim() : "");
+>>>>>>> 05698dd (update)
     rows.push(obj);
   }
   return rows;
@@ -32356,10 +32523,14 @@ function looksUntranslated(src, out, target) {
 async function translateTextInWorker(c, text, source, target) {
   const out = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
     messages: [
+<<<<<<< HEAD
       {
         role: "system",
         content: `Translate from ${source} to ${target}. Reply with translation only.`
       },
+=======
+      { role: "system", content: `Translate from ${source} to ${target}. Reply with translation only.` },
+>>>>>>> 05698dd (update)
       { role: "user", content: text }
     ],
     temperature: 0.2
@@ -32415,6 +32586,7 @@ productsRouter.post("/import", async (c) => {
       rows = csvToJson(text);
     }
     if (!rows.length) {
+<<<<<<< HEAD
       return c.json({
         ok: true,
         created: 0,
@@ -32422,6 +32594,9 @@ productsRouter.post("/import", async (c) => {
         skipped: 0,
         message: "No data rows found"
       });
+=======
+      return c.json({ ok: true, created: 0, updated: 0, skipped: 0, message: "No data rows found" });
+>>>>>>> 05698dd (update)
     }
     rows = rows.map((r) => {
       const out = {};
@@ -32484,6 +32659,7 @@ productsRouter.post("/import", async (c) => {
       }
       return null;
     };
+<<<<<<< HEAD
     const gatherImagesFromRow = (row) => {
       if (row.images_json) return normalizeImagesInput(row.images_json);
       const csv = row.images || row.image_urls;
@@ -32497,6 +32673,8 @@ productsRouter.post("/import", async (c) => {
       if (row.image_url) return normalizeImagesInput([row.image_url]);
       return null;
     };
+=======
+>>>>>>> 05698dd (update)
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const title2 = toStr(row.title);
@@ -32509,7 +32687,10 @@ productsRouter.post("/import", async (c) => {
       slug = slugify(slug);
       const description = toStr(row.description);
       const image_url = toStr(row.image_url);
+<<<<<<< HEAD
       const imagesJsonText = gatherImagesFromRow(row);
+=======
+>>>>>>> 05698dd (update)
       const subcategory_id = resolveSubcategoryId(row);
       if (!subcategory_id) {
         skipped++;
@@ -32527,6 +32708,7 @@ productsRouter.post("/import", async (c) => {
       const exists = await c.env.DB.prepare("SELECT id FROM products WHERE slug = ? LIMIT 1").bind(slug).first();
       let productId;
       if (exists?.id) {
+<<<<<<< HEAD
         const res = await c.env.DB.prepare(
           `
           UPDATE products
@@ -32534,11 +32716,21 @@ productsRouter.post("/import", async (c) => {
           WHERE id = ?
         `
         ).bind(
+=======
+        const res = await c.env.DB.prepare(`
+          UPDATE products
+          SET title = ?, description = ?, content = ?, image_url = ?, subcategory_id = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `).bind(
+>>>>>>> 05698dd (update)
           title2,
           description || null,
           content,
           image_url || null,
+<<<<<<< HEAD
           imagesJsonText,
+=======
+>>>>>>> 05698dd (update)
           Number(subcategory_id),
           exists.id
         ).run();
@@ -32546,18 +32738,28 @@ productsRouter.post("/import", async (c) => {
         if ((res.meta?.changes || 0) > 0) updated++;
         else skipped++;
       } else {
+<<<<<<< HEAD
         const res = await c.env.DB.prepare(
           `
           INSERT INTO products (title, slug, description, content, image_url, images_json, subcategory_id)
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `
         ).bind(
+=======
+        const res = await c.env.DB.prepare(`
+          INSERT INTO products (title, slug, description, content, image_url, subcategory_id)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).bind(
+>>>>>>> 05698dd (update)
           title2,
           slug,
           description || null,
           content,
           image_url || null,
+<<<<<<< HEAD
           imagesJsonText,
+=======
+>>>>>>> 05698dd (update)
           Number(subcategory_id)
         ).run();
         if (res.success) {
@@ -32586,12 +32788,19 @@ productsRouter.post("/import", async (c) => {
           const tDesc0 = toStr(row[`${lc}_description`]);
           const tCont0 = toStr(row[`${lc}_content`]);
           const tSlug0 = toStr(row[`${lc}_slug`]);
+<<<<<<< HEAD
           const tTitle = tTitle0 || await withRetry(() => translateTextInWorker(c, title2, source, lc), {
             tries,
             delayMs: delay0,
             backoff,
             timeoutMs: 8e3
           });
+=======
+          const tTitle = tTitle0 || await withRetry(
+            () => translateTextInWorker(c, title2, source, lc),
+            { tries, delayMs: delay0, backoff, timeoutMs: 8e3 }
+          );
+>>>>>>> 05698dd (update)
           const tDesc = tDesc0 || (description ? await withRetry(
             () => translateTextInWorker(c, description, source, lc),
             { tries, delayMs: delay0, backoff, timeoutMs: 8e3 }
@@ -32622,11 +32831,15 @@ productsRouter.post("/import", async (c) => {
         }
         const missing = required.filter((lc) => !trans[lc]?.ok);
         if (mode === "strict" && missing.length) {
+<<<<<<< HEAD
           errors.push({
             row: i + 1,
             reason: "strict_missing_required_locales",
             locales: missing
           });
+=======
+          errors.push({ row: i + 1, reason: "strict_missing_required_locales", locales: missing });
+>>>>>>> 05698dd (update)
         } else {
           for (const lc of targets) {
             if (!trans[lc]?.ok) continue;
@@ -33559,7 +33772,11 @@ bannerRouter.get("/", async (c) => {
       ORDER BY b.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -33578,7 +33795,11 @@ bannerRouter.get("/:id", async (c) => {
     const locale = getLocale$2(c);
     const raw = await getMergedBannerById(c.env.DB, id, locale);
     if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -33760,7 +33981,11 @@ fieldRouter.get("/", async (c) => {
       ORDER BY f.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -33785,7 +34010,11 @@ fieldRouter.get("/:id", async (c) => {
     const locale = getLocale$1(c);
     const raw = await getMergedFieldById(c.env.DB, id, locale);
     if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -33982,7 +34211,11 @@ cerPartnerRouter.get("/", async (c) => {
       ORDER BY c.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -34015,7 +34248,11 @@ cerPartnerRouter.get("/type/:type", async (c) => {
       ORDER BY c.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale, t).all();
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -34034,7 +34271,11 @@ cerPartnerRouter.get("/:id", async (c) => {
     const locale = getLocale(c);
     const raw = await getMergedById(c.env.DB, id, locale);
     if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 05698dd (update)
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -34385,6 +34626,7 @@ ${parentItems.map((i) => `  <url><loc>${esc(i.loc)}</loc>${i.lastmod ? `<lastmod
     "cache-control": "public, s-maxage=3600"
   });
 });
+<<<<<<< HEAD
 const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 function b64url(u8) {
@@ -34592,6 +34834,8 @@ ga4Router.get("/news-views", async (c) => {
     return c.json({ error: String(e.message || e) }, 500);
   }
 });
+=======
+>>>>>>> 05698dd (update)
 const app$1 = new Hono2();
 app$1.use("*", requireAdminAuth);
 app$1.post("/users", requirePerm("users.manage"), (c) => {
@@ -34600,6 +34844,7 @@ app$1.post("/users", requirePerm("users.manage"), (c) => {
 app$1.post("/content", requirePerm("content.manage"), (c) => {
   return c.json({ message: "Content updated" });
 });
+<<<<<<< HEAD
 const migrate0012 = new Hono2();
 async function getColumnSet(db, table) {
   const rs = await db.prepare(`PRAGMA table_info(${table});`).all();
@@ -34809,6 +35054,8 @@ migrate0012.get("/migrations/0012/check", async (c) => {
     return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
   }
 });
+=======
+>>>>>>> 05698dd (update)
 const enc = new TextEncoder();
 const getKey = (secret) => enc.encode(secret);
 const GRAPH = "https://graph.facebook.com/v20.0";
@@ -34837,6 +35084,7 @@ const addCORS = (res) => new Response(res.body, {
   })
 });
 app.options("/wa/*", () => addCORS(new Response(null, { status: 204 })));
+<<<<<<< HEAD
 const guardUpdate = async (c, next) => {
   const secret = c.env.UPDATE_SECRET;
   if (!secret) return next();
@@ -34846,6 +35094,8 @@ const guardUpdate = async (c, next) => {
   if (key !== secret) return c.json({ error: "Unauthorized" }, 401);
   await next();
 };
+=======
+>>>>>>> 05698dd (update)
 app.get("/webhook", (c) => {
   const url = new URL(c.req.url);
   const mode = url.searchParams.get("hub.mode");
@@ -34892,10 +35142,17 @@ app.post("/wa/send", async (c) => {
   const text = (body || "").toString();
   if (!env2.PHONE_NUMBER_ID || !env2.WHATSAPP_TOKEN) {
     return addCORS(
+<<<<<<< HEAD
       new Response(
         JSON.stringify({ ok: false, error: "Missing PHONE_NUMBER_ID or WHATSAPP_TOKEN" }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       )
+=======
+      new Response(JSON.stringify({ ok: false, error: "Missing PHONE_NUMBER_ID or WHATSAPP_TOKEN" }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" }
+      })
+>>>>>>> 05698dd (update)
     );
   }
   if (!dest || !text && !hasTemplate) {
@@ -35006,6 +35263,39 @@ app.post("/wa/inbox", async (c) => {
     })
   );
 });
+<<<<<<< HEAD
+=======
+app.post("/wa/inbox", async (c) => {
+  const env2 = c.env;
+  const { from, body } = await c.req.json().catch(() => ({}));
+  const sender = (from || "").replace(/\D/g, "");
+  const text = (body || "").toString();
+  if (!sender || !text) {
+    return addCORS(
+      new Response(JSON.stringify({ ok: false, error: "Missing from/body" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+  }
+  let dbInserted = false;
+  try {
+    if (env2.DB) {
+      await env2.DB.prepare(
+        "INSERT INTO messages(chat_id, direction, wa_from, wa_to, type, body, ts) VALUES (?,?,?,?,?,?,?)"
+      ).bind(sender, "in", sender, env2.BUSINESS_WA_E164 || "", "text", text, Date.now()).run();
+      dbInserted = true;
+    }
+  } catch (e) {
+    console.error("D1 insert incoming error:", e);
+  }
+  return addCORS(
+    new Response(JSON.stringify({ ok: true, dbInserted }), {
+      headers: { "Content-Type": "application/json" }
+    })
+  );
+});
+>>>>>>> 05698dd (update)
 app.get("/wa/history", async (c) => {
   const env2 = c.env;
   const { searchParams } = new URL(c.req.url);
@@ -35045,7 +35335,12 @@ const verifyAdmin = async (c) => {
     const row = await c.env.DB?.prepare(
       "SELECT revoked, expires_at FROM sessions WHERE jti = ?"
     ).bind(jti).first();
+<<<<<<< HEAD
     if (!row || row.revoked || !row.expires_at || row.expires_at < Date.now() / 1e3) return null;
+=======
+    if (!row || row.revoked || !row.expires_at || row.expires_at < Date.now() / 1e3)
+      return null;
+>>>>>>> 05698dd (update)
     return payload;
   } catch {
     return null;
@@ -35105,8 +35400,11 @@ app.use("/api/users", requirePerm("users.manage"));
 app.use("/api/users/*", requirePerm("users.manage"));
 app.route("/", seoRoot);
 app.route("/sitemaps", sitemaps);
+<<<<<<< HEAD
 app.use("/update/*", guardUpdate);
 app.route("/update", migrate0012);
+=======
+>>>>>>> 05698dd (update)
 app.route("/api/seo", seoApp);
 app.route("/api/auth", authRouter);
 app.route("/api/users", userRouter);
@@ -35122,8 +35420,11 @@ app.route("/api/cer-partners", cerPartnerRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
+<<<<<<< HEAD
 app.route("/api/ga4", ga4Router);
 app.route("/api/watermark", router);
+=======
+>>>>>>> 05698dd (update)
 app.get(
   "/api/health",
   (c) => c.json({
