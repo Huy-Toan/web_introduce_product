@@ -117,7 +117,10 @@ const useNewsForm = (form, setForm) => {
       const res = await fetch('/api/upload-image', { method: 'POST', body: fd, headers: authHeaders() })
     if (!res.ok) throw new Error('Upload ảnh thất bại')
     const data = await res.json()
-    return data.url
+    return {
+      image_key: data.image_key,                
+      previewUrl: data.displayUrl || data.url,  
+    };
   }, [])
 
   // ====== Cách 1: Keyword -> Full content ======

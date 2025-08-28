@@ -695,7 +695,9 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
 
       let finalImage = shared.image_url
       if (imageFile) {
-        finalImage = await uploadImage(imageFile)
+        const uploaded = await uploadImage(imageFile)
+        finalImage = uploaded.image_key         
+        setImagePreview(uploaded.previewUrl)   
       }
 
       if (/blob:|data:image\//.test(viMd)) {

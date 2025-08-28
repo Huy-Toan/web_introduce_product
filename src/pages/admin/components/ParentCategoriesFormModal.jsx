@@ -324,7 +324,10 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
     if (!response.ok) throw new Error('Upload failed');
     const data = await response.json();
-    return data.url;
+    return {
+      image_key: data.image_key,                 
+      previewUrl: data.displayUrl || data.url,
+    };
   };
 
   const handleSubmit = async (e) => {
@@ -350,7 +353,11 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     setIsUploading(true);
     try {
       let image_url = base.image_url;
-      if (imageFile) image_url = await uploadImage(imageFile);
+      if (imageFile) {
+        const uploaded = await uploadImage(imageFile);
+        image_url = uploaded.image_key;        
+        setImagePreview(uploaded.previewUrl); 
+      }
 
       // Base payload
       let payloadBase = { name: base.name, description: base.description, image_url };

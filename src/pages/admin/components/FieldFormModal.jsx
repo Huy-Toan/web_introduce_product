@@ -491,7 +491,10 @@ const FieldFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     const r = await fetch("/api/upload-image", { method: "POST", body: fd });
     if (!r.ok) throw new Error("Upload failed");
     const j = await r.json();
-    return j.url;
+    return {
+    image_key: j.image_key,                 
+    previewUrl: j.displayUrl || data.url,   
+  };
   };
 
   const handleSubmit = async (e) => {
@@ -502,7 +505,11 @@ const FieldFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     setIsUploading(true);
     try {
       let image_url = baseVI.image_url;
-      if (imageFile) image_url = await uploadImage(imageFile);
+
+      if (imageFile) {
+        const uploaded = await uploadImage(imageFile);
+        image_url = uploaded.image_key;                 
+      }
 
       const payload = {
         name: baseVI.name,

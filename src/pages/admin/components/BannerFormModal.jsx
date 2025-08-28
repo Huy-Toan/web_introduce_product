@@ -394,11 +394,17 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const uploadImage = async (file) => {
     const formData = new FormData();
     formData.append('image', file);
+
     const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
     if (!response.ok) throw new Error('Upload failed');
+
     const data = await response.json();
-    return data.url;
+    return {
+      image_key: data.image_key,
+      previewUrl: data.displayUrl || data.url, 
+    };
   };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
