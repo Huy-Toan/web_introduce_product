@@ -208,32 +208,6 @@ export default function Footer() {
 
             <p className="mb-3 text-gray-600">{t("footer.subscribe")}</p>
 
-            {/* FORM: nền trắng, shadow, border + focus xanh */}
-            <form
-              className="mb-5"
-              onSubmit={(e) => {
-                e.preventDefault();
-                // TODO: handle submit
-              }}
-            >
-              <div className="flex items-stretch rounded-xl bg-white shadow-sm border border-gray-200 overflow-hidden focus-within:border-green-500 focus-within:ring-2 focus-within:ring-green-100 transition">
-                <input
-                  type="email"
-                  placeholder={t("footer.email_placeholder")}
-                  className="px-4 py-3 w-full outline-none text-[15px] placeholder:text-gray-400"
-                  aria-label="Email"
-                  required
-                />
-                <button
-                  type="submit"
-                  className="bg-gradient-to-r from-green-500 to-green-600 text-white px-5 py-3 font-semibold cursor-pointer hover:from-green-600 hover:to-green-700 transition"
-                  aria-label="Subscribe"
-                >
-                  Gửi ▲
-                </button>
-              </div>
-            </form>
-
             {/* SOCIAL: gradient + shadow + transform */}
             <div className="flex items-center gap-3">
               <a
