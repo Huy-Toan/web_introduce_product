@@ -39,7 +39,6 @@ async function getMergedAboutById(db, id, locale) {
   return db.prepare(sql).bind(locale, id).first();
 }
 
-/** LIST: GET /api/about?locale=en */
 aboutRouter.get("/", async (c) => {
   try {
     if (!hasDB(c.env)) {
@@ -51,7 +50,7 @@ aboutRouter.get("/", async (c) => {
         a.id,
         COALESCE(at.title,   a.title)   AS title,
         COALESCE(at.content, a.content) AS content,
-        a.image_url,
+        a.image_url,      -- KEY trong DB
         a.created_at
       FROM about_us a
       LEFT JOIN about_us_translations at
@@ -59,7 +58,16 @@ aboutRouter.get("/", async (c) => {
       ORDER BY a.id ASC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-    return c.json({ about: results, source: "database", locale });
+
+    // build full URL
+    const base =
+      (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const about = results.map(r => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+
+    return c.json({ about, source: "database", locale });
   } catch (e) {
     console.error("Error fetching about list:", e);
     return c.json({ error: "Failed to fetch about us" }, 500);
@@ -74,13 +82,24 @@ aboutRouter.get("/:id", async (c) => {
     const locale = getLocale(c);
 
     const item = await getMergedAboutById(c.env.DB, id, locale);
+
     if (!item) return c.json({ error: "Not found" }, 404);
-    return c.json({ about: item, source: "database", locale });
+
+    // build full URL cho detail
+    const base =
+      (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const about = {
+      ...item,
+      image_url: item.image_url ? `${base}/${item.image_url}` : null
+    };
+
+    return c.json({ about, source: "database", locale });
   } catch (e) {
     console.error("Error fetching about detail:", e);
     return c.json({ error: "Failed to fetch about" }, 500);
   }
 });
+
 
 /**
  * CREATE: POST /api/about

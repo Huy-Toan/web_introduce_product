@@ -290,6 +290,8 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
   // —— giống product: tính rawData & isEditing chuẩn —— //
   const rawData = initialData?.news ? initialData.news : (initialData || {})
   const isEditing = Boolean(rawData?.id)
+  const [didChangeCover, setDidChangeCover] = useState(false);
+
 
   const [shared, setShared] = useState({ keyword: '', image_url: '' })
 
@@ -383,11 +385,9 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
   useEffect(() => {
     if (!isOpen) return
 
-    setShared({
-      keyword: '',
-      image_url: rawData.image_url || '',
-    })
-    setImagePreview(rawData.image_url || '')
+    setShared({ keyword: '', image_url: rawData.image_url || '' });
+    setImagePreview(rawData.image_url || '');
+    setDidChangeCover(false);
 
     const empty = { ...emptyLocaleBlock }
     const nextTr = Object.fromEntries(LANGUAGES.map(l => [l.code, { ...empty }]))
@@ -513,29 +513,30 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
   }
 
   async function replaceTempImagesInMarkdown(lc, markdown) {
-    let out = markdown
-    const re = /!\[[^\]]*]\(([^)]+)\)/g
-    const jobs = []
+    let out = markdown;
+    const re = /!\[[^\]]*]\(([^)]+)\)/g;
+    const jobs = [];
     for (const m of markdown.matchAll(re)) {
-      const url = m[1]
+      const url = m[1];
       if (url.startsWith('blob:')) {
-        const file = tempImagesByLocale.current[lc].get(url)
-        if (!file) continue
+        const file = tempImagesByLocale.current[lc].get(url);
+        if (!file) continue;
         jobs.push((async () => {
-          const u = await uploadImage(file)
-          out = out.split(url).join(u)
-        })())
+          const realUrl = await uploadImage(file, { forEditor: true }); // <- URL string
+          out = out.split(url).join(realUrl);
+        })());
       } else if (url.startsWith('data:image/')) {
         jobs.push((async () => {
-          const file = await dataURLtoFile(url)
-          const u = await uploadImage(file)
-          out = out.split(url).join(u)
-        })())
+          const file = await dataURLtoFile(url);
+          const realUrl = await uploadImage(file, { forEditor: true }); // <- URL string
+          out = out.split(url).join(realUrl);
+        })());
       }
     }
-    await Promise.all(jobs)
-    return out
+    await Promise.all(jobs);
+    return out;
   }
+
 
   function dataURLtoFile(dataurl) {
     const [meta, b64] = dataurl.split(',')
@@ -555,6 +556,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
     const r = new FileReader()
     r.onload = ev => setImagePreview(ev.target.result)
     r.readAsDataURL(f)
+    setDidChangeCover(true); 
   }
 
   const handleGenerateClick = async () => {
@@ -685,73 +687,78 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
   }
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    setIsUploading(true)
+    e.preventDefault();
+    setIsUploading(true);
     try {
-      const viTitle = (translations.vi?.title || '').trim()
-      if (!viTitle) { alert('Vui lòng nhập Tiêu đề (VI)'); setIsUploading(false); return }
-      let viMd = (mdByLocale.vi ?? translations.vi?.content ?? '').trim()
-      if (!viMd) { alert('Vui lòng nhập Nội dung (VI)'); setIsUploading(false); return }
-
-      let finalImage = shared.image_url
-      if (imageFile) {
-        finalImage = await uploadImage(imageFile)
-      }
+      const viTitle = (translations.vi?.title || '').trim();
+      if (!viTitle) { alert('Vui lòng nhập Tiêu đề (VI)'); setIsUploading(false); return; }
+      let viMd = (mdByLocale.vi ?? translations.vi?.content ?? '').trim();
+      if (!viMd) { alert('Vui lòng nhập Nội dung (VI)'); setIsUploading(false); return; }
 
       if (/blob:|data:image\//.test(viMd)) {
-        viMd = await replaceTempImagesInMarkdown('vi', viMd)
+        viMd = await replaceTempImagesInMarkdown('vi', viMd);
       }
 
-      let viSlug = (translations.vi?.slug || slugify(viTitle)).trim()
-      if (viSlug && !isValidSlug(viSlug)) {
-        viSlug = slugify(viSlug)
-      }
+      let viSlug = (translations.vi?.slug || slugify(viTitle)).trim();
+      if (viSlug && !isValidSlug(viSlug)) viSlug = slugify(viSlug);
 
+      // Base payload KHÔNG include image_url mặc định
       const basePayload = {
         title: viTitle,
         slug: viSlug,
         content: viMd,
-        image_url: finalImage || null,
         meta_description: (translations.vi?.meta || '').trim() || null,
         keywords: (translations.vi?.keywords || '').trim() || null,
-      }
+      };
 
-      const outTranslations = {}
-      for (const lc of Object.keys(translations)) {
-        if (lc === 'vi') continue
-        const t = translations[lc] || emptyLocaleBlock
-        let md = (mdByLocale[lc] ?? t.content ?? '').trim()
-        if (/blob:|data:image\//.test(md)) {
-          md = await replaceTempImagesInMarkdown(lc, md)
+      // Nếu cover thay đổi:
+      if (didChangeCover) {
+        if (imageFile) {
+          const uploaded = await uploadImage(imageFile); // object
+          basePayload.image_url = uploaded.image_key;    // Lưu KEY
+          setImagePreview(uploaded.previewUrl);
+        } else {
+          // Người dùng bấm X => xoá ảnh
+          basePayload.image_url = null;
         }
-        const anyField = (t.title || '').trim() || (t.meta || '').trim() || (t.keywords || '').trim() || md
-        if (!anyField) continue
-        let tSlug = (t.slug || slugify(t.title || '')).trim()
-        if (tSlug && !isValidSlug(tSlug)) tSlug = slugify(tSlug)
+      }
+      // Nếu KHÔNG thay đổi cover -> KHÔNG gửi image_url -> server giữ ảnh cũ
+
+      // Translations
+      const outTranslations = {};
+      for (const lc of Object.keys(translations)) {
+        if (lc === 'vi') continue;
+        const t = translations[lc] || emptyLocaleBlock;
+        let md = (mdByLocale[lc] ?? t.content ?? '').trim();
+        if (/blob:|data:image\//.test(md)) {
+          md = await replaceTempImagesInMarkdown(lc, md);
+        }
+        const anyField = (t.title || '').trim() || (t.meta || '').trim() || (t.keywords || '').trim() || md;
+        if (!anyField) continue;
+        let tSlug = (t.slug || slugify(t.title || '')).trim();
+        if (tSlug && !isValidSlug(tSlug)) tSlug = slugify(tSlug);
         outTranslations[lc] = {
           title: (t.title || '').trim(),
           slug: tSlug,
           content: md,
           meta_description: (t.meta || '').trim() || null,
           keywords: (t.keywords || '').trim() || null,
-        }
+        };
       }
 
-      const finalForm = {
-        ...basePayload,
-        translations: outTranslations,
-      }
-      if (isEditing) finalForm.id = rawData.id
+      const finalForm = { ...basePayload, translations: outTranslations };
+      if (isEditing) finalForm.id = rawData.id;
 
-      await onSubmit(finalForm)
-      handleClose()
+      await onSubmit(finalForm);
+      handleClose();
     } catch (err) {
-      console.error(err)
-      alert('Có lỗi khi lưu!')
+      console.error(err);
+      alert('Có lỗi khi lưu!');
     } finally {
-      setIsUploading(false)
+      setIsUploading(false);
     }
-  }
+  };
+
 
   const handleClose = () => {
     onClose()
@@ -1099,6 +1106,7 @@ export default function NewsFormModal({ isOpen, onClose, onSubmit, initialData =
                         setImageFile(null)
                         setImagePreview('')
                         setShared((p) => ({ ...p, image_url: '' }))
+                        setDidChangeCover(true);
                       }}
                       className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
                       disabled={isGenerating || isUploading}

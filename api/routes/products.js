@@ -71,7 +71,6 @@ productsRouter.get("/", async (c) => {
     }
 
     const locale = getLocale(c);
-    // Thứ tự bind: pt.locale, sct.locale, ...filters..., limit, offset
     const params = [locale, locale];
     const conds = [];
 
@@ -80,7 +79,6 @@ productsRouter.get("/", async (c) => {
       params.push(Number(subcategory_id));
     }
     if (sub_slug) {
-      // Chấp nhận slug gốc hoặc slug dịch của subcategory
       conds.push("(s.slug = ? OR sct.slug = ?)");
       params.push(String(sub_slug), String(sub_slug));
     }
@@ -116,7 +114,7 @@ productsRouter.get("/", async (c) => {
         COALESCE(pt.slug,  p.slug)                AS slug,
         COALESCE(pt.description, p.description)   AS description,
         COALESCE(pt.content,     p.content)       AS content,
-        p.image_url,
+        p.image_url,                 -- KEY trong DB
         p.created_at,
         p.updated_at,
 
@@ -137,7 +135,14 @@ productsRouter.get("/", async (c) => {
     `;
 
     const result = await c.env.DB.prepare(sql).bind(...params).all();
-    const products = result?.results ?? [];
+    const rows = result?.results ?? [];
+
+    // Build URL từ key
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const products = rows.map(r => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null,
+    }));
 
     return c.json({
       products,
@@ -152,6 +157,7 @@ productsRouter.get("/", async (c) => {
   }
 });
 
+
 /**
  * GET /api/products/:idOrSlug
  * Query: locale
@@ -163,8 +169,14 @@ productsRouter.get("/:idOrSlug", async (c) => {
     if (!hasDB(c.env)) return c.json({ error: "Database not available" }, 503);
 
     const locale = getLocale(c);
-    const product = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
-    if (!product) return c.json({ error: "Product not found" }, 404);
+    const raw = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
+    if (!raw) return c.json({ error: "Product not found" }, 404);
+
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const product = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null,
+    };
 
     return c.json({ product, source: "database", locale });
   } catch (err) {

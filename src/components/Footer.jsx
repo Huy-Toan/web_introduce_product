@@ -88,8 +88,8 @@ export default function Footer() {
               aria-label="AllXone"
             >
               <img
-                src="https://allxone.vn/wp-content/uploads/2022/08/cropped-logo1-150x31.png"
-                alt="AllXone Logo"
+                src="/itxeasy-logo.png"
+                alt="ITX Logo"
                 className="h-9 w-auto"
                 loading="lazy"
               />

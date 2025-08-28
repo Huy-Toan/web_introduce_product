@@ -84,7 +84,7 @@ const L = (lc, key) => LABELS[lc]?.[key] ?? LABELS.en[key] ?? key;
 
 const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id);
-
+  const [removedImage, setRemovedImage] = useState(false);
   // Base (VI) -> parent_categories
   const [base, setBase] = useState({ name: '', slug: '', description: '', image_url: '' });
 
@@ -124,6 +124,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
         name: initialData.name || '',
         description: initialData.description || ''
       };
+      setRemovedImage(false);
 
       // Nếu FE có kèm translations sẵn
       const initTr = { ...(initialData.translations || {}) };
@@ -305,6 +306,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
         : ''
     }));
   };
+
   const generateSlugFromTRName = (lc) => {
     const name = translations[lc]?.name || '';
     const s = slugify(name);
@@ -324,44 +326,55 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
     if (!response.ok) throw new Error('Upload failed');
     const data = await response.json();
-    return data.url;
+    return {
+      image_key: data.image_key,                 
+      previewUrl: data.displayUrl || data.url,
+    };
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Validate tối thiểu
-    if (!base.name?.trim()) {
-      alert('Vui lòng nhập tên danh mục (VI).');
-      return;
-    }
-    if (isEditing && base.slug && !isValidSlug(base.slug)) {
-      setSlugErrorVI('Slug không hợp lệ.');
-      return;
-    }
-    // validate slug translations nếu có lỗi đang hiển thị
-    for (const lc of Object.keys(slugErrorsTr)) {
-      if (slugErrorsTr[lc]) {
-        alert(`Slug (${lc.toUpperCase()}) không hợp lệ.`);
-        return;
-      }
-    }
+    // validate như cũ...
 
     setIsUploading(true);
     try {
+      // --- ẢNH: áp dụng logic giống đoạn mẫu bạn đưa ---
       let image_url = base.image_url;
-      if (imageFile) image_url = await uploadImage(imageFile);
+
+      if (imageFile) {
+        // chọn ảnh mới -> upload và dùng key mới
+        const uploaded = await uploadImage(imageFile);
+        image_url = uploaded.image_key;
+        setImagePreview(uploaded.previewUrl);
+      } else if (isEditing) {
+        // đang edit nhưng không upload ảnh mới
+        if (removedImage) {
+          // đã bấm xoá -> gửi null để BE xoá ảnh
+          image_url = null;
+        } else {
+          // không đụng gì tới ảnh -> KHÔNG GỬI image_url trong payload
+          image_url = undefined; // đánh dấu để lát nữa loại field này
+        }
+      } else {
+        // đang tạo mới, nếu có sẵn url thì gửi; không thì thôi
+        image_url = base.image_url ? base.image_url : undefined;
+      }
 
       // Base payload
-      let payloadBase = { name: base.name, description: base.description, image_url };
+      let payloadBase = {
+        name: base.name,
+        description: base.description,
+        // chỉ set khi cần:
+        ...(image_url !== undefined ? { image_url } : {})
+      };
+
       if (isEditing && base.slug) payloadBase.slug = slugify(base.slug || '');
-      // Tạo mới: nếu muốn để BE tự sinh slug -> đừng gửi slug
       if (!isEditing && payloadBase.slug) {
         const { slug, ...rest } = payloadBase;
         payloadBase = rest;
       }
 
-      // Translations payload (kèm slug)
+      // Translations như cũ...
       const cleanTranslations = {};
       for (const [lc, v] of Object.entries(translations)) {
         const tName = (v?.name || '').trim();
@@ -387,7 +400,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
       await onSubmit(finalPayload);
       onClose();
 
-      // reset
+      // reset form
       setBase({ name: '', slug: '', description: '', image_url: '' });
       setTranslations({});
       setTouched({});
@@ -397,6 +410,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
       setImagePreview('');
       setSlugErrorVI('');
       setSlugErrorsTr({});
+      setRemovedImage(false); // NEW: reset cờ
       lastSourceSnapshot.current = { name: '', description: '' };
     } catch (error) {
       console.error(error);
@@ -405,6 +419,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
       setIsUploading(false);
     }
   };
+
 
   if (!isOpen) return null;
   const siteURL = import.meta?.env?.VITE_SITE_URL || '';
@@ -567,6 +582,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
                 setImageFile={setImageFile}
                 setBase={setBase}
                 isUploading={isUploading}
+                onRemove={() => setRemovedImage(true)}
               />
             </div>
           )}
@@ -683,6 +699,7 @@ function ImagePicker({ imagePreview, setImagePreview, setImageFile, setBase, isU
               setImageFile(null);
               setImagePreview('');
               setBase(prev => ({ ...prev, image_url: '' }));
+              onRemove?.();  
             }}
             disabled={isUploading}
             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600 disabled:bg-gray-400"

@@ -112,20 +112,23 @@ uploadImageRouter.post('/', async (c) => {
       },
     });
 
-    // 5) Public URL
     if (!c.env.PUBLIC_R2_URL) {
       return c.json({ error: 'Thiếu PUBLIC_R2_URL trong cấu hình môi trường' }, 500);
     }
-    const baseUrl = c.env.PUBLIC_R2_URL.replace(/\/+$/, '');
-    const publicUrl = `${baseUrl}/${key}`;
+    const storageBase = c.env.PUBLIC_R2_URL.replace(/\/+$/, '');
+    const displayBase = (c.env.DISPLAY_BASE_URL || storageBase).replace(/\/+$/, '');
+
+    const storageUrl = `${storageBase}/${key}`;
+    const displayUrl = `${displayBase}/${key}`;
 
     return c.json({
       success: true,
-      url: publicUrl,
-      key,              
+      image_key: key,     
+      url: storageUrl,      
+      displayUrl,       
       fileName: key.split('/').pop(),
       alt: baseSlug,
-      prefix,          
+      prefix,
     });
   } catch (error) {
     console.error('Upload error:', error);

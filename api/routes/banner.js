@@ -48,13 +48,14 @@ bannerRouter.get("/", async (c) => {
       ORDER BY b.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-    return c.json({
-      ok: true,
-      items: results,
-      count: results.length,
-      source: "database",
-      locale,
-    });
+    const base =
+      (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const items = results.map(r => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+
+    return c.json({ ok: true, items, count: items.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching banners:", err);
     return c.json({ ok: false, error: "Failed to fetch banners" }, 500);
@@ -68,23 +69,23 @@ bannerRouter.get("/:id", async (c) => {
   try {
     if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);
     const locale = getLocale(c);
-    const item = await getMergedBannerById(c.env.DB, id, locale);
-    if (!item) return c.json({ ok: false, error: "Not found" }, 404);
+    const raw = await getMergedBannerById(c.env.DB, id, locale);
+    if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
+
+    const base =
+      (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const item = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+    };
+
     return c.json({ ok: true, item, source: "database", locale });
   } catch {
     return c.json({ ok: false, error: "Failed to fetch banner" }, 500);
   }
 });
 
-/**
- * CREATE: POST /api/banners
- * Body:
- * {
- *   content: string,
- *   image_url?: string,
- *   translations?: { en?: { content }, ja?: { content }, ... }
- * }
- */
+
 bannerRouter.post("/", async (c) => {
   try {
     if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);

@@ -257,7 +257,7 @@ export default function HomePage() {
       <TopNavigation />
       <Banner />
       <ProductCategories />
-        <IntroduceProductsSection products={products} />
+      <IntroduceProductsSection products={products} />
       <AboutSection />
       <FieldHighlightsSection />
       <CerPartnersSection />

@@ -91,7 +91,7 @@ function TopNavigation() {
                         title="AllXone"
                     >
                         <img
-                            src="https://allxone.vn/wp-content/uploads/2022/08/cropped-logo1-150x31.png"
+                            src="/itxeasy-logo.png"
                             alt="AllXone Logo"
                             className="h-8 w-auto"
                         />

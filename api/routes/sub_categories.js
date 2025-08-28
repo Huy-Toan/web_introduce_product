@@ -61,7 +61,6 @@ subCategoriesRouter.get("/", async (c) => {
 
     const locale = getLocale(c);
     const conds = [];
-    // Thứ tự params: sct.locale, pct.locale, ... (theo các bind bên dưới)
     const params = [locale, locale];
 
     if (parent_id) {
@@ -69,7 +68,6 @@ subCategoriesRouter.get("/", async (c) => {
       params.push(Number(parent_id));
     }
     if (parent_slug) {
-      // Chấp nhận cả slug gốc & slug dịch của parent
       conds.push("(pc.slug = ? OR pct.slug = ?)");
       params.push(String(parent_slug), String(parent_slug));
     }
@@ -121,6 +119,7 @@ subCategoriesRouter.get("/", async (c) => {
     const result = await c.env.DB.prepare(sql).bind(...params).all();
     let subcategories = result?.results ?? [];
 
+    // with_counts (giữ nguyên logic)
     if (String(with_counts) === "1" && subcategories.length) {
       const ids = subcategories.map(s => s.id);
       const placeholders = ids.map(() => "?").join(",");
@@ -139,6 +138,13 @@ subCategoriesRouter.get("/", async (c) => {
       subcategories = subcategories.map(s => ({ ...s, product_count: counts[s.id] || 0 }));
     }
 
+    // build full URL từ key
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    subcategories = subcategories.map(s => ({
+      ...s,
+      image_url: s.image_url ? `${base}/${s.image_url}` : null,
+    }));
+
     return c.json({
       subcategories,
       count: subcategories.length,
@@ -150,6 +156,7 @@ subCategoriesRouter.get("/", async (c) => {
     return c.json({ error: "Failed to fetch subcategories" }, 500);
   }
 });
+
 
 /**
  * GET /api/subcategories/:idOrSlug
@@ -186,27 +193,37 @@ subCategoriesRouter.get("/:idOrSlug", async (c) => {
       WHERE sc.id = ?
       LIMIT 1
     `;
-    const subcat = await c.env.DB
+    const raw = await c.env.DB
       .prepare(sql)
       .bind(locale, locale, subId)
       .first();
 
-    if (!subcat) return c.json({ error: "Subcategory not found" }, 404);
+    if (!raw) return c.json({ error: "Subcategory not found" }, 404);
 
+    let product_count = undefined;
     if (String(with_counts) === "1") {
       const cnt = await c.env.DB
         .prepare(`SELECT COUNT(*) AS product_count FROM products WHERE subcategory_id = ?`)
-        .bind(subcat.id)
+        .bind(raw.id)
         .first();
-      subcat.product_count = Number(cnt?.product_count || 0);
+      product_count = Number(cnt?.product_count || 0);
     }
 
-    return c.json({ subcategory: subcat, source: "database", locale });
+    // build full URL từ key
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const subcategory = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null,
+      ...(product_count !== undefined ? { product_count } : {}),
+    };
+
+    return c.json({ subcategory, source: "database", locale });
   } catch (err) {
     console.error("Error fetching subcategory:", err);
     return c.json({ error: "Failed to fetch subcategory" }, 500);
   }
 });
+
 
 /**
  * POST /api/subcategories
@@ -538,7 +555,7 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
         COALESCE(pt.description, p.description)   AS description,
         COALESCE(pt.content, p.content)           AS content,
         p.slug                                    AS product_slug,
-        p.image_url,
+        p.image_url,              -- KEY trong DB
         p.created_at,
         p.updated_at,
         s.id      AS subcategory_id,
@@ -562,12 +579,21 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
       ORDER BY p.created_at DESC
     `;
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, subId).all();
-    const products = res?.results ?? [];
+    const rows = res?.results ?? [];
+
+    // Build full URL từ key
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const products = rows.map(r => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null,
+    }));
+
     return c.json({ products, count: products.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching products by subcategory:", err);
     return c.json({ error: "Failed to fetch products by subcategory" }, 500);
   }
 });
+
 
 export default subCategoriesRouter;

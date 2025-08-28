@@ -29,7 +29,7 @@ editorUploadRouter.post('/', async (c) => {
 
     // Tạo tên file unique
     const ext = file.name.split('.').pop();
-    const fileName = `books/${uuidv4()}.${ext}`;
+    const fileName = `${uuidv4()}.${ext}`;
 
     // Upload lên R2
     const r2 = c.env.IMAGES;
@@ -37,15 +37,15 @@ editorUploadRouter.post('/', async (c) => {
       httpMetadata: { contentType: file.type },
     });
 
-    const baseUrl = c.env.PUBLIC_R2_URL.replace(/\/+$/, '');
+    // Build URL hiển thị
+    const baseUrl = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || '').replace(/\/+$/, '');
     const publicUrl = `${baseUrl}/${fileName}`;
 
-    // ✅ Format Editor.md cần
     return c.json({
       success: 1,
       message: 'OK',
-      url: publicUrl,
-      fileName, // giữ lại cho bạn dùng khi cần
+      url: publicUrl, 
+      fileName,       
     });
   } catch (error) {
     console.error('Upload error:', error);

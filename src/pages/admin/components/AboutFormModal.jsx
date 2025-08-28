@@ -249,6 +249,7 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
   const editorVIRef = useRef(null);
   const editorRefs = useRef({}); // per-locale
+  const [removedImage, setRemovedImage] = useState(false);
 
   // Load data when open
   useEffect(() => {
@@ -441,11 +442,18 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const uploadImage = async (file) => {
     const formData = new FormData();
     formData.append('image', file);
+
     const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
     if (!response.ok) throw new Error('Upload failed');
+
     const data = await response.json();
-    return data.url;
+    // Trả về key để lưu DB + URL để preview UI
+    return {
+      image_key: data.image_key,                
+      previewUrl: data.displayUrl || data.url,   
+    };
   };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -454,29 +462,49 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
     setIsUploading(true);
     try {
-      let image_url = baseVI.image_url;
-      if (imageFile) image_url = await uploadImage(imageFile);
-
       const payload = {
         title: baseVI.title,
         content: baseVI.content,
-        image_url,
       };
 
+      if (imageFile) {
+        const uploaded = await uploadImage(imageFile);
+        payload.image_url = uploaded.image_key;   
+      } else if (isEditing) {
+        // đang UPDATE mà không chọn ảnh mới:
+        if (removedImage) {
+          // user CHỦ ĐỘNG xóa ảnh -> gửi null để BE clear
+          payload.image_url = null;
+        } else {
+          // user KHÔNG đổi gì -> ĐỪNG gửi image_url để giữ nguyên DB
+          // (tức là bỏ qua field này)
+        }
+      } else {
+        // đang CREATE và không có ảnh -> cũng bỏ qua field này
+        // hoặc nếu bạn có sẵn key trong baseVI.image_url thì có thể gửi
+        if (baseVI.image_url) payload.image_url = baseVI.image_url;
+      }
+
+      // 3) translations
       const cleanTranslations = {};
       for (const [lc, v] of Object.entries(translations)) {
         const hasAny = v?.title || v?.content;
         if (!hasAny) continue;
-        cleanTranslations[lc] = { title: v.title || '', content: v.content || '' };
+        cleanTranslations[lc] = {
+          title: v.title || '',
+          content: v.content || '',
+        };
       }
       if (Object.keys(cleanTranslations).length) payload.translations = cleanTranslations;
 
+      // 4) id cho update
       if (isEditing) payload.id = initialData?.about?.id || initialData?.id;
 
+      // 5) submit
       await onSubmit(payload);
       onClose();
 
-      // reset
+      // reset form
       setBaseVI({ title: '', content: '', image_url: '' });
       setTranslations({});
       setTouched({});
@@ -484,6 +512,7 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       setActiveTab('vi');
       setImageFile(null);
       setImagePreview('');
+      setRemovedImage(false);
       lastSourceTitle.current = '';
       lastSourceContent.current = '';
     } catch (err) {
@@ -497,7 +526,8 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const removeImage = () => {
     setImageFile(null);
     setImagePreview('');
-    setBaseVI((prev) => ({ ...prev, image_url: '' }));
+    setBaseVI((prev) => ({ ...prev, image_url: '' })); 
+    setRemovedImage(true);
   };
 
   if (!isOpen) return null;
