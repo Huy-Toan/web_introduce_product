@@ -1,7 +1,7 @@
 // src/routes/UserRouter.js
 import { Hono } from "hono";
 import { requireAdminAuth, requirePerm } from "../auth/authMidleware.js";
-
+import { hashPassword, isStrongPassword } from "../utils/password.js";
 
 const userRouter = new Hono();
 
@@ -50,13 +50,19 @@ userRouter.post("/", async (c) => {
     const body = await c.req.json();
     const name = (body.name || "").trim();
     const email = (body.email || "").trim();
-    const password = (body.password || "").trim(); // Có thể hash ở đây
+      const passwordRaw = (body.password || "").trim();  //đã hash mật khẩu
     const role = (body.role || "user").trim();
 
-    if (!name || !email || !password)
+      if (!name || !email || !passwordRaw)
       return bad(c, "name, email, password are required");
     if (!isEmail(email)) return bad(c, "Invalid email");
+      if (!isStrongPassword(passwordRaw))
+          return bad(
+              c,
+              "Password must be at least 8 characters and include letters and numbers"
+          );
 
+      const password = await hashPassword(passwordRaw);
     const result = await c.env.DB.prepare(
       `INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`
     ).bind(name, email, password, role).run();
@@ -90,8 +96,14 @@ userRouter.put("/:id", async (c) => {
       binds.push(body.email.trim());
     }
     if (body.password) {
+        const pw = body.password.trim();
+        if (!isStrongPassword(pw))
+            return bad(
+                c,
+                "Password must be at least 8 characters and include letters and numbers"
+            );
       fields.push("password = ?");
-      binds.push(body.password.trim()); // Có thể hash ở đây
+        binds.push(await hashPassword(pw));  // đã hash mk
     }
     if (body.role) {
       fields.push("role = ?");

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 const UsersPanel = () => {
   const [users, setUsers] = useState([]);
@@ -60,8 +60,14 @@ const UsersPanel = () => {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+    const isStrongPassword = (s) => s.length >= 8 && /[A-Za-z]/.test(s) && /\d/.test(s);
+
   const saveUser = async (e) => {
     e.preventDefault();
+      if ((!editingUser && !isStrongPassword(form.password)) || (editingUser && form.password && !isStrongPassword(form.password))) {
+          alert("Mật khẩu phải có ít nhất 8 ký tự và bao gồm cả chữ lẫn số");
+          return;
+      }
     try {
       let res;
       if (editingUser) {

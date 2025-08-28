@@ -10,31 +10,17 @@ CREATE TABLE IF NOT EXISTS users (
     );
 INSERT INTO users (name, email, password, role) VALUES
 -- Toàn quyền hệ thống
-('Nguyễn Super Admin', 'superadmin@example.com', 'Temp@12345', 'superadmin'),
+('Nguyễn Super Admin', 'superadmin@example.com', '4eb1327d-d607-4018-af48-fe05d7798cac$78df21627204ce4f6af074f01bbbe813817612b9e1cf0299645fe094276b858f', 'superadmin'),
 
 -- Quản trị tổng (quản lý cấu hình chung, phê duyệt cao nhất)
-('Trần Quản Trị', 'admin@example.com', 'Temp@12345', 'admin'),
+('Trần Quản Trị', 'admin@example.com','f28aff65-53bb-4d2d-b1bf-e065f6c7176d$695b3e72d6802a2101fd81d2ac6f47518087ec6a58faf0e187e479f035eb2586' , 'admin'),
 
 -- Quản lý nội dung: bài viết, danh mục, media
-('Lê Content Manager', 'content.admin@example.com', 'Temp@12345', 'content_manager'),
+('Lê Content Manager', 'content.admin@example.com', 'e0c943fe-74e4-4c1a-b8df-8ed26f5b0407$284986c8a337a66c0ae7bcad3222c4c2417ee45b1e1c8d7fd1361b8cd4e17b20', 'content_manager'),
 
 -- Quản lý người dùng: tạo/sửa/xoá user, reset mật khẩu
-('Phạm User Manager', 'user.admin@example.com', 'Temp@12345', 'user_manager'),
+('Phạm User Manager', 'user.admin@example.com', '364e073e-0250-4cd3-b0a7-a4cce211bdb4$42b69e9829b942dc4c7a199dcea03238d4b476edf2ccbd7bbf2b2284ba6bf313', 'user_manager'),
 
--- Duyệt bình luận, xử lý báo cáo vi phạm
-('Đỗ Moderator', 'moderator@example.com', 'Temp@12345', 'moderator'),
-
--- Soạn thảo & xuất bản nội dung trong phạm vi được cấp
-('Vũ Biên Tập', 'editor@example.com', 'Temp@12345', 'editor'),
-
--- Hỗ trợ khách hàng: chỉ xem user & tạo ticket, không có quyền xoá
-('Hoàng Hỗ Trợ', 'support@example.com', 'Temp@12345', 'support'),
-
--- Xem và thao tác nghiệp vụ thanh toán/đơn hàng
-('Bùi Tài Chính', 'finance@example.com', 'Temp@12345', 'finance'),
-
--- Chỉ đọc để audit/log, không được chỉnh sửa
-('Mai Kiểm Toán', 'auditor@example.com', 'Temp@12345', 'auditor'),
 
 -- Người dùng thường
-('Ngô Người Dùng', 'user@example.com', 'Temp@12345', 'user');
+('Ngô Người Dùng', 'user@example.com', '011a0f1d-42ff-40f2-a8d5-ac421505dc3a$1e1260b740fd07b83705a088a5cb9cab71b0bb4affe6d72ca61cfabd56991557', 'user');

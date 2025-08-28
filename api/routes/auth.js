@@ -2,6 +2,7 @@
 import { Hono } from "hono";
 import { SignJWT } from "jose";
 import { setCookie } from "hono/cookie";
+import { verifyPassword } from "../utils/password.js";
 import { auth } from "../auth/authMidleware";
 
 const enc = new TextEncoder();
@@ -47,12 +48,9 @@ async function performLogin(c, body) {
             return { error: "Invalid credentials", code: 401 };
         }
 
-        // so sánh mật khẩu (hiện đang plaintext theo seed)
+        // so sánh mật khẩu đã băm
         console.log("Comparing passwords...");
-        console.log("Input password:", password);
-        console.log("Stored password:", user.password);
-
-        if (password !== user.password) {
+        if (!(await verifyPassword(password, user.password))) {
             console.log("Password mismatch");
             return { error: "Invalid credentials", code: 401 };
         }
