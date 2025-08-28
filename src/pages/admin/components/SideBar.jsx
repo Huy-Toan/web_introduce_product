@@ -11,15 +11,15 @@ const navItems = [
   { id: 'fields', label: 'Lĩnh vực', icon: Briefcase },
   { id: 'cer_partner', label: 'Chứng nhận & Đối tác', icon: Award },
   { id: 'users', label: 'Người dùng', icon: Users },
-    { id: 'contacts', label: 'Liên hệ', icon: Mail },
-    { id: 'chat', label: 'Chat', icon: MessageCircle }
+  { id: 'contacts', label: 'Liên hệ', icon: Mail },
+  { id: 'chat', label: 'Chat', icon: MessageCircle }
 ];
 
 const SidebarNav = ({ activeTab, setActiveTab }) => (
   <div className="w-64 bg-white shadow-lg">
   <div className="p-6 border-b flex items-center space-x-3">
     <img
-      src="https://allxone.vn/wp-content/uploads/2022/08/cropped-logo1-150x31.png"
+      src="/itxeasy-logo.png"
       alt="AllXone Logo"
       className="w-auto h-auto object-contain"
     />

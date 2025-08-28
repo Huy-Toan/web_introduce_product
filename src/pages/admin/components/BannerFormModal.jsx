@@ -411,8 +411,8 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       let finalForm = { ...form };
 
       if (imageFile) {
-        const uploadedImageUrl = await uploadImage(imageFile);
-        finalForm.image_url = uploadedImageUrl;
+        const uploaded = await uploadImage(imageFile);
+        finalForm.image_url = uploaded.image_key;
       }
 
       // gom translations có nội dung

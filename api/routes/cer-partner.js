@@ -28,7 +28,7 @@ async function getMergedById(db, id, locale) {
   return db.prepare(sql).bind(locale, id).first();
 }
 
-/** LIST all: GET /api/cp?locale=en */
+/** LIST: GET /api/cp?locale=en */
 cerPartnerRouter.get("/", async (c) => {
   try {
     if (!hasDB(c.env)) {
@@ -41,7 +41,7 @@ cerPartnerRouter.get("/", async (c) => {
         COALESCE(ct.name,    c.name)    AS name,
         c.type,
         COALESCE(ct.content, c.content) AS content,
-        c.image_url,
+        c.image_url,   -- KEY
         c.created_at
       FROM certifications_partners c
       LEFT JOIN certifications_partners_translations ct
@@ -49,7 +49,14 @@ cerPartnerRouter.get("/", async (c) => {
       ORDER BY c.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-    return c.json({ ok: true, items: results, count: results.length, source: "database", locale });
+
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const items = results.map(r => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+
+    return c.json({ ok: true, items, count: items.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching certifications_partners:", err);
     return c.json({ ok: false, error: "Failed to fetch items" }, 500);
@@ -71,7 +78,7 @@ cerPartnerRouter.get("/type/:type", async (c) => {
         COALESCE(ct.name,    c.name)    AS name,
         c.type,
         COALESCE(ct.content, c.content) AS content,
-        c.image_url,
+        c.image_url,   -- KEY
         c.created_at
       FROM certifications_partners c
       LEFT JOIN certifications_partners_translations ct
@@ -80,7 +87,14 @@ cerPartnerRouter.get("/type/:type", async (c) => {
       ORDER BY c.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale, t).all();
-    return c.json({ ok: true, items: results, count: results.length, type: t, locale });
+
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const items = results.map(r => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+
+    return c.json({ ok: true, items, count: items.length, type: t, locale });
   } catch (e) {
     console.error(e);
     return c.json({ ok: false, error: "Failed to fetch by type" }, 500);
@@ -94,14 +108,22 @@ cerPartnerRouter.get("/:id", async (c) => {
   try {
     if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);
     const locale = getLocale(c);
-    const item = await getMergedById(c.env.DB, id, locale);
-    if (!item) return c.json({ ok: false, error: "Not found" }, 404);
+    const raw = await getMergedById(c.env.DB, id, locale);
+    if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
+
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const item = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+    };
+
     return c.json({ ok: true, item, source: "database", locale });
   } catch (e) {
     console.error(e);
     return c.json({ ok: false, error: "Failed to fetch item" }, 500);
   }
 });
+
 
 /**
  * CREATE: POST /api/cp

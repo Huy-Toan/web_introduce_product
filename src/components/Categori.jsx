@@ -5,6 +5,12 @@ import { useNavigate, useLocation } from "react-router-dom";
 
 const SUPPORTED = ["vi", "en"];
 const DEFAULT_LOCALE = "vi";
+const DEFAULT_IMG = "/banner.jpg"
+
+const safeImg = (u) => {
+  const s = (u ?? "").toString().trim();
+  return s && s.toLowerCase() !== "null" ? s : DEFAULT_IMG;
+};
 
 function resolveLocale(propLocale, search) {
     const fromProp = (propLocale || "").toLowerCase();
@@ -101,9 +107,10 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
                         id: c.id,
                         name: c.name ?? c.title ?? c.slug ?? "Category",
                         slug: c.slug ?? (c.id != null ? String(c.id) : ""),
-                        image_url: c.image_url && c.image_url !== "null" ? c.image_url : null,
+                        image_url: safeImg(c.image_url),
                     }))
                 );
+
             } catch (err) {
                 if (err.name !== "AbortError") {
                     console.error("Failed to load parents:", err);
@@ -341,9 +348,9 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
                                                         style={caveatStyle}
                                                         className="text-2xl md:text-3xl"
                                                     >
-                            <span style={{ color: pink }}>
-                              {locale === "vi" ? "Đặc biệt hôm nay" : "Taste Now"}
-                            </span>
+                                                    <span style={{ color: pink }}>
+                                                    {locale === "vi" ? "Đặc biệt hôm nay" : "Taste Now"}
+                                                    </span>
                                                     </div>
 
                                                     {/* tiêu đề to nét viết tay */}

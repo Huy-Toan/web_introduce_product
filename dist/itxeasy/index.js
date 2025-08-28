@@ -2289,12 +2289,15 @@ uploadImageRouter.post("/", async (c) => {
     if (!c.env.PUBLIC_R2_URL) {
       return c.json({ error: "Thiếu PUBLIC_R2_URL trong cấu hình môi trường" }, 500);
     }
-    const baseUrl2 = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
-    const publicUrl = `${baseUrl2}/${key}`;
+    const storageBase = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
+    const displayBase = (c.env.DISPLAY_BASE_URL || storageBase).replace(/\/+$/, "");
+    const storageUrl = `${storageBase}/${key}`;
+    const displayUrl = `${displayBase}/${key}`;
     return c.json({
       success: true,
-      url: publicUrl,
-      key,
+      image_key: key,
+      url: storageUrl,
+      displayUrl,
       fileName: key.split("/").pop(),
       alt: baseSlug,
       prefix
@@ -2329,19 +2332,18 @@ editorUploadRouter.post("/", async (c) => {
       return c.json({ success: 0, message: "Ảnh vượt quá 5MB!" }, 400);
     }
     const ext = file.name.split(".").pop();
-    const fileName = `books/${uuidv4()}.${ext}`;
+    const fileName = `${uuidv4()}.${ext}`;
     const r2 = c.env.IMAGES;
     await r2.put(fileName, await file.arrayBuffer(), {
       httpMetadata: { contentType: file.type }
     });
-    const baseUrl2 = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
+    const baseUrl2 = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
     const publicUrl = `${baseUrl2}/${fileName}`;
     return c.json({
       success: 1,
       message: "OK",
       url: publicUrl,
       fileName
-      // giữ lại cho bạn dùng khi cần
     });
   } catch (error) {
     console.error("Upload error:", error);
@@ -2387,7 +2389,7 @@ aboutRouter.get("/", async (c) => {
         a.id,
         COALESCE(at.title,   a.title)   AS title,
         COALESCE(at.content, a.content) AS content,
-        a.image_url,
+        a.image_url,      -- KEY trong DB
         a.created_at
       FROM about_us a
       LEFT JOIN about_us_translations at
@@ -2395,7 +2397,12 @@ aboutRouter.get("/", async (c) => {
       ORDER BY a.id ASC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-    return c.json({ about: results, source: "database", locale });
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const about = results.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+    return c.json({ about, source: "database", locale });
   } catch (e) {
     console.error("Error fetching about list:", e);
     return c.json({ error: "Failed to fetch about us" }, 500);
@@ -2408,7 +2415,12 @@ aboutRouter.get("/:id", async (c) => {
     const locale = getLocale$7(c);
     const item = await getMergedAboutById(c.env.DB, id, locale);
     if (!item) return c.json({ error: "Not found" }, 404);
-    return c.json({ about: item, source: "database", locale });
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const about = {
+      ...item,
+      image_url: item.image_url ? `${base}/${item.image_url}` : null
+    };
+    return c.json({ about, source: "database", locale });
   } catch (e) {
     console.error("Error fetching about detail:", e);
     return c.json({ error: "Failed to fetch about" }, 500);
@@ -2625,7 +2637,7 @@ newsRouter.get("/", async (c) => {
         COALESCE(nt.content, n.content)             AS content,
         COALESCE(nt.meta_description, n.meta_description) AS meta_description,
         COALESCE(nt.keywords, n.keywords)           AS keywords,
-        n.image_url,
+        n.image_url,                 -- KEY trong DB
         n.published_at,
         n.created_at,
         n.updated_at
@@ -2636,9 +2648,14 @@ newsRouter.get("/", async (c) => {
     `;
     const params = [locale];
     const { results = [] } = await c.env.DB.prepare(sql).bind(...params).all();
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const news = results.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
     return c.json({
-      news: results,
-      count: results.length,
+      news,
+      count: news.length,
       source: "database",
       locale,
       debug: { sql, params }
@@ -2660,9 +2677,14 @@ newsRouter.get("/:idOrSlug", async (c) => {
       newsId = await resolveNewsIdBySlug(c.env.DB, idOrSlug, locale);
     }
     if (!newsId) return c.json({ error: "Not found" }, 404);
-    const item = await getMergedNewsById(c.env.DB, newsId, locale);
-    if (!item) return c.json({ error: "Not found" }, 404);
+    const raw = await getMergedNewsById(c.env.DB, newsId, locale);
+    if (!raw) return c.json({ error: "Not found" }, 404);
     const translations = await getAllTranslations(c.env.DB, newsId);
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const item = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+    };
     return c.json({ news: { ...item, translations }, source: "database", locale });
   } catch (err) {
     console.error("Error fetching news by id/slug:", err);
@@ -3184,6 +3206,8 @@ parentsRouter.get("/", async (c) => {
     if (hasOffset) params.push(Number(offset));
     const result = await c.env.DB.prepare(baseSql).bind(...params).all();
     let parents = result?.results ?? [];
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const toFullUrl = (k) => k ? `${base}/${k}` : null;
     if (String(with_counts) === "1" && parents.length) {
       const ids = parents.map((p) => p.id);
       const placeholders = ids.map(() => "?").join(",");
@@ -3244,7 +3268,8 @@ parentsRouter.get("/", async (c) => {
       const subsRes = await c.env.DB.prepare(subsSql).bind(locale, ...ids).all();
       const subs = subsRes?.results ?? [];
       const grouped = subs.reduce((acc, s) => {
-        (acc[s.parent_id] ||= []).push(s);
+        const out = { ...s, image_url: toFullUrl(s.image_url) };
+        (acc[s.parent_id] ||= []).push(out);
         return acc;
       }, {});
       parents = parents.map((p) => ({
@@ -3252,6 +3277,10 @@ parentsRouter.get("/", async (c) => {
         subcategories: grouped[p.id] || []
       }));
     }
+    parents = parents.map((p) => ({
+      ...p,
+      image_url: toFullUrl(p.image_url)
+    }));
     return c.json({
       parents,
       count: parents.length,
@@ -3287,6 +3316,12 @@ parentsRouter.get("/:idOrSlug", async (c) => {
     `;
     const parent = await c.env.DB.prepare(sql).bind(locale, parentId).first();
     if (!parent) return c.json({ error: "Parent category not found" }, 404);
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const toFullUrl = (k) => k ? `${base}/${k}` : null;
+    const outParent = {
+      ...parent,
+      image_url: toFullUrl(parent.image_url)
+    };
     if (String(with_subs) === "1") {
       const subsSql = `
         SELECT
@@ -3304,9 +3339,12 @@ parentsRouter.get("/:idOrSlug", async (c) => {
         ORDER BY sc.created_at DESC
       `;
       const subs = await c.env.DB.prepare(subsSql).bind(locale, parent.id).all();
-      parent.subcategories = subs?.results ?? [];
+      outParent.subcategories = (subs?.results ?? []).map((s) => ({
+        ...s,
+        image_url: toFullUrl(s.image_url)
+      }));
     }
-    return c.json({ parent, source: "database", locale });
+    return c.json({ parent: outParent, source: "database", locale });
   } catch (err) {
     console.error("Error fetching parent category:", err);
     return c.json({ error: "Failed to fetch parent category" }, 500);
@@ -3533,7 +3571,12 @@ parentsRouter.get("/:slug/products", async (c) => {
       ORDER BY p.created_at DESC
     `;
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, parentId).all();
-    const products = res?.results ?? [];
+    const rawProducts = res?.results ?? [];
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const products = rawProducts.map((p) => ({
+      ...p,
+      image_url: p.image_url ? `${base}/${p.image_url}` : null
+    }));
     return c.json({ products, count: products.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching products by parent category:", err);
@@ -3563,7 +3606,12 @@ parentsRouter.get("/:idOrSlug/subcategories", async (c) => {
       ORDER BY sc.created_at DESC
     `;
     const res = await c.env.DB.prepare(subsSql).bind(locale, parentId).all();
-    const subcategories = res?.results ?? [];
+    const rawSubs = res?.results ?? [];
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const subcategories = rawSubs.map((s) => ({
+      ...s,
+      image_url: s.image_url ? `${base}/${s.image_url}` : null
+    }));
     return c.json({ subcategories, count: subcategories.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching subcategories of parent:", err);
@@ -3667,6 +3715,11 @@ subCategoriesRouter.get("/", async (c) => {
       }, {});
       subcategories = subcategories.map((s) => ({ ...s, product_count: counts[s.id] || 0 }));
     }
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    subcategories = subcategories.map((s) => ({
+      ...s,
+      image_url: s.image_url ? `${base}/${s.image_url}` : null
+    }));
     return c.json({
       subcategories,
       count: subcategories.length,
@@ -3706,13 +3759,20 @@ subCategoriesRouter.get("/:idOrSlug", async (c) => {
       WHERE sc.id = ?
       LIMIT 1
     `;
-    const subcat = await c.env.DB.prepare(sql).bind(locale, locale, subId).first();
-    if (!subcat) return c.json({ error: "Subcategory not found" }, 404);
+    const raw = await c.env.DB.prepare(sql).bind(locale, locale, subId).first();
+    if (!raw) return c.json({ error: "Subcategory not found" }, 404);
+    let product_count = void 0;
     if (String(with_counts) === "1") {
-      const cnt = await c.env.DB.prepare(`SELECT COUNT(*) AS product_count FROM products WHERE subcategory_id = ?`).bind(subcat.id).first();
-      subcat.product_count = Number(cnt?.product_count || 0);
+      const cnt = await c.env.DB.prepare(`SELECT COUNT(*) AS product_count FROM products WHERE subcategory_id = ?`).bind(raw.id).first();
+      product_count = Number(cnt?.product_count || 0);
     }
-    return c.json({ subcategory: subcat, source: "database", locale });
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const subcategory = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null,
+      ...product_count !== void 0 ? { product_count } : {}
+    };
+    return c.json({ subcategory, source: "database", locale });
   } catch (err) {
     console.error("Error fetching subcategory:", err);
     return c.json({ error: "Failed to fetch subcategory" }, 500);
@@ -3951,7 +4011,7 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
         COALESCE(pt.description, p.description)   AS description,
         COALESCE(pt.content, p.content)           AS content,
         p.slug                                    AS product_slug,
-        p.image_url,
+        p.image_url,              -- KEY trong DB
         p.created_at,
         p.updated_at,
         s.id      AS subcategory_id,
@@ -3975,7 +4035,12 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
       ORDER BY p.created_at DESC
     `;
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, subId).all();
-    const products = res?.results ?? [];
+    const rows = res?.results ?? [];
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const products = rows.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
     return c.json({ products, count: products.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching products by subcategory:", err);
@@ -31744,7 +31809,7 @@ productsRouter.get("/", async (c) => {
         COALESCE(pt.slug,  p.slug)                AS slug,
         COALESCE(pt.description, p.description)   AS description,
         COALESCE(pt.content,     p.content)       AS content,
-        p.image_url,
+        p.image_url,                 -- KEY trong DB
         p.created_at,
         p.updated_at,
 
@@ -31764,7 +31829,12 @@ productsRouter.get("/", async (c) => {
       ${offsetSql}
     `;
     const result = await c.env.DB.prepare(sql).bind(...params).all();
-    const products = result?.results ?? [];
+    const rows = result?.results ?? [];
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const products = rows.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
     return c.json({
       products,
       count: products.length,
@@ -31782,8 +31852,13 @@ productsRouter.get("/:idOrSlug", async (c) => {
   try {
     if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
     const locale = getLocale$3(c);
-    const product = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
-    if (!product) return c.json({ error: "Product not found" }, 404);
+    const raw = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
+    if (!raw) return c.json({ error: "Product not found" }, 404);
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const product = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+    };
     return c.json({ product, source: "database", locale });
   } catch (err) {
     console.error("Error fetching product:", err);
@@ -33242,13 +33317,12 @@ bannerRouter.get("/", async (c) => {
       ORDER BY b.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-    return c.json({
-      ok: true,
-      items: results,
-      count: results.length,
-      source: "database",
-      locale
-    });
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const items = results.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+    return c.json({ ok: true, items, count: items.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching banners:", err);
     return c.json({ ok: false, error: "Failed to fetch banners" }, 500);
@@ -33260,8 +33334,13 @@ bannerRouter.get("/:id", async (c) => {
   try {
     if (!hasDB$2(c.env)) return c.json({ ok: false, error: "No database" }, 503);
     const locale = getLocale$2(c);
-    const item = await getMergedBannerById(c.env.DB, id, locale);
-    if (!item) return c.json({ ok: false, error: "Not found" }, 404);
+    const raw = await getMergedBannerById(c.env.DB, id, locale);
+    if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const item = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+    };
     return c.json({ ok: true, item, source: "database", locale });
   } catch {
     return c.json({ ok: false, error: "Failed to fetch banner" }, 500);
@@ -33431,7 +33510,7 @@ fieldRouter.get("/", async (c) => {
         f.id,
         COALESCE(ft.name,    f.name)    AS name,
         COALESCE(ft.content, f.content) AS content,
-        f.image_url,
+        f.image_url,   -- KEY trong DB
         f.created_at
       FROM fields f
       LEFT JOIN fields_translations ft
@@ -33439,10 +33518,15 @@ fieldRouter.get("/", async (c) => {
       ORDER BY f.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const items = results.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
     return c.json({
       ok: true,
-      items: results,
-      count: results.length,
+      items,
+      count: items.length,
       source: "database",
       locale
     });
@@ -33457,8 +33541,13 @@ fieldRouter.get("/:id", async (c) => {
   try {
     if (!hasDB$1(c.env)) return c.json({ ok: false, error: "No database" }, 503);
     const locale = getLocale$1(c);
-    const item = await getMergedFieldById(c.env.DB, id, locale);
-    if (!item) return c.json({ ok: false, error: "Not found" }, 404);
+    const raw = await getMergedFieldById(c.env.DB, id, locale);
+    if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const item = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+    };
     return c.json({ ok: true, item, source: "database", locale });
   } catch (e) {
     console.error(e);
@@ -33643,7 +33732,7 @@ cerPartnerRouter.get("/", async (c) => {
         COALESCE(ct.name,    c.name)    AS name,
         c.type,
         COALESCE(ct.content, c.content) AS content,
-        c.image_url,
+        c.image_url,   -- KEY
         c.created_at
       FROM certifications_partners c
       LEFT JOIN certifications_partners_translations ct
@@ -33651,7 +33740,12 @@ cerPartnerRouter.get("/", async (c) => {
       ORDER BY c.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-    return c.json({ ok: true, items: results, count: results.length, source: "database", locale });
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const items = results.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+    return c.json({ ok: true, items, count: items.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching certifications_partners:", err);
     return c.json({ ok: false, error: "Failed to fetch items" }, 500);
@@ -33670,7 +33764,7 @@ cerPartnerRouter.get("/type/:type", async (c) => {
         COALESCE(ct.name,    c.name)    AS name,
         c.type,
         COALESCE(ct.content, c.content) AS content,
-        c.image_url,
+        c.image_url,   -- KEY
         c.created_at
       FROM certifications_partners c
       LEFT JOIN certifications_partners_translations ct
@@ -33679,7 +33773,12 @@ cerPartnerRouter.get("/type/:type", async (c) => {
       ORDER BY c.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale, t).all();
-    return c.json({ ok: true, items: results, count: results.length, type: t, locale });
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const items = results.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+    return c.json({ ok: true, items, count: items.length, type: t, locale });
   } catch (e) {
     console.error(e);
     return c.json({ ok: false, error: "Failed to fetch by type" }, 500);
@@ -33691,8 +33790,13 @@ cerPartnerRouter.get("/:id", async (c) => {
   try {
     if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);
     const locale = getLocale(c);
-    const item = await getMergedById(c.env.DB, id, locale);
-    if (!item) return c.json({ ok: false, error: "Not found" }, 404);
+    const raw = await getMergedById(c.env.DB, id, locale);
+    if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const item = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+    };
     return c.json({ ok: true, item, source: "database", locale });
   } catch (e) {
     console.error(e);
