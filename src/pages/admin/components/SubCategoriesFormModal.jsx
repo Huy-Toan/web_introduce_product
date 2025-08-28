@@ -144,6 +144,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
     /** @type {Record<string, {name?:string, slug?:string, description?:string}>} */({})
   );
 
+  const [didChangeCover, setDidChangeCover] = useState(false);
   const [parents, setParents] = useState([]); // [{id,name,slug,...}]
   const [parentsLoading, setParentsLoading] = useState(false);
   const [imageFile, setImageFile] = useState(null);
@@ -166,7 +167,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
   // nạp dữ liệu khi mở modal
   useEffect(() => {
     if (!isOpen) return;
-
+    
     const fetchParents = async () => {
       try {
         setParentsLoading(true);
@@ -184,6 +185,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
 
     fetchParents();
 
+    setDidChangeCover(false);
     // set base form
     setForm({
       parent_id: initialData.parent_id ?? '',
@@ -399,7 +401,7 @@ const SubCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} })
 
       if (imageFile) {
         const { image_key} = await uploadImage(imageFile);
-        finalForm.image_key = image_key;     
+        finalForm.image_url = image_key;     
       }
 
       // translations payload: { lc: { name?, slug?, description? } }
@@ -785,6 +787,7 @@ function ImagePicker({ imagePreview, setImagePreview, setImageFile, setForm, isU
               setImageFile(null);
               setImagePreview('');
               setForm(prev => ({ ...prev, image_url: '' }));
+              setDidChangeCover(true);
             }}
             disabled={isUploading}
             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600 disabled:bg-gray-400"
@@ -807,6 +810,7 @@ function ImagePicker({ imagePreview, setImagePreview, setImageFile, setForm, isU
             const reader = new FileReader();
             reader.onload = (evt) => setImagePreview(String(evt.target?.result || ''));
             reader.readAsDataURL(file);
+            setDidChangeCover(true);
           }}
           disabled={isUploading}
           className="hidden"

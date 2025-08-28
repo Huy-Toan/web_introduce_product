@@ -289,6 +289,7 @@ function LocaleTabs({ openLocales, activeTab, setActiveTab, addLocale, removeLoc
 /* ================= component ================= */
 const CertPartnerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id || initialData?.item?.id);
+  const [removedImage, setRemovedImage] = useState(false);
 
   // Base (VI)
   const [baseVI, setBaseVI] = useState({
@@ -498,6 +499,7 @@ const CertPartnerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) =
     if (!file.type.startsWith("image/")) return alert("Vui lòng chọn file ảnh hợp lệ!");
     if (file.size > 8 * 1024 * 1024) return alert("Kích thước ảnh tối đa 8MB!");
     setImageFile(file);
+    setRemovedImage(false);
     const reader = new FileReader();
     reader.onload = (evt) => setImagePreview(String(evt.target?.result || ""));
     reader.readAsDataURL(file);
@@ -527,20 +529,22 @@ const CertPartnerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) =
 
     setIsUploading(true);
     try {
-      let image_url = baseVI.image_url;
-      
-      if (imageFile) {
-        const uploaded = await uploadImage(imageFile);
-        image_url = uploaded.image_key;                
-      }
-
       const payload = {
         name: baseVI.name,
         type: baseVI.type,
         content: baseVI.content,
-        image_url,
       };
 
+      if (imageFile) {
+        const uploaded = await uploadImage(imageFile);
+        payload.image_url = uploaded.image_key;     
+        setImagePreview(uploaded.previewUrl);       
+      } else if (removedImage) {
+        payload.image_url = null;
+      }
+
+
+      // Translations
       const cleanTranslations = {};
       for (const [lc, v] of Object.entries(translations)) {
         const hasAny = v?.name || v?.content;
@@ -562,6 +566,7 @@ const CertPartnerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) =
       setActiveTab("vi");
       setImageFile(null);
       setImagePreview("");
+      setRemovedImage(false);
       lastSourceName.current = "";
       lastSourceContent.current = "";
     } catch (err) {
@@ -575,7 +580,7 @@ const CertPartnerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) =
   const removeImage = () => {
     setImageFile(null);
     setImagePreview("");
-    setBaseVI((prev) => ({ ...prev, image_url: "" }));
+    setRemovedImage(true);   
   };
 
   if (!isOpen) return null;

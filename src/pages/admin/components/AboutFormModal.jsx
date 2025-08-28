@@ -249,6 +249,7 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
   const editorVIRef = useRef(null);
   const editorRefs = useRef({}); // per-locale
+  const [removedImage, setRemovedImage] = useState(false);
 
   // Load data when open
   useEffect(() => {
@@ -433,6 +434,7 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     if (!f.type.startsWith('image/')) return alert('Vui lòng chọn file ảnh hợp lệ!');
     if (f.size > 5 * 1024 * 1024) return alert('Kích thước ảnh không vượt quá 5MB!');
     setImageFile(f);
+    setRemovedImage(false);
     const r = new FileReader();
     r.onload = (ev) => setImagePreview(String(ev.target?.result || ''));
     r.readAsDataURL(f);
@@ -461,23 +463,31 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
     setIsUploading(true);
     try {
-      let image_url = baseVI.image_url;
-       if (imageFile) {
-        const uploaded = await uploadImage(imageFile);
-        image_url = uploaded.image_key;              
-      }
-
       const payload = {
         title: baseVI.title,
         content: baseVI.content,
-        image_url,
       };
+
+      if (imageFile) {
+        const uploaded = await uploadImage(imageFile);
+        payload.image_url = uploaded.image_key;  
+      } else if (isEditing) {
+        if (removedImage) {
+          payload.image_url = null;
+        } else {
+        }
+      } else {
+        if (baseVI.image_url) payload.image_url = baseVI.image_url;
+      }
 
       const cleanTranslations = {};
       for (const [lc, v] of Object.entries(translations)) {
         const hasAny = v?.title || v?.content;
         if (!hasAny) continue;
-        cleanTranslations[lc] = { title: v.title || '', content: v.content || '' };
+        cleanTranslations[lc] = {
+          title: v.title || '',
+          content: v.content || '',
+        };
       }
       if (Object.keys(cleanTranslations).length) payload.translations = cleanTranslations;
 
@@ -486,7 +496,6 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       await onSubmit(payload);
       onClose();
 
-      // reset
       setBaseVI({ title: '', content: '', image_url: '' });
       setTranslations({});
       setTouched({});
@@ -494,6 +503,7 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       setActiveTab('vi');
       setImageFile(null);
       setImagePreview('');
+      setRemovedImage(false);
       lastSourceTitle.current = '';
       lastSourceContent.current = '';
     } catch (err) {
@@ -507,7 +517,8 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const removeImage = () => {
     setImageFile(null);
     setImagePreview('');
-    setBaseVI((prev) => ({ ...prev, image_url: '' }));
+    setBaseVI((prev) => ({ ...prev, image_url: '' })); 
+    setRemovedImage(true);
   };
 
   if (!isOpen) return null;
