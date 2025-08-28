@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-
+import { getToken } from '../../../../api/admin/auth';
 const slugify = (str = '') =>
   str
     .toLowerCase()
@@ -12,6 +12,10 @@ const slugify = (str = '') =>
 const useNewsForm = (form, setForm) => {
   const [isGenerating, setIsGenerating] = useState(false)
 
+    const authHeaders = () => {
+        const token = getToken()
+        return token ? { Authorization: `Bearer ${token}` } : {}
+    }
   // ====== LEGACY PARSER (fallback nếu backend trả raw_responses) ======
   const legacyParser = useCallback((rawResponses, type = 'content') => {
     const cleanText = (text) => {
@@ -107,14 +111,28 @@ const useNewsForm = (form, setForm) => {
   }, [])
 
   // ====== Upload ảnh ======
-  const uploadImage = useCallback(async (file) => {
-    const fd = new FormData()
-    fd.append('image', file)
-    const res = await fetch('/api/upload-image', { method: 'POST', body: fd })
-    if (!res.ok) throw new Error('Upload ảnh thất bại')
-    const data = await res.json()
-    return data.url
-  }, [])
+  const uploadImage = useCallback(
+    async (file, opts = { forEditor: false }) => {
+      const fd = new FormData();
+      fd.append('image', file);
+      const res = await fetch('/api/upload-image', { method: 'POST', body: fd, headers: authHeaders() });
+      if (!res.ok) throw new Error('Upload ảnh thất bại');
+      const data = await res.json();
+
+      // Dùng trong editor -> trả URL string để nhét vào ![](url)
+      if (opts.forEditor) {
+        return data.displayUrl || data.url; 
+      }
+
+      // Dùng làm cover -> trả key + preview
+      return {
+        image_key: data.image_key,
+        previewUrl: data.displayUrl || data.url,
+      };
+    },
+    []
+  );
+
 
   // ====== Cách 1: Keyword -> Full content ======
   const generateContentFromKeyword = useCallback(async () => {
@@ -168,7 +186,7 @@ const useNewsForm = (form, setForm) => {
     try {
       const res = await fetch('/api/seo/generate-seo', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({ content: form.content.trim() })
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)

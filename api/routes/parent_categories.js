@@ -67,7 +67,6 @@ parentsRouter.get("/", async (c) => {
     const params = [locale];
 
     if (q && q.trim()) {
-      // search trên name/description/slug (ưu tiên bản dịch, fallback base)
       where.push(`(
         (pct.name IS NOT NULL AND pct.name LIKE ?)
         OR (pct.description IS NOT NULL AND pct.description LIKE ?)
@@ -105,7 +104,11 @@ parentsRouter.get("/", async (c) => {
     const result = await c.env.DB.prepare(baseSql).bind(...params).all();
     let parents = result?.results ?? [];
 
-    // with_counts
+    // ---- helper build URL (an toàn khi env rỗng) ----
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const toFullUrl = (k) => (k ? `${base}/${k}` : null);
+
+    // with_counts (giữ nguyên)
     if (String(with_counts) === "1" && parents.length) {
       const ids = parents.map((p) => p.id);
       const placeholders = ids.map(() => "?").join(",");
@@ -149,7 +152,7 @@ parentsRouter.get("/", async (c) => {
       }));
     }
 
-    // with_subs
+    // with_subs: map URL cho subcategories
     if (String(with_subs) === "1" && parents.length) {
       const ids = parents.map((p) => p.id);
       const placeholders = ids.map(() => "?").join(",");
@@ -171,7 +174,8 @@ parentsRouter.get("/", async (c) => {
       const subsRes = await c.env.DB.prepare(subsSql).bind(locale, ...ids).all();
       const subs = subsRes?.results ?? [];
       const grouped = subs.reduce((acc, s) => {
-        (acc[s.parent_id] ||= []).push(s);
+        const out = { ...s, image_url: toFullUrl(s.image_url) };
+        (acc[s.parent_id] ||= []).push(out);
         return acc;
       }, {});
       parents = parents.map((p) => ({
@@ -179,6 +183,12 @@ parentsRouter.get("/", async (c) => {
         subcategories: grouped[p.id] || [],
       }));
     }
+
+    // Cuối cùng: map URL cho parents
+    parents = parents.map((p) => ({
+      ...p,
+      image_url: toFullUrl(p.image_url),
+    }));
 
     return c.json({
       parents,
@@ -191,6 +201,7 @@ parentsRouter.get("/", async (c) => {
     return c.json({ error: "Failed to fetch parent categories" }, 500);
   }
 });
+
 
 /**
  * GET /api/parents/:idOrSlug
@@ -225,6 +236,15 @@ parentsRouter.get("/:idOrSlug", async (c) => {
     const parent = await c.env.DB.prepare(sql).bind(locale, parentId).first();
     if (!parent) return c.json({ error: "Parent category not found" }, 404);
 
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const toFullUrl = (k) => (k ? `${base}/${k}` : null);
+
+    // không reassign const parent
+    const outParent = {
+      ...parent,
+      image_url: toFullUrl(parent.image_url),
+    };
+
     if (String(with_subs) === "1") {
       const subsSql = `
         SELECT
@@ -242,15 +262,19 @@ parentsRouter.get("/:idOrSlug", async (c) => {
         ORDER BY sc.created_at DESC
       `;
       const subs = await c.env.DB.prepare(subsSql).bind(locale, parent.id).all();
-      parent.subcategories = subs?.results ?? [];
+      outParent.subcategories = (subs?.results ?? []).map((s) => ({
+        ...s,
+        image_url: toFullUrl(s.image_url),
+      }));
     }
 
-    return c.json({ parent, source: "database", locale });
+    return c.json({ parent: outParent, source: "database", locale });
   } catch (err) {
     console.error("Error fetching parent category:", err);
     return c.json({ error: "Failed to fetch parent category" }, 500);
   }
 });
+
 
 /**
  * POST /api/parents
@@ -557,13 +581,21 @@ parentsRouter.get("/:slug/products", async (c) => {
       ORDER BY p.created_at DESC
     `;
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, parentId).all();
-    const products = res?.results ?? [];
+    const rawProducts = res?.results ?? [];
+
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const products = rawProducts.map(p => ({
+      ...p,
+      image_url: p.image_url ? `${base}/${p.image_url}` : null,
+    }));
+
     return c.json({ products, count: products.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching products by parent category:", err);
     return c.json({ error: "Failed to fetch products by parent category" }, 500);
   }
 });
+
 
 
 /**
@@ -596,12 +628,20 @@ parentsRouter.get("/:idOrSlug/subcategories", async (c) => {
       ORDER BY sc.created_at DESC
     `;
     const res = await c.env.DB.prepare(subsSql).bind(locale, parentId).all();
-    const subcategories = res?.results ?? [];
+    const rawSubs = res?.results ?? [];
+
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const subcategories = rawSubs.map(s => ({
+      ...s,
+      image_url: s.image_url ? `${base}/${s.image_url}` : null,
+    }));
+
     return c.json({ subcategories, count: subcategories.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching subcategories of parent:", err);
     return c.json({ error: "Failed to fetch subcategories" }, 500);
   }
 });
+
 
 export default parentsRouter;

@@ -235,7 +235,7 @@ function LocaleTabs({ openLocales, active, setActive, addLocale, removeLocale, a
 
 const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id);
-
+  const [removedImage, setRemovedImage] = useState(false);
   // Base (VI)
   const [form, setForm] = useState({ content: '', image_url: '' });
 
@@ -378,6 +378,7 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     if (!file.type.startsWith('image/')) return alert('Vui lòng chọn file ảnh hợp lệ!');
     if (file.size > 8 * 1024 * 1024) return alert('Kích thước ảnh tối đa 8MB!');
     setImageFile(file);
+    setRemovedImage(false);
     const reader = new FileReader();
     reader.onload = (evt) => setImagePreview(evt.target.result);
     reader.readAsDataURL(file);
@@ -394,11 +395,17 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const uploadImage = async (file) => {
     const formData = new FormData();
     formData.append('image', file);
+
     const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
     if (!response.ok) throw new Error('Upload failed');
+
     const data = await response.json();
-    return data.url;
+    return {
+      image_key: data.image_key,
+      previewUrl: data.displayUrl || data.url, 
+    };
   };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -406,14 +413,23 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       alert(L(activeLang, 'needContentVI'));
       return;
     }
+
     setIsUploading(true);
     try {
-      let finalForm = { ...form };
+      // KHÔNG copy image_url từ form thẳng qua (tránh gửi '')
+      const finalForm = { ...form };
+      delete finalForm.image_url; // mặc định: giữ nguyên ảnh cũ -> không gửi field này
 
       if (imageFile) {
-        const uploadedImageUrl = await uploadImage(imageFile);
-        finalForm.image_url = uploadedImageUrl;
+        // ĐỔI ảnh
+        const uploaded = await uploadImage(imageFile);
+        finalForm.image_url = uploaded.image_key;
+        setImagePreview(uploaded.previewUrl); // optional: cập nhật preview
+      } else if (removedImage) {
+        // XOÁ ảnh
+        finalForm.image_url = null;
       }
+      // ngược lại: GIỮ ảnh -> không thêm image_url vào payload
 
       // gom translations có nội dung
       const outTr = {};
@@ -439,6 +455,7 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       setActiveLang('vi');
       setImageFile(null);
       setImagePreview('');
+      setRemovedImage(false);
       lastVIMark.current = '';
     } catch (error) {
       console.error(error);
@@ -451,7 +468,7 @@ const BannerFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const removeImage = () => {
     setImageFile(null);
     setImagePreview('');
-    setForm((prev) => ({ ...prev, image_url: '' }));
+    setRemovedImage(true);              
   };
 
   if (!isOpen) return null;

@@ -1,6 +1,8 @@
 // api/routes/auth.js
 import { Hono } from "hono";
 import { SignJWT } from "jose";
+import { setCookie } from "hono/cookie";
+import { verifyPassword, hashPassword } from "../utils/password.js";
 import { auth } from "../auth/authMidleware";
 
 const enc = new TextEncoder();
@@ -9,14 +11,14 @@ const nowSec = () => Math.floor(Date.now() / 1000);
 
 const authRouter = new Hono();
 
-authRouter.post("/login", async (c) => {
+async function performLogin(c, body) {
     try {
         console.log("Login attempt started");
 
         // Kiểm tra database availability
         if (!c.env.DB_AVAILABLE) {
             console.error("Database not available");
-            return c.json({ error: "Database not available" }, 503);
+            return { error: "Database not available", code: 503 };
         }
 
         // Kiểm tra JWT_SECRET
@@ -25,12 +27,12 @@ authRouter.post("/login", async (c) => {
             return c.json({ error: "Server configuration error" }, 500);
         }
 
-        const { email, password } = await c.req.json();
+        const { email, password } = body;
         console.log("Login data received:", { email, hasPassword: !!password });
 
         if (!email || !password) {
             console.log("Missing email or password");
-            return c.json({ error: "Missing email/password" }, 400);
+            return { error: "Missing email/password", code: 400 };
         }
 
         // lấy user theo email
@@ -43,17 +45,28 @@ authRouter.post("/login", async (c) => {
 
         if (!user) {
             console.log("User not found for email:", email);
-            return c.json({ error: "Invalid credentials" }, 401);
+            return { error: "Invalid credentials", code: 401 };
         }
 
-        // so sánh mật khẩu (hiện đang plaintext theo seed)
+        // so sánh mật khẩu đã băm
         console.log("Comparing passwords...");
-        console.log("Input password:", password);
-        console.log("Stored password:", user.password);
-
-        if (password !== user.password) {
+        let valid = false;
+        if (user.password.includes("$")) {
+            valid = await verifyPassword(password, user.password);
+        } else {
+            valid = user.password === password;
+            if (valid) {
+                // Nâng cấp mật khẩu plaintext lên dạng băm
+                const newHash = await hashPassword(password);
+                await c.env.DB.prepare("UPDATE users SET password = ? WHERE id = ?")
+                    .bind(newHash, user.id)
+                    .run();
+                user.password = newHash;
+            }
+        }
+        if (!valid) {
             console.log("Password mismatch");
-            return c.json({ error: "Invalid credentials" }, 401);
+            return { error: "Invalid credentials", code: 401 };
         }
 
         console.log("Password match successful, generating JWT...");
@@ -96,53 +109,44 @@ authRouter.post("/login", async (c) => {
             .setIssuedAt(iat)
             .setExpirationTime(exp)
             .sign(getKey(c.env.JWT_SECRET));
+        setCookie(c, "token", token, {
+            httpOnly: true,
+            secure: true,
+            sameSite: "Lax",
+            path: "/",
+            maxAge: maxAgeSec,
+        });
 
         console.log("Login successful for user:", user.email);
-        return c.json({
-            access_token: token,
-            token_type: "Bearer",
-            expires_in: maxAgeSec,
-            user: { id: user.id, name: user.name, email: user.email, role: user.role }
-        });
+        return {
+            token,
+            maxAgeSec,
+            user: { id: user.id, name: user.name, email: user.email, role: user.role },
+        };
     } catch (e) {
         console.error("Login error:", e);
-        console.error("Error name:", e.name);
-        console.error("Error message:", e.message);
-        console.error("Error stack:", e.stack);
-
-        // Trả về lỗi cụ thể hơn cho development
-        return c.json({
-            error: "Login failed",
-            details: e.message,
-            type: e.name
-        }, 500);
+        return { error: "Login failed", code: 500, details: e.message };
     }
+}
+
+authRouter.post("/login", async (c) => {
+    const body = await c.req.json();
+    const result = await performLogin(c, body);
+    if (result.error) return c.json({ error: result.error }, result.code);
+    return c.json({
+        access_token: result.token,
+        token_type: "Bearer",
+        expires_in: result.maxAgeSec,
+        user: result.user,
+    });
 });
 
 // Alias để tương thích frontend cũ
 authRouter.post("/admin/login", async (c) => {
-    try {
-        // Gọi lại chính route /login nội bộ
-        const url = new URL("/api/auth/login", c.req.url); // URL tuyệt đối đến route login thật
-        const res = await fetch(url.toString(), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: await c.req.text(), // giữ nguyên body FE gửi lên
-        });
-
-        const data = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-            return c.json({ message: data?.error || data?.message || "Login failed" }, res.status);
-        }
-
-        // Trả về theo format cũ { token }
-        return c.json({ token: data.access_token }, 200);
-
-    } catch (err) {
-        console.error("Alias /admin/login error:", err);
-        return c.json({ message: "Internal server error" }, 500);
-    }
+    const body = await c.req.json();
+    const result = await performLogin(c, body);
+    if (result.error) return c.json({ message: result.error }, result.code);
+    return c.json({ token: result.token }, 200);
 });
 
 authRouter.get("/me", auth, (c) => {

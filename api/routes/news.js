@@ -92,7 +92,7 @@ newsRouter.get("/", async (c) => {
         COALESCE(nt.content, n.content)             AS content,
         COALESCE(nt.meta_description, n.meta_description) AS meta_description,
         COALESCE(nt.keywords, n.keywords)           AS keywords,
-        n.image_url,
+        n.image_url,                 -- KEY trong DB
         n.published_at,
         n.created_at,
         n.updated_at
@@ -103,9 +103,16 @@ newsRouter.get("/", async (c) => {
     `;
     const params = [locale];
     const { results = [] } = await c.env.DB.prepare(sql).bind(...params).all();
+
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const news = results.map(r => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+
     return c.json({
-      news: results,
-      count: results.length,
+      news,
+      count: news.length,
       source: "database",
       locale,
       debug: { sql, params },
@@ -116,10 +123,7 @@ newsRouter.get("/", async (c) => {
   }
 });
 
-/**
- * GET /api/news/:idOrSlug?locale=en
- * Lấy 1 bài viết theo ID hoặc slug (ưu tiên slug theo locale)
- */
+
 newsRouter.get("/:idOrSlug", async (c) => {
   const idOrSlug = c.req.param("idOrSlug");
   try {
@@ -134,11 +138,16 @@ newsRouter.get("/:idOrSlug", async (c) => {
     }
     if (!newsId) return c.json({ error: "Not found" }, 404);
 
-    const item = await getMergedNewsById(c.env.DB, newsId, locale);
-    if (!item) return c.json({ error: "Not found" }, 404);
+    const raw = await getMergedNewsById(c.env.DB, newsId, locale);
+    if (!raw) return c.json({ error: "Not found" }, 404);
 
-    // Trả về translations cho chi tiết
     const translations = await getAllTranslations(c.env.DB, newsId);
+
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const item = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+    };
 
     return c.json({ news: { ...item, translations }, source: "database", locale });
   } catch (err) {
@@ -147,23 +156,7 @@ newsRouter.get("/:idOrSlug", async (c) => {
   }
 });
 
-/**
- * POST /api/news
- * Body:
- * {
- *   title: string,
- *   slug?: string,
- *   content: string,
- *   image_url?: string,
- *   meta_description?: string,
- *   keywords?: string,
- *   published_at?: string | null,
- *   translations?: {
- *     en?: { title: string, slug?: string, content?: string, meta_description?: string, keywords?: string },
- *     ja?: {...}
- *   }
- * }
- */
+
 newsRouter.post("/", async (c) => {
   try {
     if (!hasDB(c.env)) return c.json({ error: "No database" }, 500);
@@ -245,10 +238,7 @@ newsRouter.post("/", async (c) => {
   }
 });
 
-/**
- * PUT /api/news/:id
- * Cập nhật base + (optional) translations
- */
+
 newsRouter.put("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {

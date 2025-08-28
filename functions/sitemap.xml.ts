@@ -19,7 +19,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   ];
 
   const body = xml(
-`<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${children.map((loc) => `  <sitemap><loc>${loc}</loc></sitemap>`).join("\n")}
 </sitemapindex>`
   );

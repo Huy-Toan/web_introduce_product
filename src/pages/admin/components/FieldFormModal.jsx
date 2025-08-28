@@ -281,6 +281,7 @@ function LocaleTabs({ openLocales, activeTab, setActiveTab, addLocale, removeLoc
 /* ================= component ================= */
 const FieldFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id || initialData?.field?.id);
+  const [removedImage, setRemovedImage] = useState(false);
 
   // Base (VI) – fields
   const [baseVI, setBaseVI] = useState({ name: "", content: "", image_url: "" });
@@ -481,6 +482,7 @@ const FieldFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     if (!file.type.startsWith("image/")) return alert("Vui lòng chọn file ảnh hợp lệ!");
     if (file.size > 5 * 1024 * 1024) return alert("Kích thước ảnh không vượt quá 5MB!");
     setImageFile(file);
+    setRemovedImage(false); 
     const reader = new FileReader();
     reader.onload = (evt) => setImagePreview(String(evt.target?.result || ""));
     reader.readAsDataURL(file);
@@ -491,7 +493,10 @@ const FieldFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     const r = await fetch("/api/upload-image", { method: "POST", body: fd });
     if (!r.ok) throw new Error("Upload failed");
     const j = await r.json();
-    return j.url;
+    return {
+    image_key: j.image_key,                 
+    previewUrl: j.displayUrl || data.url,   
+  };
   };
 
   const handleSubmit = async (e) => {
@@ -501,14 +506,22 @@ const FieldFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
     setIsUploading(true);
     try {
-      let image_url = baseVI.image_url;
-      if (imageFile) image_url = await uploadImage(imageFile);
-
       const payload = {
         name: baseVI.name,
         content: baseVI.content,
-        image_url,
+        // KHÔNG đưa image_url ở đây để tránh overwrite
       };
+
+      // Có chọn ảnh mới => upload + set image_url (key) vào payload
+      if (imageFile) {
+        const uploaded = await uploadImage(imageFile);
+        payload.image_url = uploaded.image_key;
+      }
+      // User bấm X xóa ảnh => set image_url = null để BE xóa
+      else if (removedImage) {
+        payload.image_url = null;
+      }
+      // Còn lại: không gửi image_url => BE giữ nguyên ảnh cũ
 
       // lọc translations có dữ liệu
       const cleanTranslations = {};
@@ -532,6 +545,7 @@ const FieldFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       setActiveTab("vi");
       setImageFile(null);
       setImagePreview("");
+      setRemovedImage(false);                       // << nhớ reset cờ
       lastSourceName.current = "";
       lastSourceContent.current = "";
     } catch (err) {
@@ -542,10 +556,11 @@ const FieldFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     }
   };
 
+
   const removeImage = () => {
     setImageFile(null);
     setImagePreview("");
-    setBaseVI((prev) => ({ ...prev, image_url: "" }));
+    setRemovedImage(true);
   };
 
   if (!isOpen) return null;

@@ -45,7 +45,7 @@ export default function CerPartnersSection({ locale: localeProp }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [perSlide, setPerSlide] = useState(4); // cập nhật theo resize bên dưới
+  const [perSlide, setPerSlide] = useState(4);
   const scrollRef = useRef(null);
 
   // drag state

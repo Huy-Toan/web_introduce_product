@@ -2289,12 +2289,15 @@ uploadImageRouter.post("/", async (c) => {
     if (!c.env.PUBLIC_R2_URL) {
       return c.json({ error: "Thiếu PUBLIC_R2_URL trong cấu hình môi trường" }, 500);
     }
-    const baseUrl2 = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
-    const publicUrl = `${baseUrl2}/${key}`;
+    const storageBase = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
+    const displayBase = (c.env.DISPLAY_BASE_URL || storageBase).replace(/\/+$/, "");
+    const storageUrl = `${storageBase}/${key}`;
+    const displayUrl = `${displayBase}/${key}`;
     return c.json({
       success: true,
-      url: publicUrl,
-      key,
+      image_key: key,
+      url: storageUrl,
+      displayUrl,
       fileName: key.split("/").pop(),
       alt: baseSlug,
       prefix
@@ -2329,19 +2332,18 @@ editorUploadRouter.post("/", async (c) => {
       return c.json({ success: 0, message: "Ảnh vượt quá 5MB!" }, 400);
     }
     const ext = file.name.split(".").pop();
-    const fileName = `books/${uuidv4()}.${ext}`;
+    const fileName = `${uuidv4()}.${ext}`;
     const r2 = c.env.IMAGES;
     await r2.put(fileName, await file.arrayBuffer(), {
       httpMetadata: { contentType: file.type }
     });
-    const baseUrl2 = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
+    const baseUrl2 = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
     const publicUrl = `${baseUrl2}/${fileName}`;
     return c.json({
       success: 1,
       message: "OK",
       url: publicUrl,
       fileName
-      // giữ lại cho bạn dùng khi cần
     });
   } catch (error) {
     console.error("Upload error:", error);
@@ -2387,7 +2389,7 @@ aboutRouter.get("/", async (c) => {
         a.id,
         COALESCE(at.title,   a.title)   AS title,
         COALESCE(at.content, a.content) AS content,
-        a.image_url,
+        a.image_url,      -- KEY trong DB
         a.created_at
       FROM about_us a
       LEFT JOIN about_us_translations at
@@ -2395,7 +2397,12 @@ aboutRouter.get("/", async (c) => {
       ORDER BY a.id ASC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-    return c.json({ about: results, source: "database", locale });
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const about = results.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+    return c.json({ about, source: "database", locale });
   } catch (e) {
     console.error("Error fetching about list:", e);
     return c.json({ error: "Failed to fetch about us" }, 500);
@@ -2408,7 +2415,12 @@ aboutRouter.get("/:id", async (c) => {
     const locale = getLocale$7(c);
     const item = await getMergedAboutById(c.env.DB, id, locale);
     if (!item) return c.json({ error: "Not found" }, 404);
-    return c.json({ about: item, source: "database", locale });
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const about = {
+      ...item,
+      image_url: item.image_url ? `${base}/${item.image_url}` : null
+    };
+    return c.json({ about, source: "database", locale });
   } catch (e) {
     console.error("Error fetching about detail:", e);
     return c.json({ error: "Failed to fetch about" }, 500);
@@ -2625,7 +2637,7 @@ newsRouter.get("/", async (c) => {
         COALESCE(nt.content, n.content)             AS content,
         COALESCE(nt.meta_description, n.meta_description) AS meta_description,
         COALESCE(nt.keywords, n.keywords)           AS keywords,
-        n.image_url,
+        n.image_url,                 -- KEY trong DB
         n.published_at,
         n.created_at,
         n.updated_at
@@ -2636,9 +2648,14 @@ newsRouter.get("/", async (c) => {
     `;
     const params = [locale];
     const { results = [] } = await c.env.DB.prepare(sql).bind(...params).all();
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const news = results.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
     return c.json({
-      news: results,
-      count: results.length,
+      news,
+      count: news.length,
       source: "database",
       locale,
       debug: { sql, params }
@@ -2660,9 +2677,14 @@ newsRouter.get("/:idOrSlug", async (c) => {
       newsId = await resolveNewsIdBySlug(c.env.DB, idOrSlug, locale);
     }
     if (!newsId) return c.json({ error: "Not found" }, 404);
-    const item = await getMergedNewsById(c.env.DB, newsId, locale);
-    if (!item) return c.json({ error: "Not found" }, 404);
+    const raw = await getMergedNewsById(c.env.DB, newsId, locale);
+    if (!raw) return c.json({ error: "Not found" }, 404);
     const translations = await getAllTranslations(c.env.DB, newsId);
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const item = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+    };
     return c.json({ news: { ...item, translations }, source: "database", locale });
   } catch (err) {
     console.error("Error fetching news by id/slug:", err);
@@ -3184,6 +3206,8 @@ parentsRouter.get("/", async (c) => {
     if (hasOffset) params.push(Number(offset));
     const result = await c.env.DB.prepare(baseSql).bind(...params).all();
     let parents = result?.results ?? [];
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const toFullUrl = (k) => k ? `${base}/${k}` : null;
     if (String(with_counts) === "1" && parents.length) {
       const ids = parents.map((p) => p.id);
       const placeholders = ids.map(() => "?").join(",");
@@ -3244,7 +3268,8 @@ parentsRouter.get("/", async (c) => {
       const subsRes = await c.env.DB.prepare(subsSql).bind(locale, ...ids).all();
       const subs = subsRes?.results ?? [];
       const grouped = subs.reduce((acc, s) => {
-        (acc[s.parent_id] ||= []).push(s);
+        const out = { ...s, image_url: toFullUrl(s.image_url) };
+        (acc[s.parent_id] ||= []).push(out);
         return acc;
       }, {});
       parents = parents.map((p) => ({
@@ -3252,6 +3277,10 @@ parentsRouter.get("/", async (c) => {
         subcategories: grouped[p.id] || []
       }));
     }
+    parents = parents.map((p) => ({
+      ...p,
+      image_url: toFullUrl(p.image_url)
+    }));
     return c.json({
       parents,
       count: parents.length,
@@ -3287,6 +3316,12 @@ parentsRouter.get("/:idOrSlug", async (c) => {
     `;
     const parent = await c.env.DB.prepare(sql).bind(locale, parentId).first();
     if (!parent) return c.json({ error: "Parent category not found" }, 404);
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const toFullUrl = (k) => k ? `${base}/${k}` : null;
+    const outParent = {
+      ...parent,
+      image_url: toFullUrl(parent.image_url)
+    };
     if (String(with_subs) === "1") {
       const subsSql = `
         SELECT
@@ -3304,9 +3339,12 @@ parentsRouter.get("/:idOrSlug", async (c) => {
         ORDER BY sc.created_at DESC
       `;
       const subs = await c.env.DB.prepare(subsSql).bind(locale, parent.id).all();
-      parent.subcategories = subs?.results ?? [];
+      outParent.subcategories = (subs?.results ?? []).map((s) => ({
+        ...s,
+        image_url: toFullUrl(s.image_url)
+      }));
     }
-    return c.json({ parent, source: "database", locale });
+    return c.json({ parent: outParent, source: "database", locale });
   } catch (err) {
     console.error("Error fetching parent category:", err);
     return c.json({ error: "Failed to fetch parent category" }, 500);
@@ -3533,7 +3571,12 @@ parentsRouter.get("/:slug/products", async (c) => {
       ORDER BY p.created_at DESC
     `;
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, parentId).all();
-    const products = res?.results ?? [];
+    const rawProducts = res?.results ?? [];
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const products = rawProducts.map((p) => ({
+      ...p,
+      image_url: p.image_url ? `${base}/${p.image_url}` : null
+    }));
     return c.json({ products, count: products.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching products by parent category:", err);
@@ -3563,7 +3606,12 @@ parentsRouter.get("/:idOrSlug/subcategories", async (c) => {
       ORDER BY sc.created_at DESC
     `;
     const res = await c.env.DB.prepare(subsSql).bind(locale, parentId).all();
-    const subcategories = res?.results ?? [];
+    const rawSubs = res?.results ?? [];
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const subcategories = rawSubs.map((s) => ({
+      ...s,
+      image_url: s.image_url ? `${base}/${s.image_url}` : null
+    }));
     return c.json({ subcategories, count: subcategories.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching subcategories of parent:", err);
@@ -3667,6 +3715,11 @@ subCategoriesRouter.get("/", async (c) => {
       }, {});
       subcategories = subcategories.map((s) => ({ ...s, product_count: counts[s.id] || 0 }));
     }
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    subcategories = subcategories.map((s) => ({
+      ...s,
+      image_url: s.image_url ? `${base}/${s.image_url}` : null
+    }));
     return c.json({
       subcategories,
       count: subcategories.length,
@@ -3706,13 +3759,20 @@ subCategoriesRouter.get("/:idOrSlug", async (c) => {
       WHERE sc.id = ?
       LIMIT 1
     `;
-    const subcat = await c.env.DB.prepare(sql).bind(locale, locale, subId).first();
-    if (!subcat) return c.json({ error: "Subcategory not found" }, 404);
+    const raw = await c.env.DB.prepare(sql).bind(locale, locale, subId).first();
+    if (!raw) return c.json({ error: "Subcategory not found" }, 404);
+    let product_count = void 0;
     if (String(with_counts) === "1") {
-      const cnt = await c.env.DB.prepare(`SELECT COUNT(*) AS product_count FROM products WHERE subcategory_id = ?`).bind(subcat.id).first();
-      subcat.product_count = Number(cnt?.product_count || 0);
+      const cnt = await c.env.DB.prepare(`SELECT COUNT(*) AS product_count FROM products WHERE subcategory_id = ?`).bind(raw.id).first();
+      product_count = Number(cnt?.product_count || 0);
     }
-    return c.json({ subcategory: subcat, source: "database", locale });
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const subcategory = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null,
+      ...product_count !== void 0 ? { product_count } : {}
+    };
+    return c.json({ subcategory, source: "database", locale });
   } catch (err) {
     console.error("Error fetching subcategory:", err);
     return c.json({ error: "Failed to fetch subcategory" }, 500);
@@ -3951,7 +4011,7 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
         COALESCE(pt.description, p.description)   AS description,
         COALESCE(pt.content, p.content)           AS content,
         p.slug                                    AS product_slug,
-        p.image_url,
+        p.image_url,              -- KEY trong DB
         p.created_at,
         p.updated_at,
         s.id      AS subcategory_id,
@@ -3975,14 +4035,19 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
       ORDER BY p.created_at DESC
     `;
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, subId).all();
-    const products = res?.results ?? [];
+    const rows = res?.results ?? [];
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const products = rows.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
     return c.json({ products, count: products.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching products by subcategory:", err);
     return c.json({ error: "Failed to fetch products by subcategory" }, 500);
   }
 });
-const encoder = new TextEncoder();
+const encoder$1 = new TextEncoder();
 const decoder = new TextDecoder();
 function concat(...buffers) {
   const size = buffers.reduce((acc, { length }) => acc + length, 0);
@@ -4036,7 +4101,7 @@ function decode(input) {
 function encode(input) {
   let unencoded = input;
   if (typeof unencoded === "string") {
-    unencoded = encoder.encode(unencoded);
+    unencoded = encoder$1.encode(unencoded);
   }
   if (Uint8Array.prototype.toBase64) {
     return unencoded.toBase64({ alphabet: "base64url", omitPadding: true });
@@ -4771,7 +4836,7 @@ async function flattenedVerify(jws, key, options) {
     resolvedKey = true;
   }
   checkKeyType(alg, key, "verify");
-  const data = concat(encoder.encode(jws.protected ?? ""), encoder.encode("."), typeof jws.payload === "string" ? encoder.encode(jws.payload) : jws.payload);
+  const data = concat(encoder$1.encode(jws.protected ?? ""), encoder$1.encode("."), typeof jws.payload === "string" ? encoder$1.encode(jws.payload) : jws.payload);
   let signature;
   try {
     signature = decode(jws.signature);
@@ -4791,7 +4856,7 @@ async function flattenedVerify(jws, key, options) {
       throw new JWSInvalid("Failed to base64url decode the payload");
     }
   } else if (typeof jws.payload === "string") {
-    payload = encoder.encode(jws.payload);
+    payload = encoder$1.encode(jws.payload);
   } else {
     payload = jws.payload;
   }
@@ -4995,7 +5060,7 @@ class JWTClaimsBuilder {
     this.#payload = structuredClone(payload);
   }
   data() {
-    return encoder.encode(JSON.stringify(this.#payload));
+    return encoder$1.encode(JSON.stringify(this.#payload));
   }
   get iss() {
     return this.#payload.iss;
@@ -5116,15 +5181,15 @@ class FlattenedSign {
     checkKeyType(alg, key, "sign");
     let payload = this.#payload;
     if (b64) {
-      payload = encoder.encode(encode(payload));
+      payload = encoder$1.encode(encode(payload));
     }
     let protectedHeader;
     if (this.#protectedHeader) {
-      protectedHeader = encoder.encode(encode(JSON.stringify(this.#protectedHeader)));
+      protectedHeader = encoder$1.encode(encode(JSON.stringify(this.#protectedHeader)));
     } else {
-      protectedHeader = encoder.encode("");
+      protectedHeader = encoder$1.encode("");
     }
-    const data = concat(protectedHeader, encoder.encode("."), payload);
+    const data = concat(protectedHeader, encoder$1.encode("."), payload);
     const k = await normalizeKey(key, alg);
     const signature = await sign(alg, k, data);
     const jws = {
@@ -5207,49 +5272,217 @@ class SignJWT {
     return sig.sign(key, options);
   }
 }
-const enc$1 = new TextEncoder();
-const getKey$1 = (secret) => enc$1.encode(secret);
+var validCookieNameRegEx = /^[\w!#$%&'*.^`|~+-]+$/;
+var validCookieValueRegEx = /^[ !#-:<-[\]-~]*$/;
+var parse = (cookie, name) => {
+  if (cookie.indexOf(name) === -1) {
+    return {};
+  }
+  const pairs = cookie.trim().split(";");
+  const parsedCookie = {};
+  for (let pairStr of pairs) {
+    pairStr = pairStr.trim();
+    const valueStartPos = pairStr.indexOf("=");
+    if (valueStartPos === -1) {
+      continue;
+    }
+    const cookieName = pairStr.substring(0, valueStartPos).trim();
+    if (name !== cookieName || !validCookieNameRegEx.test(cookieName)) {
+      continue;
+    }
+    let cookieValue = pairStr.substring(valueStartPos + 1).trim();
+    if (cookieValue.startsWith('"') && cookieValue.endsWith('"')) {
+      cookieValue = cookieValue.slice(1, -1);
+    }
+    if (validCookieValueRegEx.test(cookieValue)) {
+      parsedCookie[cookieName] = decodeURIComponent_(cookieValue);
+      {
+        break;
+      }
+    }
+  }
+  return parsedCookie;
+};
+var _serialize = (name, value, opt = {}) => {
+  let cookie = `${name}=${value}`;
+  if (name.startsWith("__Secure-") && !opt.secure) {
+    throw new Error("__Secure- Cookie must have Secure attributes");
+  }
+  if (name.startsWith("__Host-")) {
+    if (!opt.secure) {
+      throw new Error("__Host- Cookie must have Secure attributes");
+    }
+    if (opt.path !== "/") {
+      throw new Error('__Host- Cookie must have Path attributes with "/"');
+    }
+    if (opt.domain) {
+      throw new Error("__Host- Cookie must not have Domain attributes");
+    }
+  }
+  if (opt && typeof opt.maxAge === "number" && opt.maxAge >= 0) {
+    if (opt.maxAge > 3456e4) {
+      throw new Error(
+        "Cookies Max-Age SHOULD NOT be greater than 400 days (34560000 seconds) in duration."
+      );
+    }
+    cookie += `; Max-Age=${opt.maxAge | 0}`;
+  }
+  if (opt.domain && opt.prefix !== "host") {
+    cookie += `; Domain=${opt.domain}`;
+  }
+  if (opt.path) {
+    cookie += `; Path=${opt.path}`;
+  }
+  if (opt.expires) {
+    if (opt.expires.getTime() - Date.now() > 3456e7) {
+      throw new Error(
+        "Cookies Expires SHOULD NOT be greater than 400 days (34560000 seconds) in the future."
+      );
+    }
+    cookie += `; Expires=${opt.expires.toUTCString()}`;
+  }
+  if (opt.httpOnly) {
+    cookie += "; HttpOnly";
+  }
+  if (opt.secure) {
+    cookie += "; Secure";
+  }
+  if (opt.sameSite) {
+    cookie += `; SameSite=${opt.sameSite.charAt(0).toUpperCase() + opt.sameSite.slice(1)}`;
+  }
+  if (opt.priority) {
+    cookie += `; Priority=${opt.priority}`;
+  }
+  if (opt.partitioned) {
+    if (!opt.secure) {
+      throw new Error("Partitioned Cookie must have Secure attributes");
+    }
+    cookie += "; Partitioned";
+  }
+  return cookie;
+};
+var serialize = (name, value, opt) => {
+  value = encodeURIComponent(value);
+  return _serialize(name, value, opt);
+};
+var getCookie = (c, key, prefix) => {
+  const cookie = c.req.raw.headers.get("Cookie");
+  {
+    if (!cookie) {
+      return void 0;
+    }
+    let finalKey = key;
+    const obj2 = parse(cookie, finalKey);
+    return obj2[finalKey];
+  }
+};
+var setCookie = (c, name, value, opt) => {
+  let cookie;
+  if (opt?.prefix === "secure") {
+    cookie = serialize("__Secure-" + name, value, { path: "/", ...opt, secure: true });
+  } else if (opt?.prefix === "host") {
+    cookie = serialize("__Host-" + name, value, {
+      ...opt,
+      path: "/",
+      secure: true,
+      domain: void 0
+    });
+  } else {
+    cookie = serialize(name, value, { path: "/", ...opt });
+  }
+  c.header("Set-Cookie", cookie, { append: true });
+};
+const encoder = new TextEncoder();
+const isStrongPassword = (p = "") => p.length >= 8 && /[A-Za-z]/.test(p) && /\d/.test(p);
+const toHex = (buffer) => [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, "0")).join("");
+async function hashPassword(password) {
+  const salt = crypto.randomUUID();
+  const data = encoder.encode(password + salt);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return `${salt}$${toHex(hashBuffer)}`;
+}
+async function verifyPassword(password, stored) {
+  const [salt, hash] = stored.split("$");
+  const data = encoder.encode(password + salt);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return toHex(hashBuffer) === hash;
+}
+const enc$2 = new TextEncoder();
+const getKey$2 = (secret) => enc$2.encode(secret);
 const nowSec$1 = () => Math.floor(Date.now() / 1e3);
 const bearer = (h) => h?.startsWith("Bearer ") ? h.slice(7) : null;
 const auth = async (c, next) => {
   try {
-    const token = bearer(c.req.header("Authorization"));
+    const token = bearer(c.req.header("Authorization")) || getCookie(c, "token");
     if (!token) return c.json({ error: "Unauthorized" }, 401);
-    if (!c.env.DB_AVAILABLE) return c.json({ error: "Database not available" }, 503);
-    const { payload } = await jwtVerify(token, getKey$1(c.env.JWT_SECRET));
+    if (!c.env.DB_AVAILABLE)
+      return c.json({ error: "Database not available" }, 503);
+    const { payload } = await jwtVerify(token, getKey$2(c.env.JWT_SECRET));
     const { jti } = payload;
     const row = await c.env.DB.prepare(
       "SELECT revoked, expires_at FROM sessions WHERE jti = ?"
     ).bind(jti).first();
-    if (!row) return c.json({ error: "Invalid session. Please log in again." }, 401);
-    if (row.revoked) return c.json({ error: "Token revoked. Please log in again." }, 401);
-    if (!row.expires_at || row.expires_at < nowSec$1()) return c.json({ error: "Token expired. Please log in again." }, 401);
+    if (!row)
+      return c.json({ error: "Invalid session. Please log in again." }, 401);
+    if (row.revoked)
+      return c.json({ error: "Token revoked. Please log in again." }, 401);
+    if (!row.expires_at || row.expires_at < nowSec$1())
+      return c.json({ error: "Token expired. Please log in again." }, 401);
     c.set("user", payload);
     await next();
   } catch {
     return c.json({ error: "Invalid or expired token" }, 401);
   }
 };
-const enc = new TextEncoder();
-const getKey = (secret) => enc.encode(secret);
+const rolePermissions = {
+  superadmin: ["users.manage", "users.password", "content.manage"],
+  admin: ["users.manage", "users.password", "content.manage"],
+  user_manager: ["users.manage"],
+  editor: ["content.manage"],
+  content_manager: ["content.manage"]
+};
+const hasPerm = (user, perms) => {
+  const needed = Array.isArray(perms) ? perms : [perms];
+  const permsOfRole = rolePermissions[user?.role] || [];
+  return needed.every((p) => permsOfRole.includes(p));
+};
+const requireAdminAuth = async (c, next) => {
+  await auth(c, async () => {
+    const user = c.get("user");
+    if (!user || !user.role || user.role === "user") {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+    await next();
+  });
+};
+const requirePerm = (perms) => async (c, next) => {
+  const user = c.get("user");
+  const needed = Array.isArray(perms) ? perms : [perms];
+  const permsOfRole = rolePermissions[user?.role] || [];
+  const ok2 = needed.every((p) => permsOfRole.includes(p));
+  if (!ok2) return c.json({ error: "Forbidden" }, 403);
+  await next();
+};
+const enc$1 = new TextEncoder();
+const getKey$1 = (secret) => enc$1.encode(secret);
 const nowSec = () => Math.floor(Date.now() / 1e3);
 const authRouter = new Hono2();
-authRouter.post("/login", async (c) => {
+async function performLogin(c, body) {
   try {
     console.log("Login attempt started");
     if (!c.env.DB_AVAILABLE) {
       console.error("Database not available");
-      return c.json({ error: "Database not available" }, 503);
+      return { error: "Database not available", code: 503 };
     }
     if (!c.env.JWT_SECRET) {
       console.error("JWT_SECRET not configured");
       return c.json({ error: "Server configuration error" }, 500);
     }
-    const { email, password } = await c.req.json();
+    const { email, password } = body;
     console.log("Login data received:", { email, hasPassword: !!password });
     if (!email || !password) {
       console.log("Missing email or password");
-      return c.json({ error: "Missing email/password" }, 400);
+      return { error: "Missing email/password", code: 400 };
     }
     console.log("Querying user from database...");
     const user = await c.env.DB.prepare(
@@ -5258,14 +5491,23 @@ authRouter.post("/login", async (c) => {
     console.log("User query result:", user ? { id: user.id, email: user.email, role: user.role } : "No user found");
     if (!user) {
       console.log("User not found for email:", email);
-      return c.json({ error: "Invalid credentials" }, 401);
+      return { error: "Invalid credentials", code: 401 };
     }
     console.log("Comparing passwords...");
-    console.log("Input password:", password);
-    console.log("Stored password:", user.password);
-    if (password !== user.password) {
+    let valid = false;
+    if (user.password.includes("$")) {
+      valid = await verifyPassword(password, user.password);
+    } else {
+      valid = user.password === password;
+      if (valid) {
+        const newHash = await hashPassword(password);
+        await c.env.DB.prepare("UPDATE users SET password = ? WHERE id = ?").bind(newHash, user.id).run();
+        user.password = newHash;
+      }
+    }
+    if (!valid) {
       console.log("Password mismatch");
-      return c.json({ error: "Invalid credentials" }, 401);
+      return { error: "Invalid credentials", code: 401 };
     }
     console.log("Password match successful, generating JWT...");
     const maxAgeSec = Number(c.env.JWT_EXPIRES_IN ?? 900);
@@ -5297,44 +5539,41 @@ authRouter.post("/login", async (c) => {
       // ← role lấy từ DB
       name: user.name,
       jti
-    }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setIssuedAt(iat).setExpirationTime(exp).sign(getKey(c.env.JWT_SECRET));
-    console.log("Login successful for user:", user.email);
-    return c.json({
-      access_token: token,
-      token_type: "Bearer",
-      expires_in: maxAgeSec,
-      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+    }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setIssuedAt(iat).setExpirationTime(exp).sign(getKey$1(c.env.JWT_SECRET));
+    setCookie(c, "token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      path: "/",
+      maxAge: maxAgeSec
     });
+    console.log("Login successful for user:", user.email);
+    return {
+      token,
+      maxAgeSec,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+    };
   } catch (e) {
     console.error("Login error:", e);
-    console.error("Error name:", e.name);
-    console.error("Error message:", e.message);
-    console.error("Error stack:", e.stack);
-    return c.json({
-      error: "Login failed",
-      details: e.message,
-      type: e.name
-    }, 500);
+    return { error: "Login failed", code: 500, details: e.message };
   }
+}
+authRouter.post("/login", async (c) => {
+  const body = await c.req.json();
+  const result = await performLogin(c, body);
+  if (result.error) return c.json({ error: result.error }, result.code);
+  return c.json({
+    access_token: result.token,
+    token_type: "Bearer",
+    expires_in: result.maxAgeSec,
+    user: result.user
+  });
 });
 authRouter.post("/admin/login", async (c) => {
-  try {
-    const url = new URL("/api/auth/login", c.req.url);
-    const res = await fetch(url.toString(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: await c.req.text()
-      // giữ nguyên body FE gửi lên
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      return c.json({ message: data?.error || data?.message || "Login failed" }, res.status);
-    }
-    return c.json({ token: data.access_token }, 200);
-  } catch (err) {
-    console.error("Alias /admin/login error:", err);
-    return c.json({ message: "Internal server error" }, 500);
-  }
+  const body = await c.req.json();
+  const result = await performLogin(c, body);
+  if (result.error) return c.json({ message: result.error }, result.code);
+  return c.json({ token: result.token }, 200);
 });
 authRouter.get("/me", auth, (c) => {
   return c.json({ authenticated: true, user: c.get("user") });
@@ -7218,7 +7457,7 @@ var CFB = /* @__PURE__ */ function _CFB() {
   function get_fs() {
     return fs || (fs = {});
   }
-  function parse(file, options) {
+  function parse2(file, options) {
     if (file[0] == 80 && file[1] == 75) return parse_zip2(file, options);
     if ((file[0] | 32) == 109 && (file[1] | 32) == 105) return parse_mad(file, options);
     if (file.length < 512) throw new Error("CFB file size " + file.length + " < 512");
@@ -7499,7 +7738,7 @@ var CFB = /* @__PURE__ */ function _CFB() {
   }
   function read_file(filename2, options) {
     get_fs();
-    return parse(fs.readFileSync(filename2), options);
+    return parse2(fs.readFileSync(filename2), options);
   }
   function read(blob, options) {
     var type = options && options.type;
@@ -7510,11 +7749,11 @@ var CFB = /* @__PURE__ */ function _CFB() {
       case "file":
         return read_file(blob, options);
       case "base64":
-        return parse(s2a(Base64_decode(blob)), options);
+        return parse2(s2a(Base64_decode(blob)), options);
       case "binary":
-        return parse(s2a(blob), options);
+        return parse2(s2a(blob), options);
     }
-    return parse(
+    return parse2(
       /*::typeof blob == 'string' ? new Buffer(blob, 'utf-8') : */
       blob,
       options
@@ -8700,7 +8939,7 @@ var CFB = /* @__PURE__ */ function _CFB() {
   }
   exports.find = find;
   exports.read = read;
-  exports.parse = parse;
+  exports.parse = parse2;
   exports.write = write;
   exports.writeFile = write_file;
   exports.utils = {
@@ -31599,7 +31838,7 @@ productsRouter.get("/", async (c) => {
         COALESCE(pt.slug,  p.slug)                AS slug,
         COALESCE(pt.description, p.description)   AS description,
         COALESCE(pt.content,     p.content)       AS content,
-        p.image_url,
+        p.image_url,                 -- KEY trong DB
         p.created_at,
         p.updated_at,
 
@@ -31619,7 +31858,12 @@ productsRouter.get("/", async (c) => {
       ${offsetSql}
     `;
     const result = await c.env.DB.prepare(sql).bind(...params).all();
-    const products = result?.results ?? [];
+    const rows = result?.results ?? [];
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const products = rows.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
     return c.json({
       products,
       count: products.length,
@@ -31637,8 +31881,13 @@ productsRouter.get("/:idOrSlug", async (c) => {
   try {
     if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
     const locale = getLocale$3(c);
-    const product = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
-    if (!product) return c.json({ error: "Product not found" }, 404);
+    const raw = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
+    if (!raw) return c.json({ error: "Product not found" }, 404);
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const product = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+    };
     return c.json({ product, source: "database", locale });
   } catch (err) {
     console.error("Error fetching product:", err);
@@ -31957,9 +32206,12 @@ async function translateContentInWorker(c, text, source, target) {
   if (!src) return "";
   const out = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
     messages: [
-      { role: "system", content: `Translate from ${source} to ${target}.
+      {
+        role: "system",
+        content: `Translate from ${source} to ${target}.
 Return PLAIN TEXT only (no markdown, no code fences, no labels).
-Keep short line breaks. Do not add headings or bullets.` },
+Keep short line breaks. Do not add headings or bullets.`
+      },
       { role: "user", content: src }
     ],
     temperature: 0
@@ -32007,6 +32259,59 @@ productsRouter.post("/import", async (c) => {
     let created = 0, updated = 0, skipped = 0;
     const errors = [];
     const locale = getLocale$3(c);
+    const subRes = await c.env.DB.prepare(`
+      SELECT
+        s.id                  AS id,
+        s.slug                AS s_slug,
+        s.name                AS s_name,
+        st.locale             AS t_locale,
+        st.slug               AS t_slug,
+        st.name               AS t_name
+      FROM subcategories s
+      LEFT JOIN subcategories_translations st
+        ON st.sub_id = s.id
+    `).all();
+    const subRows = subRes?.results || [];
+    const subById = /* @__PURE__ */ new Map();
+    const keyToId = /* @__PURE__ */ new Map();
+    const normalizeAscii = (s = "") => String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+    for (const r of subRows) {
+      const id = Number(r.id);
+      if (!Number.isFinite(id)) continue;
+      subById.set(id, r);
+      const keys2 = [r.s_name, r.s_slug, r.t_name, r.t_slug].filter(Boolean);
+      for (const k of keys2) {
+        keyToId.set(normalizeAscii(k), id);
+        keyToId.set(slugify(k), id);
+        keyToId.set(String(k).toLowerCase(), id);
+      }
+    }
+    const resolveSubcategoryId = (row) => {
+      const idRaw = row.subcategory_id;
+      if (idRaw != null && String(idRaw).trim() !== "") {
+        const n = Number(idRaw);
+        if (Number.isFinite(n) && subById.has(n)) return n;
+      }
+      const nameCandidates = [
+        row.subcategory_name,
+        row.subcategory,
+        row.subcat,
+        row.sub_category,
+        row.sub_cat_name,
+        row["subcategory(vi)"],
+        row["subcategory(en)"]
+      ].filter((v) => v != null && String(v).trim() !== "");
+      for (const v of nameCandidates) {
+        const s = String(v).trim();
+        const k1 = keyToId.get(normalizeAscii(s));
+        if (k1) return k1;
+        const k2 = keyToId.get(slugify(s));
+        if (k2) return k2;
+        const k3 = keyToId.get(s.toLowerCase());
+        if (k3) return k3;
+      }
+      return null;
+    };
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const title2 = toStr(row.title);
@@ -32019,23 +32324,15 @@ productsRouter.post("/import", async (c) => {
       slug = slugify(slug);
       const description = toStr(row.description);
       const image_url = toStr(row.image_url);
-      let subcategory_id = null;
-      if (row.subcategory_id != null && String(row.subcategory_id).trim() !== "") {
-        const idNum = Number(row.subcategory_id);
-        if (Number.isFinite(idNum)) subcategory_id = idNum;
-      } else if (row.subcategory) {
-        const subKey = toStr(row.subcategory);
-        if (subKey) {
-          const rs = await c.env.DB.prepare(`
-              SELECT s.id
-              FROM subcategories s
-              LEFT JOIN subcategories_translations st
-                ON st.sub_id = s.id AND st.locale = ?
-              WHERE s.slug = ? OR st.slug = ? OR s.name = ? OR st.name = ?
-              LIMIT 1
-            `).bind(locale, slugify(subKey), slugify(subKey), subKey, subKey).first();
-          if (rs?.id) subcategory_id = rs.id;
-        }
+      const subcategory_id = resolveSubcategoryId(row);
+      if (!subcategory_id) {
+        skipped++;
+        errors.push({
+          row: i + 1,
+          reason: "subcategory_not_found",
+          value: row.subcategory_name ?? row.subcategory ?? row.subcat ?? row.sub_category ?? row.sub_cat_name ?? row.subcategory_id ?? ""
+        });
+        continue;
       }
       if (dryRun) {
         created++;
@@ -32053,7 +32350,7 @@ productsRouter.post("/import", async (c) => {
           description || null,
           content,
           image_url || null,
-          subcategory_id == null ? null : Number(subcategory_id),
+          Number(subcategory_id),
           exists.id
         ).run();
         productId = exists.id;
@@ -32069,7 +32366,7 @@ productsRouter.post("/import", async (c) => {
           description || null,
           content,
           image_url || null,
-          subcategory_id == null ? null : Number(subcategory_id)
+          Number(subcategory_id)
         ).run();
         if (res.success) {
           productId = res.meta?.last_row_id;
@@ -32746,18 +33043,32 @@ var Resend = class {
     });
   }
 };
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 async function sendEmailResend(c, { to, subject, html, text, replyTo }) {
   const apiKey = c.env.RESEND_API_KEY;
   if (!apiKey) throw new Error("Missing RESEND_API_KEY");
+  const configuredFrom = c.env.FROM_EMAIL || "no-reply@itxeasy.com";
+  const from = /@itxeasy\.com$/i.test(configuredFrom) ? `ITXEASY <${configuredFrom}>` : "ITXEASY <no-reply@itxeasy.com>";
+  const toArr = Array.isArray(to) ? to : [to].filter(Boolean);
+  if (!toArr.length || !subject || !(html || text)) {
+    throw new Error("Missing to/subject/body");
+  }
+  toArr.forEach((mail) => {
+    if (!EMAIL_RE.test(String(mail))) {
+      throw new Error(`Invalid recipient: ${mail}`);
+    }
+  });
   const resend = new Resend(apiKey);
-  const from = c.env.FROM_EMAIL || "onboarding@resend.dev";
   const payload = {
     from,
-    to: Array.isArray(to) ? to : [to],
+    to: toArr,
     subject,
     html,
     ...text ? { text } : {},
-    ...replyTo ? { reply_to: Array.isArray(replyTo) ? replyTo : [replyTo] } : {}
+    // mặc định reply_to là info@itxeasy.com
+    reply_to: Array.isArray(replyTo) ? replyTo : [replyTo || "info@itxeasy.com"]
+    // headers tuỳ chọn
+    // headers: { 'List-Unsubscribe': '<mailto:unsubscribe@itxeasy.com>' },
   };
   const { data, error } = await resend.emails.send(payload);
   if (error) throw new Error(error.message || "Resend failed");
@@ -32787,8 +33098,7 @@ contactRouter.post("/", async (c) => {
     const phone2 = (body.phone || "").trim();
     const address = (body.address || "").trim();
     const message2 = (body.message || "").trim();
-    if (!fullName || !email || !message2)
-      return bad$1(c, "fullName, email, message are required");
+    if (!fullName || !email || !message2) return bad$1(c, "fullName, email, message are required");
     if (!isEmail$1(email)) return bad$1(c, "Invalid email");
     const result = await c.env.DB.prepare(
       `INSERT INTO contact_messages (full_name, email, phone, address, message)
@@ -32798,7 +33108,7 @@ contactRouter.post("/", async (c) => {
       "SELECT * FROM contact_messages WHERE id = ?"
     ).bind(result.meta.last_row_id).first();
     const brand = c.env.BRAND_NAME || "Website";
-    const admin = c.env.ADMIN_EMAIL || "admin@example.com";
+    const contactTo = c.env.CONTACT_TO || "info@itxeasy.com";
     const adminHtml = `
       <div>
         <h2>New contact message</h2>
@@ -32809,7 +33119,7 @@ contactRouter.post("/", async (c) => {
         <p><b>Message:</b></p>
         <pre style="white-space:pre-wrap;">${message2}</pre>
         <hr/>
-        <p>Created at: ${newItem.created_at} — Status: ${newItem.status} — ID: ${newItem.id}</p>
+        <p>Created at: ${newItem?.created_at ?? ""} — Status: ${newItem?.status ?? ""} — ID: ${newItem?.id ?? ""}</p>
       </div>
     `;
     const adminText = `New contact from ${fullName}
@@ -32837,19 +33147,21 @@ Nội dung:
 ${message2}`;
     try {
       await Promise.all([
+        // Mail về nội bộ: to = info@, reply-to = email khách
         sendEmailResend(c, {
-          to: admin,
+          to: contactTo,
           subject: `[${brand}] New contact from ${fullName}`,
           html: adminHtml,
           text: adminText,
           replyTo: email
-          // Admin bấm Reply là trả lời thẳng người gửi
         }),
+        // Mail xác nhận cho khách: to = khách, reply-to = info@
         sendEmailResend(c, {
           to: email,
           subject: `Cảm ơn bạn đã liên hệ ${brand}`,
           html: userHtml,
-          text: userText
+          text: userText,
+          replyTo: contactTo
         })
       ]);
     } catch (mailErr) {
@@ -32894,6 +33206,8 @@ contactRouter.delete("/:id", async (c) => {
   }
 });
 const userRouter = new Hono2();
+userRouter.use("*", requireAdminAuth);
+userRouter.use("*", requirePerm("users.manage"));
 const bad = (c, msg = "Bad Request", code = 400) => c.json({ ok: false, error: msg }, code);
 const ok = (c, data = {}, code = 200) => c.json({ ok: true, ...data }, code);
 const isEmail = (s = "") => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
@@ -32926,11 +33240,17 @@ userRouter.post("/", async (c) => {
     const body = await c.req.json();
     const name = (body.name || "").trim();
     const email = (body.email || "").trim();
-    const password = (body.password || "").trim();
+    const passwordRaw = (body.password || "").trim();
     const role = (body.role || "user").trim();
-    if (!name || !email || !password)
+    if (!name || !email || !passwordRaw)
       return bad(c, "name, email, password are required");
     if (!isEmail(email)) return bad(c, "Invalid email");
+    if (!isStrongPassword(passwordRaw))
+      return bad(
+        c,
+        "Password must be at least 8 characters and include letters and numbers"
+      );
+    const password = await hashPassword(passwordRaw);
     const result = await c.env.DB.prepare(
       `INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`
     ).bind(name, email, password, role).run();
@@ -32959,8 +33279,17 @@ userRouter.put("/:id", async (c) => {
       binds.push(body.email.trim());
     }
     if (body.password) {
+      if (!hasPerm(c.get("user"), "users.password")) {
+        return bad(c, "Forbidden", 403);
+      }
+      const pw = body.password.trim();
+      if (!isStrongPassword(pw))
+        return bad(
+          c,
+          "Password must be at least 8 characters and include letters and numbers"
+        );
       fields.push("password = ?");
-      binds.push(body.password.trim());
+      binds.push(await hashPassword(pw));
     }
     if (body.role) {
       fields.push("role = ?");
@@ -33032,13 +33361,12 @@ bannerRouter.get("/", async (c) => {
       ORDER BY b.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-    return c.json({
-      ok: true,
-      items: results,
-      count: results.length,
-      source: "database",
-      locale
-    });
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const items = results.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+    return c.json({ ok: true, items, count: items.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching banners:", err);
     return c.json({ ok: false, error: "Failed to fetch banners" }, 500);
@@ -33050,8 +33378,13 @@ bannerRouter.get("/:id", async (c) => {
   try {
     if (!hasDB$2(c.env)) return c.json({ ok: false, error: "No database" }, 503);
     const locale = getLocale$2(c);
-    const item = await getMergedBannerById(c.env.DB, id, locale);
-    if (!item) return c.json({ ok: false, error: "Not found" }, 404);
+    const raw = await getMergedBannerById(c.env.DB, id, locale);
+    if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const item = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+    };
     return c.json({ ok: true, item, source: "database", locale });
   } catch {
     return c.json({ ok: false, error: "Failed to fetch banner" }, 500);
@@ -33221,7 +33554,7 @@ fieldRouter.get("/", async (c) => {
         f.id,
         COALESCE(ft.name,    f.name)    AS name,
         COALESCE(ft.content, f.content) AS content,
-        f.image_url,
+        f.image_url,   -- KEY trong DB
         f.created_at
       FROM fields f
       LEFT JOIN fields_translations ft
@@ -33229,10 +33562,15 @@ fieldRouter.get("/", async (c) => {
       ORDER BY f.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const items = results.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
     return c.json({
       ok: true,
-      items: results,
-      count: results.length,
+      items,
+      count: items.length,
       source: "database",
       locale
     });
@@ -33247,8 +33585,13 @@ fieldRouter.get("/:id", async (c) => {
   try {
     if (!hasDB$1(c.env)) return c.json({ ok: false, error: "No database" }, 503);
     const locale = getLocale$1(c);
-    const item = await getMergedFieldById(c.env.DB, id, locale);
-    if (!item) return c.json({ ok: false, error: "Not found" }, 404);
+    const raw = await getMergedFieldById(c.env.DB, id, locale);
+    if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const item = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+    };
     return c.json({ ok: true, item, source: "database", locale });
   } catch (e) {
     console.error(e);
@@ -33433,7 +33776,7 @@ cerPartnerRouter.get("/", async (c) => {
         COALESCE(ct.name,    c.name)    AS name,
         c.type,
         COALESCE(ct.content, c.content) AS content,
-        c.image_url,
+        c.image_url,   -- KEY
         c.created_at
       FROM certifications_partners c
       LEFT JOIN certifications_partners_translations ct
@@ -33441,7 +33784,12 @@ cerPartnerRouter.get("/", async (c) => {
       ORDER BY c.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-    return c.json({ ok: true, items: results, count: results.length, source: "database", locale });
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const items = results.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+    return c.json({ ok: true, items, count: items.length, source: "database", locale });
   } catch (err) {
     console.error("Error fetching certifications_partners:", err);
     return c.json({ ok: false, error: "Failed to fetch items" }, 500);
@@ -33460,7 +33808,7 @@ cerPartnerRouter.get("/type/:type", async (c) => {
         COALESCE(ct.name,    c.name)    AS name,
         c.type,
         COALESCE(ct.content, c.content) AS content,
-        c.image_url,
+        c.image_url,   -- KEY
         c.created_at
       FROM certifications_partners c
       LEFT JOIN certifications_partners_translations ct
@@ -33469,7 +33817,12 @@ cerPartnerRouter.get("/type/:type", async (c) => {
       ORDER BY c.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale, t).all();
-    return c.json({ ok: true, items: results, count: results.length, type: t, locale });
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const items = results.map((r) => ({
+      ...r,
+      image_url: r.image_url ? `${base}/${r.image_url}` : null
+    }));
+    return c.json({ ok: true, items, count: items.length, type: t, locale });
   } catch (e) {
     console.error(e);
     return c.json({ ok: false, error: "Failed to fetch by type" }, 500);
@@ -33481,8 +33834,13 @@ cerPartnerRouter.get("/:id", async (c) => {
   try {
     if (!hasDB(c.env)) return c.json({ ok: false, error: "No database" }, 503);
     const locale = getLocale(c);
-    const item = await getMergedById(c.env.DB, id, locale);
-    if (!item) return c.json({ ok: false, error: "Not found" }, 404);
+    const raw = await getMergedById(c.env.DB, id, locale);
+    if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const item = {
+      ...raw,
+      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+    };
     return c.json({ ok: true, item, source: "database", locale });
   } catch (e) {
     console.error(e);
@@ -33829,6 +34187,16 @@ ${parentItems.map((i) => `  <url><loc>${esc(i.loc)}</loc>${i.lastmod ? `<lastmod
     "cache-control": "public, s-maxage=3600"
   });
 });
+const app$1 = new Hono2();
+app$1.use("*", requireAdminAuth);
+app$1.post("/users", requirePerm("users.manage"), (c) => {
+  return c.json({ message: "User created" });
+});
+app$1.post("/content", requirePerm("content.manage"), (c) => {
+  return c.json({ message: "Content updated" });
+});
+const enc = new TextEncoder();
+const getKey = (secret) => enc.encode(secret);
 const GRAPH = "https://graph.facebook.com/v20.0";
 const app = new Hono2();
 app.use("*", async (c, next) => {
@@ -34075,6 +34443,74 @@ app.get("/wa/history", async (c) => {
     })
   );
 });
+const verifyAdmin = async (c) => {
+  const token = getCookie(c, "token");
+  if (!token || !c.env.JWT_SECRET) return null;
+  try {
+    const { payload } = await jwtVerify(token, getKey(c.env.JWT_SECRET));
+    const { jti } = payload;
+    const row = await c.env.DB?.prepare(
+      "SELECT revoked, expires_at FROM sessions WHERE jti = ?"
+    ).bind(jti).first();
+    if (!row || row.revoked || !row.expires_at || row.expires_at < Date.now() / 1e3)
+      return null;
+    return payload;
+  } catch {
+    return null;
+  }
+};
+const serveAdminLogin = async (c) => {
+  const user = await verifyAdmin(c);
+  if (user) return c.redirect("/admin/dashboard", 302);
+  const res = await c.env.ASSETS.fetch(c.req.raw);
+  const headers = new Headers(res.headers);
+  headers.set("Cache-Control", "no-store");
+  return new Response(res.body, { ...res, headers });
+};
+app.get("/admin/login", serveAdminLogin);
+app.get("/admin/login/", serveAdminLogin);
+const redirectAdminRoot = async (c) => {
+  const user = await verifyAdmin(c);
+  if (!user) return c.redirect("/admin/login", 302);
+  return c.redirect("/admin/dashboard", 302);
+};
+app.get("/admin", redirectAdminRoot);
+app.get("/admin/", redirectAdminRoot);
+app.route("/admin/api", app$1);
+app.get("/admin/*", async (c) => {
+  if (c.req.path.startsWith("/admin/api")) return c.notFound();
+  const user = await verifyAdmin(c);
+  if (!user) return c.redirect("/admin/login", 302);
+  return c.env.ASSETS.fetch(c.req.raw);
+});
+const adminOnlyPaths = [
+  "/api/banners",
+  "/api/about",
+  "/api/news",
+  "/api/fields",
+  "/api/products",
+  "/api/parent_categories",
+  "/api/sub_categories",
+  "/api/cer-partners",
+  "/api/upload-image",
+  "/api/editor-upload",
+  "/api/translate"
+];
+const protectContent = async (c, next) => {
+  const method = c.req.method;
+  if (method === "GET" || method === "OPTIONS") return next();
+  await requireAdminAuth(c, async () => {
+    await requirePerm("content.manage")(c, next);
+  });
+};
+for (const path of adminOnlyPaths) {
+  app.use(path, protectContent);
+  app.use(`${path}/*`, protectContent);
+}
+app.use("/api/users", requireAdminAuth);
+app.use("/api/users/*", requireAdminAuth);
+app.use("/api/users", requirePerm("users.manage"));
+app.use("/api/users/*", requirePerm("users.manage"));
 app.route("/", seoRoot);
 app.route("/sitemaps", sitemaps);
 app.route("/api/seo", seoApp);

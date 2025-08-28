@@ -33,9 +33,10 @@ binding = "AI"
 [vars]
 JWT_SECRET = "kOIu0O//qZ7JP++tc7GSBBUmvdw+Fcm7sx/D533H0JQ="
 JWT_EXPIRES_IN = "900" 
-BRAND_NAME = "ITXEASY"
-ADMIN_EMAIL = "doanvanngoc061220@gmail.com"   
-FROM_EMAIL = "onboarding@resend.dev"         
+RESEND_API_KEY = "re_GUzwZDkn_DqQBJrw3BvH6t5AxDdYBm1sh"
+FROM_EMAIL     = "no-reply@itxeasy.com"
+CONTACT_TO     = "info@itxeasy.com"
+BRAND_NAME     = "ITXEASY"
 EMAIL_PROVIDER = "resend"
 CANONICAL_HOST = "itxeasy.dev.com"
 
