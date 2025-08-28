@@ -38,7 +38,7 @@ FROM_EMAIL     = "no-reply@itxeasy.com"
 CONTACT_TO     = "info@itxeasy.com"
 BRAND_NAME     = "ITXEASY"
 EMAIL_PROVIDER = "resend"
-CANONICAL_HOST = "itxeasy.dev.com"
+CANONICAL_HOST = "beta.itxeasy.com"
 
 upload_source_maps = true
 
