@@ -5,12 +5,25 @@ import { useNavigate, useLocation } from "react-router-dom";
 
 const SUPPORTED = ["vi", "en"];
 const DEFAULT_LOCALE = "vi";
-const DEFAULT_IMG = "/banner.jpg"
+const DEFAULT_IMG = "/banner.jpg";
 
-const safeImg = (u) => {
-  const s = (u ?? "").toString().trim();
-  return s && s.toLowerCase() !== "null" ? s : DEFAULT_IMG;
+// Nếu bạn có CDN (R2/Cloudflare Images) thì đặt vào .env: VITE_CDN_BASE=https://cdn.example.com
+const CDN_BASE = import.meta.env.VITE_CDN_BASE || "";
+
+/** Chuẩn hoá URL ảnh thành tuyệt đối + fallback */
+const toAbsImg = (u) => {
+    const s = (u ?? "").toString().trim();
+    if (!s || s.toLowerCase() === "null") return DEFAULT_IMG;
+    if (/^https?:\/\//i.test(s)) return s; // đã tuyệt đối
+    if (CDN_BASE) {
+        const base = CDN_BASE.replace(/\/+$/, "");
+        const key = s.replace(/^\/+/, "");
+        return `${base}/${key}`;
+    }
+    return `/${s.replace(/^\/+/, "")}`; // tương đối từ gốc site
 };
+
+const safeImg = (u) => toAbsImg(u);
 
 function resolveLocale(propLocale, search) {
     const fromProp = (propLocale || "").toLowerCase();
@@ -87,7 +100,7 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
         try {
             document.documentElement.lang = locale;
             localStorage.setItem("locale", locale);
-        } catch {}
+        } catch { }
     }, [locale]);
 
     // Fetch categories theo locale
@@ -107,10 +120,9 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
                         id: c.id,
                         name: c.name ?? c.title ?? c.slug ?? "Category",
                         slug: c.slug ?? (c.id != null ? String(c.id) : ""),
-                        image_url: safeImg(c.image_url),
+                        image_url: safeImg(c.image_url), // đã chuẩn hoá URL + fallback
                     }))
                 );
-
             } catch (err) {
                 if (err.name !== "AbortError") {
                     console.error("Failed to load parents:", err);
@@ -273,9 +285,7 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
                 {/* Slider Container */}
                 <div
                     ref={containerRef}
-                    className={`relative max-w-6xl mx-auto select-none ${
-                        isDragging ? "cursor-grabbing" : "cursor-grab"
-                    }`}
+                    className={`relative max-w-6xl mx-auto select-none ${isDragging ? "cursor-grabbing" : "cursor-grab"}`}
                     onMouseEnter={handleMouseEnter}
                     onMouseLeave={handleMouseLeave}
                     onMouseDown={(e) => {
@@ -314,18 +324,14 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
                             ref={sliderRef}
                             className="flex transition-transform duration-500 ease-in-out pointer-events-none"
                             style={{
-                                transform: `${baseTranslate} ${
-                                    isDragging ? `translateX(${translateX * 0.3}px)` : ""
-                                }`,
+                                transform: `${baseTranslate} ${isDragging ? `translateX(${translateX * 0.3}px)` : ""}`,
                                 transition: isDragging ? "none" : "transform 0.5s ease-in-out",
                             }}
                         >
                             {displayCategories.map((category, index) => {
-                                const name =
-                                    category.name || category.title || category.slug || "Category";
-
-                                // Chọn nền pastel luân phiên để giống 3 thẻ trong ảnh
+                                const name = category.name || category.title || category.slug || "Category";
                                 const bg = pastel[index % pastel.length];
+                                const img = category.image_url || DEFAULT_IMG;
 
                                 return (
                                     <div
@@ -340,37 +346,39 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
                                             aria-label={name}
                                             style={{ background: bg }}
                                         >
-                                            {/* Card content (text-only style như ảnh) */}
-                                            <div className="p-8 md:p-10 lg:p-12 min-h-[280px] flex flex-col justify-between">
-                                                <div>
-                                                    {/* dòng script màu hồng */}
-                                                    <div
-                                                        style={caveatStyle}
-                                                        className="text-2xl md:text-3xl"
-                                                    >
-                                                    <span style={{ color: pink }}>
-                                                    {locale === "vi" ? "Đặc biệt hôm nay" : "Taste Now"}
-                                                    </span>
-                                                    </div>
+                                            {/* Ảnh nằm ở đầu card */}
+                                            <div className="relative w-full aspect-[4/3]">
+                                                <img
+                                                    src={img}
+                                                    alt={name}
+                                                    className="absolute inset-0 w-full h-full object-cover"
+                                                    loading="lazy"
+                                                    onError={(e) => { e.currentTarget.src = DEFAULT_IMG; }}
+                                                />
+                                            </div>
 
-                                                    {/* tiêu đề to nét viết tay */}
+                                            {/* Nội dung chữ */}
+                                            <div className="p-8 md:p-10 lg:p-12 min-h-[220px] flex flex-col justify-between">
+                                                <div>
+                                                    <div style={caveatStyle} className="text-2xl md:text-3xl">
+                                                        <span style={{ color: pink }}>
+                                                            {locale === "vi" ? "Đặc biệt hôm nay" : "Taste Now"}
+                                                        </span>
+                                                    </div>
                                                     <h3
                                                         style={gochiStyle}
-                                                        className="mt-4 text-4xl md:text-5xl leading-tight text-gray-900"
+                                                        className="mt-4 text-3xl md:text-4xl leading-tight text-gray-900"
                                                     >
                                                         {name}
                                                     </h3>
                                                 </div>
 
-                                                {/* CTA dạng mũi tên */}
                                                 <div
-                                                    className="mt-8 inline-flex items-center gap-2 text-gray-800 group-hover:translate-x-1 transition-transform"
+                                                    className="mt-6 inline-flex items-center gap-2 text-gray-800 group-hover:translate-x-1 transition-transform"
                                                     style={gochiStyle}
                                                 >
                                                     <span aria-hidden>→</span>
-                                                    <span className="underline underline-offset-4">
-                            {t.shop}
-                          </span>
+                                                    <span className="underline underline-offset-4">{t.shop}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -386,9 +394,8 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
                             <button
                                 key={index}
                                 onClick={() => goToSlide(index)}
-                                className={`h-2.5 rounded-full transition-all duration-300 pointer-events-auto ${
-                                    index === currentIndex ? "bg-green-600 w-8" : "bg-gray-300 w-2.5 hover:bg-gray-400"
-                                }`}
+                                className={`h-2.5 rounded-full transition-all duration-300 pointer-events-auto ${index === currentIndex ? "bg-green-600 w-8" : "bg-gray-300 w-2.5 hover:bg-gray-400"
+                                    }`}
                                 aria-label={(locale === "vi" ? "Trang " : "Page ") + (index + 1)}
                             />
                         ))}
