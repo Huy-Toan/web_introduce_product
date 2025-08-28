@@ -4,7 +4,7 @@ import TopNavigation from "../components/Navigation";
 import Footer from "../components/Footer";
 import Banner from "../components/Banner";
 import ProductCategories from "../components/Categori";
-import IntroduceProductsSection from "../components/IntroduceProducts.jsx";
+// import IntroduceProductsSection from "../components/IntroduceProducts.jsx";
 import AboutSection from "../components/AboutSection";
 import NewsSection from "../components/NewsSection";
 import FieldHighlightsSection from "../components/FieldSection";
@@ -33,7 +33,7 @@ export default function HomePage() {
         const items = (data.items || data.parent_categories || data || [])
           .map(x => ({ name: x?.name || x?.title, slug: x?.slug || x?.id }))
           .filter(x => x.name && x.slug);
-          setProducts(items);
+        setProducts(items);
       } catch { }
     })();
 
@@ -77,7 +77,7 @@ export default function HomePage() {
     // Sản phẩm nổi bật (thử nhiều endpoint cho chắc)
     (async () => {
       try {
-          const res = await fetch("/api/products", { signal: ac.signal });
+        const res = await fetch("/api/products", { signal: ac.signal });
         if (!res.ok) return;
         const data = await res.json();
         const items = (data.products || data.items || data || [])
@@ -257,7 +257,6 @@ export default function HomePage() {
       <TopNavigation />
       <Banner />
       <ProductCategories />
-      <IntroduceProductsSection products={products} />
       <AboutSection />
       <FieldHighlightsSection />
       <CerPartnersSection />
