@@ -148,7 +148,7 @@ async function translateMarkdown(md, source, target) {
 const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id);
   const [isR2Importing, setIsR2Importing] = useState(false);
-
+  const [removedImage, setRemovedImage] = useState(false);
   // Base (VI)
   const [base, setBase] = useState({
     title: '',
@@ -233,6 +233,8 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     setSlugErrorsTr({});
     lastSourceTitle.current = initialData.title || '';
     lastSourceDesc.current = viDesc;
+
+    setRemovedImage(false);
 
     const initTr = { ...(initialData.translations || {}) };
     delete initTr.vi;
@@ -534,86 +536,105 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   }
 
   // Submit
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!base.title?.trim()) { alert('Vui lòng nhập Tên sản phẩm'); return; }
-    if (!base.content?.trim()) { alert('Vui lòng nhập Nội dung sản phẩm'); return; }
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (!base.title?.trim()) { alert('Vui lòng nhập Tên sản phẩm'); return; }
+  if (!base.content?.trim()) { alert('Vui lòng nhập Nội dung sản phẩm'); return; }
 
-    if (isEditing) {
-      if (!base.slug) { setSlugErrorVI('Vui lòng nhập slug hoặc dùng “Tạo từ tên”.'); return; }
-      if (!isValidSlug(base.slug)) { setSlugErrorVI('Slug không hợp lệ.'); return; }
-    }
-    for (const lc of Object.keys(slugErrorsTr)) {
-      if (slugErrorsTr[lc]) { alert(`Slug (${lc.toUpperCase()}) không hợp lệ.`); return; }
-    }
+  if (isEditing) {
+    if (!base.slug) { setSlugErrorVI('Vui lòng nhập slug hoặc dùng “Tạo từ tên”.'); return; }
+    if (!isValidSlug(base.slug)) { setSlugErrorVI('Slug không hợp lệ.'); return; }
+  }
+  for (const lc of Object.keys(slugErrorsTr)) {
+    if (slugErrorsTr[lc]) { alert(`Slug (${lc.toUpperCase()}) không hợp lệ.`); return; }
+  }
 
-    setIsUploading(true);
-    try {
-      let image_url = base.image_url;
-      if (imageFile) {
+  setIsUploading(true);
+  try {
+    let image_url = base.image_url;
+
+    if (imageFile) {
+      // chọn ảnh mới -> upload & dùng key mới
       const uploaded = await uploadImage(imageFile);
-      image_url = uploaded.image_key;       
+      image_url = uploaded.image_key;
+      setImagePreview(uploaded.previewUrl);
+    } else if (isEditing) {
+      // đang edit, không upload ảnh mới
+      if (removedImage) {
+        // đã bấm xoá -> gửi null để BE xoá ảnh
+        image_url = null;
+      } else {
+        // không đụng ảnh -> KHÔNG GỬI field image_url
+        image_url = undefined;
+      }
+    } else {
+      // tạo mới
+      image_url = base.image_url ? base.image_url : undefined;
     }
 
-      let payloadBase = {
-        title: base.title,
-        description: base.description,
-        content: base.content,
-        image_url,
-        subcategory_id: base.subcategory_id ?? null,
-      };
-      if (isEditing) payloadBase.slug = slugify(base.slug || '');
+    // Base payload
+    let payloadBase = {
+      title: base.title,
+      description: base.description,
+      content: base.content,
+      subcategory_id: base.subcategory_id ?? null,
+      ...(image_url !== undefined ? { image_url } : {}), 
+    };
+    if (isEditing) payloadBase.slug = slugify(base.slug || '');
 
-      if (!isEditing && payloadBase.slug) {
-        const { slug, ...rest } = payloadBase;
-        payloadBase = rest; // tạo mới: để BE tự sinh slug nếu muốn
-      }
-
-      // translations payload: { lc: { title?, slug?, description?, content? } }
-      const cleanTranslations = {};
-      for (const [lc, v] of Object.entries(translations)) {
-        const hasAny = (v?.title || v?.description || v?.content || v?.slug);
-        if (!hasAny) continue;
-
-        const tSlugRaw = (v?.slug || '').trim();
-        const tSlug = tSlugRaw ? slugify(tSlugRaw) : '';
-
-        const entry = {};
-        if (v.title) entry.title = v.title;
-        if (v.description) entry.description = v.description;
-        if (v.content) entry.content = v.content;
-        if (tSlug && isValidSlug(tSlug)) entry.slug = tSlug;
-
-        cleanTranslations[lc] = entry;
-      }
-
-      const finalPayload = {
-        ...payloadBase,
-        ...(Object.keys(cleanTranslations).length ? { translations: cleanTranslations } : {}),
-      };
-      if (initialData.id) finalPayload.id = initialData.id;
-
-      await onSubmit(finalPayload);
-      onClose();
-
-      setBase({ title: '', slug: '', description: '', content: '', image_url: '', subcategory_id: null });
-      setTranslations({});
-      setTouched({});
-      setOpenLocales(['vi', 'en']);
-      setActiveTab('vi');
-      setImageFile(null);
-      setImagePreview('');
-      setSlugErrorVI('');
-      setSlugErrorsTr({});
-      lastSourceTitle.current = '';
-      lastSourceDesc.current = '';
-    } catch (err) {
-      console.error(err);
-      alert('Có lỗi xảy ra khi upload ảnh hoặc gửi dữ liệu. Vui lòng thử lại!');
-    } finally {
-      setIsUploading(false);
+    if (!isEditing && payloadBase.slug) {
+      const { slug, ...rest } = payloadBase;
+      payloadBase = rest; // tạo mới: để BE tự sinh slug nếu muốn
     }
-  };
+
+    // translations payload
+    const cleanTranslations = {};
+    for (const [lc, v] of Object.entries(translations)) {
+      const hasAny = (v?.title || v?.description || v?.content || v?.slug);
+      if (!hasAny) continue;
+
+      const tSlugRaw = (v?.slug || '').trim();
+      const tSlug = tSlugRaw ? slugify(tSlugRaw) : '';
+
+      const entry = {};
+      if (v.title) entry.title = v.title;
+      if (v.description) entry.description = v.description;
+      if (v.content) entry.content = v.content;
+      if (tSlug && isValidSlug(tSlug)) entry.slug = tSlug;
+
+      cleanTranslations[lc] = entry;
+    }
+
+    const finalPayload = {
+      ...payloadBase,
+      ...(Object.keys(cleanTranslations).length ? { translations: cleanTranslations } : {}),
+    };
+    if (initialData.id) finalPayload.id = initialData.id;
+
+    await onSubmit(finalPayload);
+    onClose();
+
+    // reset form
+    setBase({ title: '', slug: '', description: '', content: '', image_url: '', subcategory_id: null });
+    setTranslations({});
+    setTouched({});
+    setOpenLocales(['vi', 'en']);
+    setActiveTab('vi');
+    setImageFile(null);
+    setImagePreview('');
+    setSlugErrorVI('');
+    setSlugErrorsTr({});
+    setRemovedImage(false); // NEW: reset cờ
+    lastSourceTitle.current = '';
+    lastSourceDesc.current = '';
+  } catch (err) {
+    console.error(err);
+    alert('Có lỗi xảy ra khi upload ảnh hoặc gửi dữ liệu. Vui lòng thử lại!');
+  } finally {
+    setIsUploading(false);
+  }
+};
+
 
   if (!isOpen) return null;
   const siteURL = import.meta?.env?.VITE_SITE_URL || '';
@@ -801,6 +822,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
                 setImageFile={setImageFile}
                 setBase={setBase}
                 isUploading={isUploading || isImporting}
+                onRemove={() => setRemovedImage(true)}
               />
             </div>
           )}
@@ -994,6 +1016,7 @@ function ImagePicker({ imagePreview, setImagePreview, setImageFile, setBase, isU
               setImageFile(null);
               setImagePreview('');
               setBase(prev => ({ ...prev, image_url: '' }));
+              onRemove?.();
             }}
             disabled={isUploading}
             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600 disabled:bg-gray-400"

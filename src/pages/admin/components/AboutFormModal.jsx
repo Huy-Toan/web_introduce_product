@@ -434,7 +434,6 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     if (!f.type.startsWith('image/')) return alert('Vui lòng chọn file ảnh hợp lệ!');
     if (f.size > 5 * 1024 * 1024) return alert('Kích thước ảnh không vượt quá 5MB!');
     setImageFile(f);
-    setRemovedImage(false);
     const r = new FileReader();
     r.onload = (ev) => setImagePreview(String(ev.target?.result || ''));
     r.readAsDataURL(f);
@@ -470,16 +469,23 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
       if (imageFile) {
         const uploaded = await uploadImage(imageFile);
-        payload.image_url = uploaded.image_key;  
+        payload.image_url = uploaded.image_key;   
       } else if (isEditing) {
+        // đang UPDATE mà không chọn ảnh mới:
         if (removedImage) {
+          // user CHỦ ĐỘNG xóa ảnh -> gửi null để BE clear
           payload.image_url = null;
         } else {
+          // user KHÔNG đổi gì -> ĐỪNG gửi image_url để giữ nguyên DB
+          // (tức là bỏ qua field này)
         }
       } else {
+        // đang CREATE và không có ảnh -> cũng bỏ qua field này
+        // hoặc nếu bạn có sẵn key trong baseVI.image_url thì có thể gửi
         if (baseVI.image_url) payload.image_url = baseVI.image_url;
       }
 
+      // 3) translations
       const cleanTranslations = {};
       for (const [lc, v] of Object.entries(translations)) {
         const hasAny = v?.title || v?.content;
@@ -491,11 +497,14 @@ const AboutFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       }
       if (Object.keys(cleanTranslations).length) payload.translations = cleanTranslations;
 
+      // 4) id cho update
       if (isEditing) payload.id = initialData?.about?.id || initialData?.id;
 
+      // 5) submit
       await onSubmit(payload);
       onClose();
 
+      // reset form
       setBaseVI({ title: '', content: '', image_url: '' });
       setTranslations({});
       setTouched({});

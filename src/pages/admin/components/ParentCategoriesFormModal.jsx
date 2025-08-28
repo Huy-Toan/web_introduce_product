@@ -84,9 +84,7 @@ const L = (lc, key) => LABELS[lc]?.[key] ?? LABELS.en[key] ?? key;
 
 const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id);
-// top-level states
-  const [didChangeCover, setDidChangeCover] = useState(false);
-
+  const [removedImage, setRemovedImage] = useState(false);
   // Base (VI) -> parent_categories
   const [base, setBase] = useState({ name: '', slug: '', description: '', image_url: '' });
 
@@ -119,7 +117,6 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
         image_url: initialData.image_url || ''
       });
       setImagePreview(initialData.image_url || '');
-      setDidChangeCover(false); 
       setActiveTab('vi');
       setSlugErrorVI('');
       setSlugErrorsTr({});
@@ -127,6 +124,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
         name: initialData.name || '',
         description: initialData.description || ''
       };
+      setRemovedImage(false);
 
       // Nếu FE có kèm translations sẵn
       const initTr = { ...(initialData.translations || {}) };
@@ -308,6 +306,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
         : ''
     }));
   };
+
   const generateSlugFromTRName = (lc) => {
     const name = translations[lc]?.name || '';
     const s = slugify(name);
@@ -335,82 +334,92 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // validate như cũ...
 
-    if (!base.name?.trim()) {
-      alert('Vui lòng nhập tên danh mục (VI).');
-      return;
-    }
-    if (isEditing && base.slug && !isValidSlug(base.slug)) {
-      setSlugErrorVI('Slug không hợp lệ.');
-      return;
-    }
+    setIsUploading(true);
+    try {
+      // --- ẢNH: áp dụng logic giống đoạn mẫu bạn đưa ---
+      let image_url = base.image_url;
 
-    for (const lc of Object.keys(slugErrorsTr)) {
-      if (slugErrorsTr[lc]) {
-        alert(`Slug (${lc.toUpperCase()}) không hợp lệ.`);
-        return;
+      if (imageFile) {
+        // chọn ảnh mới -> upload và dùng key mới
+        const uploaded = await uploadImage(imageFile);
+        image_url = uploaded.image_key;
+        setImagePreview(uploaded.previewUrl);
+      } else if (isEditing) {
+        // đang edit nhưng không upload ảnh mới
+        if (removedImage) {
+          // đã bấm xoá -> gửi null để BE xoá ảnh
+          image_url = null;
+        } else {
+          // không đụng gì tới ảnh -> KHÔNG GỬI image_url trong payload
+          image_url = undefined; // đánh dấu để lát nữa loại field này
+        }
+      } else {
+        // đang tạo mới, nếu có sẵn url thì gửi; không thì thôi
+        image_url = base.image_url ? base.image_url : undefined;
       }
-    }
 
-      setIsUploading(true);
-      try {
-        let payloadBase = { 
-          name: base.name, 
-          description: base.description 
-        };
+      // Base payload
+      let payloadBase = {
+        name: base.name,
+        description: base.description,
+        // chỉ set khi cần:
+        ...(image_url !== undefined ? { image_url } : {})
+      };
 
-        if (didChangeCover) {
-          if (imageFile) {
-            const uploaded = await uploadImage(imageFile);
-            payloadBase.image_url = uploaded.image_key; 
-            setImagePreview(uploaded.previewUrl);      
-          } else {
-
-            payloadBase.image_url = null;
-          }
-        }
-        // 3) Nếu KHÔNG đổi cover => KHÔNG gửi image_url => BE giữ ảnh cũ
-
-        if (isEditing && base.slug) payloadBase.slug = slugify(base.slug || '');
-        if (!isEditing && payloadBase.slug) {
-          const { slug, ...rest } = payloadBase;
-          payloadBase = rest; // để BE tự sinh slug nếu muốn
-        }
-
-        // translations giữ nguyên như bạn đang làm
-        const cleanTranslations = {};
-        for (const [lc, v] of Object.entries(translations)) {
-          const tName = (v?.name || '').trim();
-          const tDesc = (v?.description || '').trim();
-          const tSlugRaw = (v?.slug || '').trim();
-          const tSlug = tSlugRaw ? slugify(tSlugRaw) : '';
-          const hasAny = tName || tDesc || tSlug;
-          if (!hasAny) continue;
-          const entry = {};
-          if (tName) entry.name = tName;
-          if (tDesc) entry.description = tDesc;
-          if (tSlug && isValidSlug(tSlug)) entry.slug = tSlug;
-          cleanTranslations[lc] = entry;
-        }
-
-        const finalPayload = {
-          ...payloadBase,
-          ...(Object.keys(cleanTranslations).length ? { translations: cleanTranslations } : {})
-        };
-        if (initialData.id) finalPayload.id = initialData.id;
-
-        await onSubmit(finalPayload);
-        onClose();
-
-        // reset như cũ…
-        setDidChangeCover(false); // << nhớ reset cờ
-      } catch (error) {
-        console.error(error);
-        alert('Có lỗi xảy ra khi upload ảnh hoặc gửi dữ liệu. Vui lòng thử lại!');
-      } finally {
-        setIsUploading(false);
+      if (isEditing && base.slug) payloadBase.slug = slugify(base.slug || '');
+      if (!isEditing && payloadBase.slug) {
+        const { slug, ...rest } = payloadBase;
+        payloadBase = rest;
       }
+
+      // Translations như cũ...
+      const cleanTranslations = {};
+      for (const [lc, v] of Object.entries(translations)) {
+        const tName = (v?.name || '').trim();
+        const tDesc = (v?.description || '').trim();
+        const tSlugRaw = (v?.slug || '').trim();
+        const tSlug = tSlugRaw ? slugify(tSlugRaw) : '';
+        const hasAny = tName || tDesc || tSlug;
+        if (!hasAny) continue;
+
+        const entry = {};
+        if (tName) entry.name = tName;
+        if (tDesc) entry.description = tDesc;
+        if (tSlug && isValidSlug(tSlug)) entry.slug = tSlug;
+        cleanTranslations[lc] = entry;
+      }
+
+      const finalPayload = {
+        ...payloadBase,
+        ...(Object.keys(cleanTranslations).length ? { translations: cleanTranslations } : {})
+      };
+      if (initialData.id) finalPayload.id = initialData.id;
+
+      await onSubmit(finalPayload);
+      onClose();
+
+      // reset form
+      setBase({ name: '', slug: '', description: '', image_url: '' });
+      setTranslations({});
+      setTouched({});
+      setOpenLocales(['vi', 'en']);
+      setActiveTab('vi');
+      setImageFile(null);
+      setImagePreview('');
+      setSlugErrorVI('');
+      setSlugErrorsTr({});
+      setRemovedImage(false); // NEW: reset cờ
+      lastSourceSnapshot.current = { name: '', description: '' };
+    } catch (error) {
+      console.error(error);
+      alert('Có lỗi xảy ra khi upload ảnh hoặc gửi dữ liệu. Vui lòng thử lại!');
+    } finally {
+      setIsUploading(false);
+    }
   };
+
 
   if (!isOpen) return null;
   const siteURL = import.meta?.env?.VITE_SITE_URL || '';
@@ -572,8 +581,8 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
                 setImagePreview={setImagePreview}
                 setImageFile={setImageFile}
                 setBase={setBase}
-                setDidChangeCover={setDidChangeCover}
                 isUploading={isUploading}
+                onRemove={() => setRemovedImage(true)}
               />
             </div>
           )}
@@ -690,7 +699,7 @@ function ImagePicker({ imagePreview, setImagePreview, setImageFile, setBase, isU
               setImageFile(null);
               setImagePreview('');
               setBase(prev => ({ ...prev, image_url: '' }));
-              setDidChangeCover(true);
+              onRemove?.();  
             }}
             disabled={isUploading}
             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600 disabled:bg-gray-400"
@@ -712,7 +721,6 @@ function ImagePicker({ imagePreview, setImagePreview, setImageFile, setBase, isU
             const reader = new FileReader();
             reader.onload = (evt) => setImagePreview(String(evt.target?.result || ''));
             reader.readAsDataURL(file);
-            setDidChangeCover(true); 
           }}
           disabled={isUploading}
           className="hidden"
