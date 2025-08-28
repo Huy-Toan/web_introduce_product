@@ -185,19 +185,19 @@ const UsersPanel = () => {
                   required
                 />
               </div>
-              {!editingUser && (
                 <div>
-                  <label className="block text-sm font-medium mb-1">Mật khẩu</label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={form.password}
-                    onChange={handleChange}
-                    className="border rounded px-3 py-2 w-full"
-                    required
-                  />
+                    <label className="block text-sm font-medium mb-1">
+                        Mật khẩu{editingUser && " (để trống nếu không đổi)"}
+                    </label>
+                    <input
+                        type="password"
+                        name="password"
+                        value={form.password}
+                        onChange={handleChange}
+                        className="border rounded px-3 py-2 w-full"
+                        {...(!editingUser ? { required: true } : {})}
+                    />
                 </div>
-              )}
               <div>
                 <label className="block text-sm font-medium mb-1">Vai trò</label>
                 <select

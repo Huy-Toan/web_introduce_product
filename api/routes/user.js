@@ -1,6 +1,6 @@
 // src/routes/UserRouter.js
 import { Hono } from "hono";
-import { requireAdminAuth, requirePerm } from "../auth/authMidleware.js";
+import { requireAdminAuth, requirePerm, hasPerm } from "../auth/authMidleware.js";
 import { hashPassword, isStrongPassword } from "../utils/password.js";
 
 const userRouter = new Hono();
@@ -96,6 +96,9 @@ userRouter.put("/:id", async (c) => {
       binds.push(body.email.trim());
     }
     if (body.password) {
+        if (!hasPerm(c.get("user"), "users.password")) {
+            return bad(c, "Forbidden", 403);
+        }
         const pw = body.password.trim();
         if (!isStrongPassword(pw))
             return bad(

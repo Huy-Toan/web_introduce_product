@@ -5370,11 +5370,16 @@ const auth = async (c, next) => {
   }
 };
 const rolePermissions = {
-  superadmin: ["users.manage", "content.manage"],
-  admin: ["users.manage", "content.manage"],
+  superadmin: ["users.manage", "users.password", "content.manage"],
+  admin: ["users.manage", "users.password", "content.manage"],
   user_manager: ["users.manage"],
   editor: ["content.manage"],
   content_manager: ["content.manage"]
+};
+const hasPerm = (user, perms) => {
+  const needed = Array.isArray(perms) ? perms : [perms];
+  const permsOfRole = rolePermissions[user?.role] || [];
+  return needed.every((p) => permsOfRole.includes(p));
 };
 const requireAdminAuth = async (c, next) => {
   await auth(c, async () => {
@@ -33136,6 +33141,9 @@ userRouter.put("/:id", async (c) => {
       binds.push(body.email.trim());
     }
     if (body.password) {
+      if (!hasPerm(c.get("user"), "users.password")) {
+        return bad(c, "Forbidden", 403);
+      }
       const pw = body.password.trim();
       if (!isStrongPassword(pw))
         return bad(
