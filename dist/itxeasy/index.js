@@ -3982,7 +3982,7 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
     return c.json({ error: "Failed to fetch products by subcategory" }, 500);
   }
 });
-const encoder = new TextEncoder();
+const encoder$1 = new TextEncoder();
 const decoder = new TextDecoder();
 function concat(...buffers) {
   const size = buffers.reduce((acc, { length }) => acc + length, 0);
@@ -4036,7 +4036,7 @@ function decode(input) {
 function encode(input) {
   let unencoded = input;
   if (typeof unencoded === "string") {
-    unencoded = encoder.encode(unencoded);
+    unencoded = encoder$1.encode(unencoded);
   }
   if (Uint8Array.prototype.toBase64) {
     return unencoded.toBase64({ alphabet: "base64url", omitPadding: true });
@@ -4771,7 +4771,7 @@ async function flattenedVerify(jws, key, options) {
     resolvedKey = true;
   }
   checkKeyType(alg, key, "verify");
-  const data = concat(encoder.encode(jws.protected ?? ""), encoder.encode("."), typeof jws.payload === "string" ? encoder.encode(jws.payload) : jws.payload);
+  const data = concat(encoder$1.encode(jws.protected ?? ""), encoder$1.encode("."), typeof jws.payload === "string" ? encoder$1.encode(jws.payload) : jws.payload);
   let signature;
   try {
     signature = decode(jws.signature);
@@ -4791,7 +4791,7 @@ async function flattenedVerify(jws, key, options) {
       throw new JWSInvalid("Failed to base64url decode the payload");
     }
   } else if (typeof jws.payload === "string") {
-    payload = encoder.encode(jws.payload);
+    payload = encoder$1.encode(jws.payload);
   } else {
     payload = jws.payload;
   }
@@ -4995,7 +4995,7 @@ class JWTClaimsBuilder {
     this.#payload = structuredClone(payload);
   }
   data() {
-    return encoder.encode(JSON.stringify(this.#payload));
+    return encoder$1.encode(JSON.stringify(this.#payload));
   }
   get iss() {
     return this.#payload.iss;
@@ -5116,15 +5116,15 @@ class FlattenedSign {
     checkKeyType(alg, key, "sign");
     let payload = this.#payload;
     if (b64) {
-      payload = encoder.encode(encode(payload));
+      payload = encoder$1.encode(encode(payload));
     }
     let protectedHeader;
     if (this.#protectedHeader) {
-      protectedHeader = encoder.encode(encode(JSON.stringify(this.#protectedHeader)));
+      protectedHeader = encoder$1.encode(encode(JSON.stringify(this.#protectedHeader)));
     } else {
-      protectedHeader = encoder.encode("");
+      protectedHeader = encoder$1.encode("");
     }
-    const data = concat(protectedHeader, encoder.encode("."), payload);
+    const data = concat(protectedHeader, encoder$1.encode("."), payload);
     const k = await normalizeKey(key, alg);
     const signature = await sign(alg, k, data);
     const jws = {
@@ -5327,6 +5327,21 @@ var setCookie = (c, name, value, opt) => {
   }
   c.header("Set-Cookie", cookie, { append: true });
 };
+const encoder = new TextEncoder();
+const isStrongPassword = (p = "") => p.length >= 8 && /[A-Za-z]/.test(p) && /\d/.test(p);
+const toHex = (buffer) => [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, "0")).join("");
+async function hashPassword(password) {
+  const salt = crypto.randomUUID();
+  const data = encoder.encode(password + salt);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return `${salt}$${toHex(hashBuffer)}`;
+}
+async function verifyPassword(password, stored) {
+  const [salt, hash] = stored.split("$");
+  const data = encoder.encode(password + salt);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return toHex(hashBuffer) === hash;
+}
 const enc$2 = new TextEncoder();
 const getKey$2 = (secret) => enc$2.encode(secret);
 const nowSec$1 = () => Math.floor(Date.now() / 1e3);
@@ -5355,11 +5370,16 @@ const auth = async (c, next) => {
   }
 };
 const rolePermissions = {
-  superadmin: ["users.manage", "content.manage"],
-  admin: ["users.manage", "content.manage"],
+  superadmin: ["users.manage", "users.password", "content.manage"],
+  admin: ["users.manage", "users.password", "content.manage"],
   user_manager: ["users.manage"],
   editor: ["content.manage"],
   content_manager: ["content.manage"]
+};
+const hasPerm = (user, perms) => {
+  const needed = Array.isArray(perms) ? perms : [perms];
+  const permsOfRole = rolePermissions[user?.role] || [];
+  return needed.every((p) => permsOfRole.includes(p));
 };
 const requireAdminAuth = async (c, next) => {
   await auth(c, async () => {
@@ -5409,9 +5429,18 @@ async function performLogin(c, body) {
       return { error: "Invalid credentials", code: 401 };
     }
     console.log("Comparing passwords...");
-    console.log("Input password:", password);
-    console.log("Stored password:", user.password);
-    if (password !== user.password) {
+    let valid = false;
+    if (user.password.includes("$")) {
+      valid = await verifyPassword(password, user.password);
+    } else {
+      valid = user.password === password;
+      if (valid) {
+        const newHash = await hashPassword(password);
+        await c.env.DB.prepare("UPDATE users SET password = ? WHERE id = ?").bind(newHash, user.id).run();
+        user.password = newHash;
+      }
+    }
+    if (!valid) {
       console.log("Password mismatch");
       return { error: "Invalid credentials", code: 401 };
     }
@@ -33136,11 +33165,17 @@ userRouter.post("/", async (c) => {
     const body = await c.req.json();
     const name = (body.name || "").trim();
     const email = (body.email || "").trim();
-    const password = (body.password || "").trim();
+    const passwordRaw = (body.password || "").trim();
     const role = (body.role || "user").trim();
-    if (!name || !email || !password)
+    if (!name || !email || !passwordRaw)
       return bad(c, "name, email, password are required");
     if (!isEmail(email)) return bad(c, "Invalid email");
+    if (!isStrongPassword(passwordRaw))
+      return bad(
+        c,
+        "Password must be at least 8 characters and include letters and numbers"
+      );
+    const password = await hashPassword(passwordRaw);
     const result = await c.env.DB.prepare(
       `INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)`
     ).bind(name, email, password, role).run();
@@ -33169,8 +33204,17 @@ userRouter.put("/:id", async (c) => {
       binds.push(body.email.trim());
     }
     if (body.password) {
+      if (!hasPerm(c.get("user"), "users.password")) {
+        return bad(c, "Forbidden", 403);
+      }
+      const pw = body.password.trim();
+      if (!isStrongPassword(pw))
+        return bad(
+          c,
+          "Password must be at least 8 characters and include letters and numbers"
+        );
       fields.push("password = ?");
-      binds.push(body.password.trim());
+      binds.push(await hashPassword(pw));
     }
     if (body.role) {
       fields.push("role = ?");

@@ -38,13 +38,20 @@ export const auth = async (c, next) => {
 
 // Mapping role -> permissions
 const rolePermissions = {
-    superadmin: ["users.manage", "content.manage"],
-    admin: ["users.manage", "content.manage"],
+    superadmin: ["users.manage", "users.password", "content.manage"],
+    admin: ["users.manage", "users.password", "content.manage"],
     user_manager: ["users.manage"],
     editor: ["content.manage"],
     content_manager: ["content.manage"]
 };
 
+
+// Utility to check if a user has one or more permissions
+export const hasPerm = (user, perms) => {
+    const needed = Array.isArray(perms) ? perms : [perms];
+    const permsOfRole = rolePermissions[user?.role] || [];
+    return needed.every((p) => permsOfRole.includes(p));
+};
 // Require authenticated admin (non-"user" role)
 export const requireAdminAuth = async (c, next) => {
     await auth(c, async () => {

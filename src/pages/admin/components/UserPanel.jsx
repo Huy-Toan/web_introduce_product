@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 const UsersPanel = () => {
   const [users, setUsers] = useState([]);
@@ -60,8 +60,14 @@ const UsersPanel = () => {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+    const isStrongPassword = (s) => s.length >= 8 && /[A-Za-z]/.test(s) && /\d/.test(s);
+
   const saveUser = async (e) => {
     e.preventDefault();
+      if ((!editingUser && !isStrongPassword(form.password)) || (editingUser && form.password && !isStrongPassword(form.password))) {
+          alert("Mật khẩu phải có ít nhất 8 ký tự và bao gồm cả chữ lẫn số");
+          return;
+      }
     try {
       let res;
       if (editingUser) {
@@ -179,19 +185,19 @@ const UsersPanel = () => {
                   required
                 />
               </div>
-              {!editingUser && (
                 <div>
-                  <label className="block text-sm font-medium mb-1">Mật khẩu</label>
-                  <input
-                    type="password"
-                    name="password"
-                    value={form.password}
-                    onChange={handleChange}
-                    className="border rounded px-3 py-2 w-full"
-                    required
-                  />
+                    <label className="block text-sm font-medium mb-1">
+                        Mật khẩu{editingUser && " (để trống nếu không đổi)"}
+                    </label>
+                    <input
+                        type="password"
+                        name="password"
+                        value={form.password}
+                        onChange={handleChange}
+                        className="border rounded px-3 py-2 w-full"
+                        {...(!editingUser ? { required: true } : {})}
+                    />
                 </div>
-              )}
               <div>
                 <label className="block text-sm font-medium mb-1">Vai trò</label>
                 <select
