@@ -5424,7 +5424,18 @@ async function performLogin(c, body) {
       return { error: "Invalid credentials", code: 401 };
     }
     console.log("Comparing passwords...");
-    if (!await verifyPassword(password, user.password)) {
+    let valid = false;
+    if (user.password.includes("$")) {
+      valid = await verifyPassword(password, user.password);
+    } else {
+      valid = user.password === password;
+      if (valid) {
+        const newHash = await hashPassword(password);
+        await c.env.DB.prepare("UPDATE users SET password = ? WHERE id = ?").bind(newHash, user.id).run();
+        user.password = newHash;
+      }
+    }
+    if (!valid) {
       console.log("Password mismatch");
       return { error: "Invalid credentials", code: 401 };
     }
