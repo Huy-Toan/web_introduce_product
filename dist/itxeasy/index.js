@@ -34488,7 +34488,6 @@ const adminOnlyPaths = [
   "/api/about",
   "/api/news",
   "/api/fields",
-  "/api/contacts",
   "/api/products",
   "/api/parent_categories",
   "/api/sub_categories",
