@@ -31764,9 +31764,8 @@ const getLocale$3 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$3).toLowerCa
 const hasDB$3 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const slugify = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
 const withBase = (base, u) => {
-  let s = String(u || "").trim();
+  const s = String(u || "").trim();
   if (!s) return null;
-  s = s.replace(/^\/+(?=https?:\/\/)/i, "");
   if (/^https?:\/\//i.test(s)) return s;
   return base ? `${base}/${s.replace(/^\/+/, "")}` : s;
 };
@@ -31794,9 +31793,8 @@ function normalizeImagesInput(input) {
       return { url: it, is_primary: idx === 0 ? 1 : 0, sort_order: idx };
     }
     if (typeof it === "object" && it.url) {
-      const cleaned = String(it.url).trim().replace(/^\/+(?=https?:\/\/)/i, "");
       return {
-        url: cleaned,
+        url: String(it.url).trim(),
         is_primary: typeof it.is_primary === "number" ? it.is_primary : it.is_primary ? 1 : idx === 0 ? 1 : 0,
         sort_order: typeof it.sort_order === "number" ? it.sort_order : idx
       };

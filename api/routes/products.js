@@ -21,19 +21,11 @@ const slugify = (s = "") =>
 
 /** URL builder: ghép base vào key tương đối */
 const withBase = (base, u) => {
-  let s = String(u || "").trim();
+  const s = String(u || "").trim();
   if (!s) return null;
-
-  // 🔧 Fix: nếu lỡ có "/https://..." hoặc "//https://..." thì bỏ slash trước
-  s = s.replace(/^\/+(?=https?:\/\/)/i, "");
-
-  // URL tuyệt đối thì giữ nguyên
-  if (/^https?:\/\//i.test(s)) return s;
-
-  // còn lại: ghép base
+  if (/^https?:\/\//i.test(s)) return s; // đã tuyệt đối
   return base ? `${base}/${s.replace(/^\/+/, "")}` : s;
 };
-
 
 /** Chuẩn hoá mảng ảnh về format chuẩn
  * input có thể là:
@@ -70,10 +62,8 @@ function normalizeImagesInput(input) {
         return { url: it, is_primary: idx === 0 ? 1 : 0, sort_order: idx };
       }
       if (typeof it === "object" && it.url) {
-        const cleaned = String(it.url).trim().replace(/^\/+(?=https?:\/\/)/i, ""); // 🔧 Fix
-
         return {
-          url: cleaned,
+          url: String(it.url).trim(),
           is_primary:
             typeof it.is_primary === "number"
               ? it.is_primary
@@ -86,7 +76,6 @@ function normalizeImagesInput(input) {
             typeof it.sort_order === "number" ? it.sort_order : idx,
         };
       }
-
       return null;
     })
     .filter(Boolean);
@@ -277,7 +266,6 @@ productsRouter.get("/", async (c) => {
     return c.json({ error: "Failed to fetch products" }, 500);
   }
 });
-// ➜ Thêm ngay dưới GET "/" và trước GET "/:idOrSlug"
 productsRouter.get("/:id/translations", async (c) => {
   const id = Number(c.req.param("id"));
   try {
@@ -326,7 +314,6 @@ productsRouter.get("/:id/translations", async (c) => {
     return c.json({ error: "Failed to get translations" }, 500);
   }
 });
-
 /** =========================================================
  * GET /api/products/:idOrSlug
  * ========================================================= */

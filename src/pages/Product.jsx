@@ -28,24 +28,32 @@ function getInitialLocale() {
  *  3) image_url (giữ tương thích cũ nếu BE đã build tuyệt đối)
  *  4) images_json cũ (nếu còn)
  */
+// Helper: lấy ảnh cover an toàn từ mọi dạng dữ liệu
 function coverFromProduct(p) {
-  if (!p) return "";
-  if (p.cover_image) return p.cover_image;
-  if (Array.isArray(p.images) && p.images.length) return p.images[0];
-  if (p.image_url) return p.image_url;
-  // Fallback rất cũ: images_json lưu object {url}
-  if (p.images_json) {
+  // 1) ưu tiên cover_image (BE đã chuẩn hoá)
+  if (p?.cover_image) return p.cover_image;
+
+  // 2) hoặc ảnh đầu trong mảng images (BE chuẩn hoá)
+  if (Array.isArray(p?.images) && p.images.length) {
+    return p.images[0];
+  }
+
+  // 3) fallback: image_url (có thể đã tuyệt đối nhờ BE)
+  if (p?.image_url) return p.image_url;
+
+  // 4) fallback cũ: parse images_json (khi BE chưa normalize)
+  if (p?.images_json) {
     try {
       const arr = Array.isArray(p.images_json) ? p.images_json : JSON.parse(p.images_json);
       if (Array.isArray(arr) && arr.length) {
-        const sorted = [...arr].sort((a, b) => (a?.sort_order ?? 0) - (b?.sort_order ?? 0));
-        const primary = sorted.find((it) => (it?.is_primary || 0) === 1) || sorted[0];
+        const primary = arr.find(it => (it?.is_primary || 0) === 1) || arr[0];
         return primary?.url || "";
       }
-    } catch {/* ignore */ }
+    } catch { }
   }
   return "";
 }
+
 
 export default function Products() {
   const navigate = useNavigate();
