@@ -2301,6 +2301,7 @@ uploadImageRouter.post("/", async (c) => {
       }
     });
 <<<<<<< HEAD
+<<<<<<< HEAD
     if (!c.env.INTERNAL_R2_URL && !c.env.PUBLIC_R2_URL) {
       return c.json({ error: "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL" }, 500);
     }
@@ -2313,15 +2314,25 @@ uploadImageRouter.post("/", async (c) => {
     const storageBase = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
     const displayBase = (c.env.DISPLAY_BASE_URL || storageBase).replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    if (!c.env.INTERNAL_R2_URL && !c.env.PUBLIC_R2_URL) {
+      return c.json({ error: "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL" }, 500);
+    }
+    const storageBase = (c.env.INTERNAL_R2_URL || c.env.PUBLIC_R2_URL).replace(/\/+$/, "");
+    const displayBase = (c.env.PUBLIC_R2_URL || storageBase).replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const storageUrl = `${storageBase}/${key}`;
     const displayUrl = `${displayBase}/${key}`;
     return c.json({
       success: true,
       image_key: key,
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
       url: storageUrl,
 >>>>>>> 05698dd (update)
+=======
+>>>>>>> 8642042 (merge branch leads)
       displayUrl,
       fileName: key.split("/").pop(),
       alt: baseSlug,
@@ -2363,10 +2374,14 @@ editorUploadRouter.post("/", async (c) => {
       httpMetadata: { contentType: file.type }
     });
 <<<<<<< HEAD
+<<<<<<< HEAD
     const baseUrl2 = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const baseUrl2 = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const baseUrl2 = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const publicUrl = `${baseUrl2}/${fileName}`;
     return c.json({
       success: 1,
@@ -2484,10 +2499,14 @@ aboutRouter.get("/", async (c) => {
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const about = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -2506,10 +2525,14 @@ aboutRouter.get("/:id", async (c) => {
     const item = await getMergedAboutById(c.env.DB, id, locale);
     if (!item) return c.json({ error: "Not found" }, 404);
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const about = {
       ...item,
       image_url: item.image_url ? `${base}/${item.image_url}` : null
@@ -2743,10 +2766,14 @@ newsRouter.get("/", async (c) => {
     const params = [locale];
     const { results = [] } = await c.env.DB.prepare(sql).bind(...params).all();
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const news = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -2779,10 +2806,14 @@ newsRouter.get("/:idOrSlug", async (c) => {
     if (!raw) return c.json({ error: "Not found" }, 404);
     const translations = await getAllTranslations(c.env.DB, newsId);
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -3309,10 +3340,14 @@ parentsRouter.get("/", async (c) => {
     const result = await c.env.DB.prepare(baseSql).bind(...params).all();
     let parents = result?.results ?? [];
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const toFullUrl = (k) => k ? `${base}/${k}` : null;
     if (String(with_counts) === "1" && parents.length) {
       const ids = parents.map((p) => p.id);
@@ -3423,10 +3458,14 @@ parentsRouter.get("/:idOrSlug", async (c) => {
     const parent = await c.env.DB.prepare(sql).bind(locale, parentId).first();
     if (!parent) return c.json({ error: "Parent category not found" }, 404);
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const toFullUrl = (k) => k ? `${base}/${k}` : null;
     const outParent = {
       ...parent,
@@ -3683,10 +3722,14 @@ parentsRouter.get("/:slug/products", async (c) => {
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, parentId).all();
     const rawProducts = res?.results ?? [];
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const products = rawProducts.map((p) => ({
       ...p,
       image_url: p.image_url ? `${base}/${p.image_url}` : null
@@ -3722,10 +3765,14 @@ parentsRouter.get("/:idOrSlug/subcategories", async (c) => {
     const res = await c.env.DB.prepare(subsSql).bind(locale, parentId).all();
     const rawSubs = res?.results ?? [];
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const subcategories = rawSubs.map((s) => ({
       ...s,
       image_url: s.image_url ? `${base}/${s.image_url}` : null
@@ -3834,10 +3881,14 @@ subCategoriesRouter.get("/", async (c) => {
       subcategories = subcategories.map((s) => ({ ...s, product_count: counts[s.id] || 0 }));
     }
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     subcategories = subcategories.map((s) => ({
       ...s,
       image_url: s.image_url ? `${base}/${s.image_url}` : null
@@ -3889,10 +3940,14 @@ subCategoriesRouter.get("/:idOrSlug", async (c) => {
       product_count = Number(cnt?.product_count || 0);
     }
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const subcategory = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null,
@@ -4163,10 +4218,14 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, subId).all();
     const rows = res?.results ?? [];
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const products = rows.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -32064,6 +32123,7 @@ productsRouter.get("/", async (c) => {
     const result = await c.env.DB.prepare(sql).bind(...params).all();
     const rows = result?.results ?? [];
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const products = rows.map((r) => {
       const { images, cover } = buildImagesView(r.images_json, base);
@@ -32080,6 +32140,9 @@ productsRouter.get("/", async (c) => {
     });
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const products = rows.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -32135,6 +32198,7 @@ productsRouter.get("/:idOrSlug", async (c) => {
     const raw = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
     if (!raw) return c.json({ error: "Product not found" }, 404);
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(
       /\/+$/,
       ""
@@ -32150,6 +32214,9 @@ productsRouter.get("/:idOrSlug", async (c) => {
       // NEW
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const product = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -33773,10 +33840,14 @@ bannerRouter.get("/", async (c) => {
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -33796,10 +33867,14 @@ bannerRouter.get("/:id", async (c) => {
     const raw = await getMergedBannerById(c.env.DB, id, locale);
     if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -33982,10 +34057,14 @@ fieldRouter.get("/", async (c) => {
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -34011,10 +34090,14 @@ fieldRouter.get("/:id", async (c) => {
     const raw = await getMergedFieldById(c.env.DB, id, locale);
     if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -34212,10 +34295,14 @@ cerPartnerRouter.get("/", async (c) => {
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -34249,10 +34336,14 @@ cerPartnerRouter.get("/type/:type", async (c) => {
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale, t).all();
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -34272,10 +34363,14 @@ cerPartnerRouter.get("/:id", async (c) => {
     const raw = await getMergedById(c.env.DB, id, locale);
     if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
 <<<<<<< HEAD
+<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 =======
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
 >>>>>>> 05698dd (update)
+=======
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+>>>>>>> 8642042 (merge branch leads)
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
