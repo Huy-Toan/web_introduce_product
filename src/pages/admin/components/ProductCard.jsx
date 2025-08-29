@@ -1,15 +1,40 @@
 import { Edit2, Trash2 } from 'lucide-react';
 
 const ProductCard = ({ product, onEdit, onDelete }) => {
+  // Ưu tiên dùng image_url nếu có (BE trả về cover)
+  // fallback: lấy từ images_json (mảng URL hoặc object {url})
+  let cover = product.image_url || "";
+  if (!cover && product.images_json) {
+    try {
+      const arr = Array.isArray(product.images_json)
+        ? product.images_json
+        : JSON.parse(product.images_json);
+      if (Array.isArray(arr) && arr.length) {
+        const primary = arr.find(it => it.is_primary === 1) || arr[0];
+        cover = primary?.url || "";
+      }
+    } catch {
+      // ignore parse error
+    }
+  }
+
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
-      <img
-        src={product.image_url}
-        alt={product.title}
-        className="w-full h-48 object-cover"
-      />
+      {cover ? (
+        <img
+          src={cover}
+          alt={product.title}
+          className="w-full h-48 object-cover"
+        />
+      ) : (
+        <div className="w-full h-48 bg-gray-100 flex items-center justify-center text-gray-400">
+          Không có ảnh
+        </div>
+      )}
       <div className="p-4">
-        <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">{product.title}</h3>
+        <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">
+          {product.title}
+        </h3>
         <div className="flex gap-2">
           <button
             onClick={() => onEdit(product)}

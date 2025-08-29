@@ -11,6 +11,56 @@ const DEFAULT_LOCALE = "vi";
 const getLocaleFromSearch = (search) =>
   new URLSearchParams(search).get("locale")?.toLowerCase() || "";
 
+/* ================= Helpers for images & cover ================= */
+function normalizeImages(input) {
+  let arr = [];
+  if (!input) return [];
+  if (Array.isArray(input)) arr = input;
+  else {
+    try {
+      const j = JSON.parse(input);
+      if (Array.isArray(j)) arr = j;
+    } catch {
+      arr = [];
+    }
+  }
+  const out = arr
+    .map((it, i) => {
+      if (!it) return null;
+      if (typeof it === "string") {
+        return { url: it, is_primary: i === 0 ? 1 : 0, sort_order: i };
+      }
+      if (typeof it === "object" && it.url) {
+        return {
+          url: String(it.url).trim(),
+          is_primary: it.is_primary ? 1 : 0,
+          sort_order: Number.isFinite(it.sort_order) ? it.sort_order : i,
+        };
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => (a?.sort_order ?? 0) - (b?.sort_order ?? 0));
+
+  if (out.length) {
+    const hasPrimary = out.some((x) => x.is_primary === 1);
+    if (!hasPrimary) out[0].is_primary = 1;
+    out.forEach((x, i) => (x.sort_order = i));
+  }
+  return out;
+}
+
+function coverFromProduct(p) {
+  if (p?.image_url) return p.image_url;
+  const imgs = normalizeImages(p?.images_json);
+  if (imgs.length) {
+    const primary = imgs.find((x) => x.is_primary === 1) || imgs[0];
+    return primary?.url || "";
+  }
+  return "";
+}
+
+/* ======================= Page ======================= */
 export default function ProductDetailPage() {
   const { idOrSlug } = useParams();
   const navigate = useNavigate();
@@ -43,6 +93,10 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [relLoading, setRelLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Gallery state
+  const [gallery, setGallery] = useState([]); // [{url,is_primary,sort_order}]
+  const [activeIdx, setActiveIdx] = useState(0);
 
   const fetchParentBySub = async (subSlug, signal) => {
     let res = await fetch(
@@ -86,6 +140,7 @@ export default function ProductDetailPage() {
     noRelated: locale === "vi" ? "Chưa có sản phẩm liên quan." : "No related products.",
     prev: locale === "vi" ? "Trước" : "Prev",
     next: locale === "vi" ? "Sau" : "Next",
+    views: locale === "vi" ? "lượt xem" : "views",
   };
 
   const items = [
@@ -111,12 +166,15 @@ export default function ProductDetailPage() {
     { label: product?.title || t.detail },
   ];
 
+  // Ảnh chính lấy theo activeIdx từ gallery (fallback banner)
   const imageSrc = useMemo(() => {
-    if (!product?.image_url || product.image_url === "null") return "/banner.jpg";
-    return product.image_url;
-  }, [product]);
+    const g = gallery;
+    if (g && g.length && g[activeIdx]?.url) return g[activeIdx].url;
+    const cov = coverFromProduct(product || {});
+    return cov || "/banner.jpg";
+  }, [gallery, activeIdx, product]);
 
-  // ===== Helpers để resolve slug -> id và chuẩn hoá URL theo locale =====
+  // ===== Helpers resolve & fetch =====
   const isNumeric = (s) => /^\d+$/.test(String(s || "").trim());
 
   const fetchBy = async (key, lc, signal) => {
@@ -126,6 +184,30 @@ export default function ProductDetailPage() {
     const d = await r.json();
     return d?.product || null;
   };
+
+  // Gọi tăng views (best-effort, không chặn UI)
+  // Gọi tăng views (best-effort, kèm chống trùng trong 1 phiên)
+  const bumpViews = async (productId) => {
+    if (!productId) return;
+    try {
+      const key = `product:viewed:${productId}`;
+      if (sessionStorage.getItem(key)) return;
+
+      const r = await fetch(`/api/products/${encodeURIComponent(productId)}/view`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (r.ok) {
+        sessionStorage.setItem(key, "1");
+        setProduct((prev) => (prev ? { ...prev, views: (prev.views || 0) + 1 } : prev));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+
 
   useEffect(() => {
     if (!idOrSlug) return;
@@ -138,20 +220,16 @@ export default function ProductDetailPage() {
 
         let baseProduct = null;
 
-        // 1) Nếu là id thuần số -> fetch thẳng theo id + locale hiện tại
         if (isNumeric(idOrSlug)) {
           baseProduct = await fetchBy(idOrSlug, locale, ac.signal);
         } else {
-          // 2) Thử fetch theo slug với locale hiện tại
           baseProduct = await fetchBy(idOrSlug, locale, ac.signal);
 
-          // 3) Nếu không thấy, thử các locale khác để lấy ra product.id
           if (!baseProduct) {
             for (const lc of SUPPORTED) {
               if (lc === locale) continue;
               const p = await fetchBy(idOrSlug, lc, ac.signal);
               if (p) {
-                // Đã tìm thấy theo slug của ngôn ngữ khác -> fetch lại theo ID + locale hiện tại
                 baseProduct = await fetchBy(p.id, locale, ac.signal);
                 break;
               }
@@ -161,7 +239,7 @@ export default function ProductDetailPage() {
 
         if (!baseProduct) throw new Error("Not found");
 
-        // 4) Chuẩn hoá URL sang slug của locale hiện tại (nhưng giữ ?locale)
+        // Chuẩn hoá URL sang slug của locale hiện tại
         const routeSlug = decodeURIComponent(String(idOrSlug)).toLowerCase();
         const canonicalSlug = (
           baseProduct.slug || baseProduct.product_slug || baseProduct.id
@@ -176,13 +254,27 @@ export default function ProductDetailPage() {
             )}${qs}`,
             { replace: true }
           );
-          // return ở đây để đợi mount lại với slug mới, tránh nháy nội dung
           return;
         }
 
+        // Setup product + gallery
         setProduct(baseProduct);
 
-        // 5) Bổ sung parent nếu thiếu
+        const imgs = (() => {
+          const normalized = normalizeImages(baseProduct.images_json);
+          if (normalized.length) return normalized;
+          const cov = coverFromProduct(baseProduct);
+          return cov ? [{ url: cov, is_primary: 1, sort_order: 0 }] : [];
+        })();
+        // Đặt active theo ảnh đại diện
+        const idxPrimary = Math.max(
+          0,
+          imgs.findIndex((x) => x.is_primary === 1)
+        );
+        setGallery(imgs);
+        setActiveIdx(idxPrimary >= 0 ? idxPrimary : 0);
+
+        // Bổ sung parent nếu thiếu
         if (!baseProduct?.parent_slug && baseProduct?.subcategory_slug) {
           const parent = await fetchParentBySub(baseProduct.subcategory_slug, ac.signal);
           if (parent?.parent_slug) {
@@ -190,7 +282,7 @@ export default function ProductDetailPage() {
           }
         }
 
-        // 6) Related theo sub/parent (theo locale hiện tại)
+        // Related theo sub/parent
         setRelLoading(true);
         let relatedList = [];
 
@@ -227,6 +319,9 @@ export default function ProductDetailPage() {
 
         relatedList = relatedList.filter((x) => x.id !== baseProduct?.id).slice(0, 12);
         setRelated(relatedList);
+
+        // Tăng views (sau khi đã resolve ID chính xác)
+        bumpViews(baseProduct.id || idOrSlug);
       } catch (e) {
         if (e.name !== "AbortError") {
           console.error("Load product error:", e);
@@ -306,6 +401,7 @@ export default function ProductDetailPage() {
       <main className="container mx-auto px-4 py-6 max-w-7xl">
         <div className="card p-4 space-y-6">
           <div className="md:flex gap-10">
+            {/* Khối ảnh */}
             <div className="md:w-1/2 flex-shrink-0 mb-6 md:mb-0">
               <div
                 className="
@@ -324,11 +420,54 @@ export default function ProductDetailPage() {
                   }}
                 />
               </div>
+
+              {/* Thumbnails */}
+              {gallery.length > 1 && (
+                <div className="mt-3 grid grid-cols-5 sm:grid-cols-6 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                  {gallery.map((g, idx) => (
+                    <button
+                      key={`${g.url}-${idx}`}
+                      type="button"
+                      onClick={() => setActiveIdx(idx)}
+                      className={[
+                        "cursor-pointer relative border rounded overflow-hidden",
+                        "aspect-square",
+                        idx === activeIdx ? "ring-2 ring-blue-500 border-blue-400" : "border-gray-200 hover:border-gray-300"
+                      ].join(" ")}
+                      title={product.title}
+                    >
+                      <img
+                        src={g.url}
+                        alt={`${product.title}-${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => { e.currentTarget.style.opacity = 0.3; }}
+                      />
+                      {g.is_primary === 1 && (
+                        <span className="absolute top-1 left-1 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">
+                          Cover
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-
+            {/* Thông tin */}
             <div className="md:w-2/3 lg:w-3/4">
-              <h1 className="text-2xl font-semibold mb-3">{product.title}</h1>
+              <h1 className="text-2xl font-semibold mb-2">{product.title}</h1>
+
+              <div className="flex items-center gap-3 text-sm text-gray-500 mb-4">
+                {product.views != null && (
+                  <span>
+                    {product.views} {t.views}
+                  </span>
+                )}
+                {product.updated_at && (
+                  <span>• {new Date(product.updated_at).toLocaleDateString()}</span>
+                )}
+              </div>
 
               {product.subcategory_name && (
                 <div className="mb-5">
@@ -403,9 +542,8 @@ export default function ProductDetailPage() {
                 className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar"
               >
                 {related.map((rel) => {
-                  const relImg =
-                    !rel.image_url || rel.image_url === "null" ? "/banner.jpg" : rel.image_url;
                   const relTitle = rel.title || rel.name;
+                  const relCover = coverFromProduct(rel) || "/banner.jpg";
                   return (
                     <div
                       key={rel.id}
@@ -414,7 +552,7 @@ export default function ProductDetailPage() {
                     >
                       <div className="w-full aspect-[5/6] overflow-hidden bg-white">
                         <img
-                          src={relImg}
+                          src={relCover}
                           alt={relTitle}
                           className="block w-full h-full object-cover transform transition-transform duration-300 ease-in-out group-hover:scale-110"
                           loading="lazy"

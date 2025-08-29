@@ -23,6 +23,23 @@ function getInitialLocale() {
   return SUPPORTED.includes(urlLc) ? urlLc : (SUPPORTED.includes(lsLc) ? lsLc : DEFAULT_LOCALE);
 }
 
+// Helper: lấy ảnh cover từ product (ưu tiên image_url, fallback images_json)
+function coverFromProduct(p) {
+  let cover = p?.image_url || "";
+  if (!cover && p?.images_json) {
+    try {
+      const arr = Array.isArray(p.images_json) ? p.images_json : JSON.parse(p.images_json);
+      if (Array.isArray(arr) && arr.length) {
+        const primary = arr.find(it => it.is_primary === 1) || arr[0];
+        cover = primary?.url || "";
+      }
+    } catch {
+      // ignore parse error
+    }
+  }
+  return cover;
+}
+
 export default function Products() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -100,10 +117,7 @@ export default function Products() {
     return arr;
   }, [parentSlug, subSlug, parentMeta, subMeta, locale]);
 
-  // Hook cũ vẫn dùng, nhưng để đảm bảo có bản dịch, ta tự fetch theo locale cho 3 chế độ:
-  //  - All
-  //  - Theo parent
-  //  - Theo sub
+  // Hook cũ vẫn dùng
   const { products: hookProducts, productsLoading, setSelectedSubcategorySlug } =
     useProducts({ initialSubSlug: subSlug || "" });
 
@@ -187,7 +201,7 @@ export default function Products() {
     return () => { try { controller.abort(); } catch { } };
   }, [parentSlug, subSlug, locale]);
 
-  // Products theo sub (chú ý BE trả product_slug → chuẩn hóa thành slug)
+  // Products theo sub (map product_slug -> slug)
   useEffect(() => {
     if (!subSlug) {
       setSubProducts([]);
@@ -206,7 +220,6 @@ export default function Products() {
         const res = await fetch(url, { signal: controller.signal });
         const data = await res.json();
         const list = Array.isArray(data?.products) ? data.products : [];
-        // map product_slug -> slug để UI hoạt động thống nhất
         setSubProducts(list.map(p => ({ ...p, slug: p.slug || p.product_slug })));
       } catch (e) {
         if (e?.name !== "AbortError") {
@@ -225,16 +238,25 @@ export default function Products() {
   const isFilteringByParentOnly = !!parentSlug && !subSlug;
 
   const displayedLoading = isFilteringBySub
-    ? (subLoading || productsLoading) // vẫn OR hook để giữ skeleton nếu hook đang bận
+    ? (subLoading || productsLoading)
     : isFilteringByParentOnly
       ? (parentLoading || productsLoading)
       : (allLoading || productsLoading);
 
-  const displayedProducts = isFilteringBySub
+  const displayedProductsRaw = isFilteringBySub
     ? (subProducts || [])
     : isFilteringByParentOnly
       ? (parentProducts || [])
       : (allProducts.length ? allProducts : (hookProducts || []));
+
+  // Bổ sung cover fallback cho mỗi product (để Card & SEO dùng ổn định)
+  const displayedProducts = useMemo(() => {
+    return (displayedProductsRaw || []).map(p => {
+      const cover = coverFromProduct(p);
+      // đảm bảo luôn có p._cover và đồng thời patch image_url nếu trống (card cũ dùng image_url)
+      return { ...p, _cover: cover, image_url: p.image_url || cover };
+    });
+  }, [displayedProductsRaw]);
 
   const [currentPage, setCurrentPage] = useState(1);
   useEffect(() => setCurrentPage(1), [parentSlug, subSlug, locale]);
@@ -265,7 +287,6 @@ export default function Products() {
     let p = "/product";
     if (parentSlug) p += `/${encodeURIComponent(parentSlug)}`;
     if (subSlug) p += `/${encodeURIComponent(subSlug)}`;
-    // có thể thêm ?locale vào canonical nếu muốn tách theo ngôn ngữ
     return p; // hoặc `${p}?locale=${locale}`
   }, [parentSlug, subSlug /*, locale*/]);
   const canonical = `${SITE_URL}${canonicalPath}`;
@@ -304,7 +325,7 @@ export default function Products() {
   }, [subMeta, parentMeta]);
 
   const breadcrumbLd = useMemo(() => {
-    const base = [{ name: "Product", url: `${SITE_URL}/product` }]; // có thể thêm ?locale
+    const base = [{ name: "Product", url: `${SITE_URL}/product` }];
     if (parentSlug) base.push({
       name: parentMeta?.name || decodeURIComponent(parentSlug),
       url: `${SITE_URL}/product/${encodeURIComponent(parentSlug)}`
@@ -325,19 +346,7 @@ export default function Products() {
     };
   }, [SITE_URL, parentSlug, subSlug, parentMeta, subMeta]);
 
-  const collectionPageLd = useMemo(() => ({
-    "@context": "https://schema.org",
-    "@type": "CollectionPage",
-    name: pageTitle,
-    description: pageDesc,
-    url: canonical,
-    isPartOf: {
-      "@type": "WebSite",
-      name: BRAND,
-      url: SITE_URL
-    }
-  }), [pageTitle, pageDesc, canonical, BRAND, SITE_URL]);
-
+  // Dùng cover chuẩn cho SEO
   const itemListLd = useMemo(() => {
     const items = (paginated || []).map((p, idx) => ({
       "@type": "ListItem",
@@ -346,7 +355,7 @@ export default function Products() {
         "@type": "Product",
         name: p.title || p.name,
         url: `${SITE_URL}/product/product-detail/${encodeURIComponent(p.slug || p.id)}`,
-        image: p.image_url || undefined,
+        image: coverFromProduct(p) || undefined,
         brand: BRAND
       }
     }));
@@ -372,7 +381,7 @@ export default function Products() {
         keywords={keywords}
         ogType="website"
         twitterCard="summary_large_image"
-        jsonLd={[breadcrumbLd, collectionPageLd, itemListLd]}
+        jsonLd={[breadcrumbLd, itemListLd]}  // collectionPageLd là tuỳ chọn, mình giữ gọn 2 khối chính
       />
 
       <TopNavigation />
@@ -400,7 +409,17 @@ export default function Products() {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {paginated.map((p) => (
-                    <ProductCard key={p.id} product={p} onClick={() => openDetail(p)} />
+                    <div
+                      key={p.id}
+                      onClick={() => openDetail(p)}
+                      className="cursor-pointer"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter') openDetail(p); }}
+                    >
+                      {/* Patch image_url với cover để ProductCard cũ hiển thị ảnh đúng */}
+                      <ProductCard product={{ ...p, image_url: p.image_url || p._cover }} />
+                    </div>
                   ))}
                 </div>
 
