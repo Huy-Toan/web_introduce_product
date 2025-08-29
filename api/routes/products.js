@@ -21,11 +21,19 @@ const slugify = (s = "") =>
 
 /** URL builder: ghép base vào key tương đối */
 const withBase = (base, u) => {
-  const s = String(u || "").trim();
+  let s = String(u || "").trim();
   if (!s) return null;
-  if (/^https?:\/\//i.test(s)) return s; // đã tuyệt đối
+
+  // 🔧 Fix: nếu lỡ có "/https://..." hoặc "//https://..." thì bỏ slash trước
+  s = s.replace(/^\/+(?=https?:\/\/)/i, "");
+
+  // URL tuyệt đối thì giữ nguyên
+  if (/^https?:\/\//i.test(s)) return s;
+
+  // còn lại: ghép base
   return base ? `${base}/${s.replace(/^\/+/, "")}` : s;
 };
+
 
 /** Chuẩn hoá mảng ảnh về format chuẩn
  * input có thể là:
@@ -62,8 +70,10 @@ function normalizeImagesInput(input) {
         return { url: it, is_primary: idx === 0 ? 1 : 0, sort_order: idx };
       }
       if (typeof it === "object" && it.url) {
+        const cleaned = String(it.url).trim().replace(/^\/+(?=https?:\/\/)/i, ""); // 🔧 Fix
+
         return {
-          url: String(it.url).trim(),
+          url: cleaned,
           is_primary:
             typeof it.is_primary === "number"
               ? it.is_primary
@@ -76,6 +86,7 @@ function normalizeImagesInput(input) {
             typeof it.sort_order === "number" ? it.sort_order : idx,
         };
       }
+
       return null;
     })
     .filter(Boolean);
