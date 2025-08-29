@@ -239,10 +239,7 @@ productsRouter.get("/", async (c) => {
     const result = await c.env.DB.prepare(sql).bind(...params).all();
     const rows = result?.results ?? [];
 
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(
-      /\/+$/,
-      ""
-    );
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
 
     const products = rows.map((r) => {
       // images view
