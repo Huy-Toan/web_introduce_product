@@ -34940,6 +34940,9 @@ app$1.post("/content", requirePerm("content.manage"), (c) => {
   return c.json({ message: "Content updated" });
 });
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> c6aa93a (update table products)
 const migrate0012 = new Hono2();
 async function getColumnSet(db, table) {
   const rs = await db.prepare(`PRAGMA table_info(${table});`).all();
@@ -34948,6 +34951,7 @@ async function getColumnSet(db, table) {
 function maybeAddColumn(stmts, colsSet, table, colSql) {
   const colName = colSql.split(/\s+/)[0].replace(/"/g, "");
   if (!colsSet.has(colName)) {
+<<<<<<< HEAD
     stmts.push({ sql: `ALTER TABLE ${table} ADD COLUMN ${colSql};`, args: [] });
   }
 }
@@ -34959,6 +34963,16 @@ async function getDDL(db, table) {
   const rs = await db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name=?1;`).bind(table).all();
   return rs.results?.[0]?.sql ?? null;
 }
+=======
+    stmts.push(
+      {
+        sql: `ALTER TABLE ${table} ADD COLUMN ${colSql};`,
+        args: []
+      }
+    );
+  }
+}
+>>>>>>> c6aa93a (update table products)
 migrate0012.post("/migrations/0012/apply", async (c) => {
   try {
     if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
@@ -34975,6 +34989,7 @@ migrate0012.post("/migrations/0012/apply", async (c) => {
         args: []
       });
     }
+<<<<<<< HEAD
     statements.push({
       sql: `
         UPDATE products
@@ -34988,6 +35003,19 @@ migrate0012.post("/migrations/0012/apply", async (c) => {
       `,
       args: []
     });
+=======
+    const backfillSQL = `
+      UPDATE products
+      SET images_json = json(
+        '[{"url":' || quote(image_url) || ',"is_primary":1,"sort_order":0}]'
+      )
+      WHERE
+        (images_json IS NULL OR trim(images_json) = '')
+        AND image_url IS NOT NULL
+        AND trim(image_url) <> '';
+    `;
+    statements.push({ sql: backfillSQL, args: [] });
+>>>>>>> c6aa93a (update table products)
     statements.push({ sql: `DROP TRIGGER IF EXISTS products_updated_at;`, args: [] });
     statements.push({
       sql: `CREATE TRIGGER products_updated_at
@@ -34999,6 +35027,7 @@ migrate0012.post("/migrations/0012/apply", async (c) => {
       args: []
     });
     if (statements.length === 0) {
+<<<<<<< HEAD
       const schemaProducts2 = await c.env.DB.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='products';`).all();
       const schemaNews2 = await c.env.DB.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='news';`).all();
       return c.json({
@@ -35009,6 +35038,9 @@ migrate0012.post("/migrations/0012/apply", async (c) => {
           news: schemaNews2.results?.[0]?.sql ?? null
         }
       });
+=======
+      return c.json({ ok: true, message: "Nothing to apply (already up-to-date)." });
+>>>>>>> c6aa93a (update table products)
     }
     const prepared = statements.map((s) => c.env.DB.prepare(s.sql));
     await c.env.DB.batch(prepared);
@@ -35016,7 +35048,11 @@ migrate0012.post("/migrations/0012/apply", async (c) => {
     const schemaNews = await c.env.DB.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='news';`).all();
     return c.json({
       ok: true,
+<<<<<<< HEAD
       message: "Migration 0012 (products/news) applied successfully",
+=======
+      message: "Migration 0012 applied successfully",
+>>>>>>> c6aa93a (update table products)
       executed: statements.map((s) => s.sql.trim()),
       schemas: {
         products: schemaProducts.results?.[0]?.sql ?? null,
@@ -35024,7 +35060,11 @@ migrate0012.post("/migrations/0012/apply", async (c) => {
       }
     });
   } catch (err) {
+<<<<<<< HEAD
     console.error("migration 0012 apply error:", err);
+=======
+    console.error("migration 0012 error:", err);
+>>>>>>> c6aa93a (update table products)
     return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
   }
 });
@@ -35047,6 +35087,7 @@ migrate0012.get("/migrations/0012/preview", async (c) => {
     return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
   }
 });
+<<<<<<< HEAD
 const ABOUT_US_SQL = 'CREATE TABLE about_us (  id INTEGER PRIMARY KEY AUTOINCREMENT,  title VARCHAR(255) NOT NULL,  "content" TEXT NOT NULL,  image_url VARCHAR(255),  created_at TEXT DEFAULT (CURRENT_TIMESTAMP));';
 async function createAboutUsPlan(db) {
   const exists = await hasTable(db, "about_us");
@@ -35093,6 +35134,8 @@ migrate0012.get("/migrations/0012/check-about-us", async (c) => {
     return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
   }
 });
+=======
+>>>>>>> c6aa93a (update table products)
 migrate0012.get("/schema/:table/columns", async (c) => {
   try {
     if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
@@ -35140,6 +35183,10 @@ migrate0012.get("/migrations/0012/check", async (c) => {
         trigger_products_updated_at_exists: Boolean(triggerSql)
       },
       debug: {
+<<<<<<< HEAD
+=======
+        // giúp bạn nhìn nhanh
+>>>>>>> c6aa93a (update table products)
         products_columns: prodCols.results,
         news_columns: newsCols.results,
         products_trigger_sql: triggerSql
@@ -35149,8 +35196,11 @@ migrate0012.get("/migrations/0012/check", async (c) => {
     return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
   }
 });
+<<<<<<< HEAD
 =======
 >>>>>>> 05698dd (update)
+=======
+>>>>>>> c6aa93a (update table products)
 const enc = new TextEncoder();
 const getKey = (secret) => enc.encode(secret);
 const GRAPH = "https://graph.facebook.com/v20.0";
@@ -35496,10 +35546,14 @@ app.use("/api/users/*", requirePerm("users.manage"));
 app.route("/", seoRoot);
 app.route("/sitemaps", sitemaps);
 <<<<<<< HEAD
+<<<<<<< HEAD
 app.use("/update/*", guardUpdate);
 app.route("/update", migrate0012);
 =======
 >>>>>>> 05698dd (update)
+=======
+app.route("/admin", migrate0012);
+>>>>>>> c6aa93a (update table products)
 app.route("/api/seo", seoApp);
 app.route("/api/auth", authRouter);
 app.route("/api/users", userRouter);
