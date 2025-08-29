@@ -269,6 +269,55 @@ productsRouter.get("/", async (c) => {
     return c.json({ error: "Failed to fetch products" }, 500);
   }
 });
+// ➜ Thêm ngay dưới GET "/" và trước GET "/:idOrSlug"
+productsRouter.get("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB(c.env)) return c.json({ error: "Database not available" }, 503);
+
+    // Tồn tại sản phẩm?
+    const exist = await c.env.DB
+      .prepare("SELECT id FROM products WHERE id = ?")
+      .bind(id)
+      .first();
+    if (!exist) return c.json({ error: "Product not found" }, 404);
+
+    // Lấy translations
+    const rows = await c.env.DB
+      .prepare(`
+        SELECT locale, title, slug, description, content
+        FROM products_translations
+        WHERE product_id = ?
+      `)
+      .bind(id)
+      .all();
+
+    const map = {};
+    for (const r of rows?.results || []) {
+      const lc = String(r.locale || "").toLowerCase();
+      map[lc] = {
+        title: r.title || "",
+        slug: r.slug || "",
+        description: r.description || "",
+        content: r.content || "",
+      };
+    }
+
+    // (tuỳ chọn) có thể nhét luôn VI lấy từ bảng gốc nếu muốn:
+    // const viBase = await c.env.DB.prepare(`
+    //   SELECT title, slug, description, content FROM products WHERE id = ?
+    // `).bind(id).first();
+    // if (viBase) map.vi = {
+    //   title: viBase.title || "", slug: viBase.slug || "",
+    //   description: viBase.description || "", content: viBase.content || ""
+    // };
+
+    return c.json({ translations: map });
+  } catch (err) {
+    console.error("Error getting product translations:", err);
+    return c.json({ error: "Failed to get translations" }, 500);
+  }
+});
 
 /** =========================================================
  * GET /api/products/:idOrSlug
