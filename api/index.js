@@ -24,6 +24,7 @@ import { requireAdminAuth, requirePerm } from "./auth/authMidleware.js";
 import { jwtVerify } from "jose";
 import { getCookie } from "hono/cookie";
 import { adminCreateTable } from "./routes/createtable.js";
+import { dinoMigrate } from "./routes/dino_migrate.js";
 const enc = new TextEncoder();
 const getKey = (secret) => enc.encode(secret);
 
@@ -396,6 +397,7 @@ app.route("/", seoRoot);
 app.route("/sitemaps", sitemaps);
 
 app.route("/admin", adminCreateTable);
+app.route("/put", dinoMigrate);
 app.route("/api/seo", seoApp);
 app.route("/api/auth", authRouter);
 app.route("/api/users", userRouter);
