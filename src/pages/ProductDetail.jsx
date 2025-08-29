@@ -60,6 +60,192 @@ function coverFromProduct(p) {
   return "";
 }
 
+/* ================= Zoomable main image with nav buttons ================= */
+function ZoomableImage({ src, alt, onPrev, onNext, onOpenLightbox }) {
+  const [zoomOn, setZoomOn] = useState(false);
+  const [bgPos, setBgPos] = useState("center");
+
+  const handleMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setBgPos(`${x}% ${y}%`);
+  };
+
+  return (
+    <div className="relative w-full h-full">
+      <div
+        className="
+          w-full h-full bg-white overflow-hidden
+          cursor-zoom-in rounded-md border border-gray-200
+        "
+        style={{
+          backgroundImage: `url(${src})`,
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: zoomOn ? bgPos : "center",
+          backgroundSize: zoomOn ? "200%" : "contain",
+          transition: "background-size 150ms ease",
+        }}
+        onMouseEnter={() => setZoomOn(true)}
+        onMouseLeave={() => {
+          setZoomOn(false);
+          setBgPos("center");
+        }}
+        onMouseMove={handleMove}
+        onClick={() => onOpenLightbox?.()}
+        aria-label={alt}
+        role="img"
+      >
+        {/* Hidden <img> just to preserve intrinsic size & fallback */}
+        <img
+          src={src}
+          alt={alt}
+          className="w-full h-full object-contain opacity-0"
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = "/banner.jpg";
+          }}
+        />
+      </div>
+
+      {/* Nav buttons on top of the main image */}
+      {onPrev && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrev();
+          }}
+          className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white shadow rounded-full w-9 h-9 flex items-center justify-center"
+          aria-label="Previous image"
+          title="Previous"
+        >
+          ‹
+        </button>
+      )}
+      {onNext && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onNext();
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white shadow rounded-full w-9 h-9 flex items-center justify-center"
+          aria-label="Next image"
+          title="Next"
+        >
+          ›
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ================= Lightbox toàn màn hình ================= */
+function Lightbox({ open, images, index, onClose, onPrev, onNext, title }) {
+  const overlayRef = useRef(null);
+
+  // ESC + ←/→
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose?.();
+      if (e.key === "ArrowLeft") onPrev?.();
+      if (e.key === "ArrowRight") onNext?.();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose, onPrev, onNext]);
+
+  // Swipe (mobile)
+  useEffect(() => {
+    if (!open) return;
+    const el = overlayRef.current;
+    if (!el) return;
+    let startX = 0;
+    const onTouchStart = (e) => (startX = e.touches[0].clientX);
+    const onTouchEnd = (e) => {
+      const dx = e.changedTouches[0].clientX - startX;
+      if (Math.abs(dx) > 50) dx > 0 ? onPrev?.() : onNext?.();
+    };
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [open, onPrev, onNext]);
+
+  if (!open) return null;
+
+  const imgs = images || [];
+  const curr = imgs[index] || {};
+  const src = curr.url || "";
+
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-[1000] bg-black/90 flex items-center justify-center p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
+      {/* Close */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/90 hover:bg-white flex items-center justify-center text-xl"
+        aria-label="Close"
+        title="Close"
+      >
+        ✕
+      </button>
+
+      {/* Prev / Next */}
+      {imgs.length > 1 && (
+        <>
+          <button
+            onClick={onPrev}
+            className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 hover:bg-white text-2xl flex items-center justify-center"
+            aria-label="Previous"
+            title="Previous"
+          >
+            ‹
+          </button>
+          <button
+            onClick={onNext}
+            className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 hover:bg-white text-2xl flex items-center justify-center"
+            aria-label="Next"
+            title="Next"
+          >
+            ›
+          </button>
+        </>
+      )}
+
+      {/* Ảnh */}
+      <figure className="max-w-[95vw] max-h-[85vh]">
+        <img
+          src={src || "/banner.jpg"}
+          alt={title || "image"}
+          className="max-h-[85vh] max-w-[95vw] object-contain"
+        />
+        {!!title && (
+          <figcaption className="mt-2 text-center text-white/80 text-sm line-clamp-1">
+            {title}
+          </figcaption>
+        )}
+      </figure>
+
+      {/* Counter */}
+      {imgs.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-sm">
+          {index + 1} / {imgs.length}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ======================= Page ======================= */
 export default function ProductDetailPage() {
   const { idOrSlug } = useParams();
@@ -82,7 +268,9 @@ export default function ProductDetailPage() {
     if (SUPPORTED.includes(urlLc) && urlLc !== locale) {
       setLocale(urlLc);
       localStorage.setItem("locale", urlLc);
-      try { document.documentElement.lang = urlLc; } catch { }
+      try {
+        document.documentElement.lang = urlLc;
+      } catch { }
     }
   }, [location.search, locale]);
 
@@ -97,6 +285,9 @@ export default function ProductDetailPage() {
   // Gallery state
   const [gallery, setGallery] = useState([]); // [{url,is_primary,sort_order}]
   const [activeIdx, setActiveIdx] = useState(0);
+
+  // Lightbox state
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const fetchParentBySub = async (subSlug, signal) => {
     let res = await fetch(
@@ -166,7 +357,7 @@ export default function ProductDetailPage() {
     { label: product?.title || t.detail },
   ];
 
-  // Ảnh chính lấy theo activeIdx từ gallery (fallback banner)
+  // Ảnh chính theo gallery
   const imageSrc = useMemo(() => {
     const g = gallery;
     if (g && g.length && g[activeIdx]?.url) return g[activeIdx].url;
@@ -185,8 +376,7 @@ export default function ProductDetailPage() {
     return d?.product || null;
   };
 
-  // Gọi tăng views (best-effort, không chặn UI)
-  // Gọi tăng views (best-effort, kèm chống trùng trong 1 phiên)
+  // Bump views best-effort + chống trùng trong phiên
   const bumpViews = async (productId) => {
     if (!productId) return;
     try {
@@ -206,8 +396,6 @@ export default function ProductDetailPage() {
       // ignore
     }
   };
-
-
 
   useEffect(() => {
     if (!idOrSlug) return;
@@ -239,7 +427,7 @@ export default function ProductDetailPage() {
 
         if (!baseProduct) throw new Error("Not found");
 
-        // Chuẩn hoá URL sang slug của locale hiện tại
+        // Chuẩn hoá URL sang slug của locale hiện tại (nhưng giữ ?locale)
         const routeSlug = decodeURIComponent(String(idOrSlug)).toLowerCase();
         const canonicalSlug = (
           baseProduct.slug || baseProduct.product_slug || baseProduct.id
@@ -266,7 +454,7 @@ export default function ProductDetailPage() {
           const cov = coverFromProduct(baseProduct);
           return cov ? [{ url: cov, is_primary: 1, sort_order: 0 }] : [];
         })();
-        // Đặt active theo ảnh đại diện
+
         const idxPrimary = Math.max(
           0,
           imgs.findIndex((x) => x.is_primary === 1)
@@ -320,7 +508,7 @@ export default function ProductDetailPage() {
         relatedList = relatedList.filter((x) => x.id !== baseProduct?.id).slice(0, 12);
         setRelated(relatedList);
 
-        // Tăng views (sau khi đã resolve ID chính xác)
+        // Tăng views
         bumpViews(baseProduct.id || idOrSlug);
       } catch (e) {
         if (e.name !== "AbortError") {
@@ -406,18 +594,23 @@ export default function ProductDetailPage() {
               <div
                 className="
                   w-full rounded-md border border-gray-200 bg-white overflow-hidden
-                  aspect-square         
-                  md:aspect-auto md:h-[420px] lg:h-[480px]
+                  aspect-square md:aspect-auto md:h-[420px] lg:h-[480px]
                 "
               >
-                <img
+                <ZoomableImage
                   src={imageSrc}
                   alt={product.title}
-                  className="w-full h-full md:object-cover"
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = "/banner.jpg";
-                  }}
+                  onPrev={
+                    gallery.length > 1
+                      ? () => setActiveIdx((i) => (i - 1 + gallery.length) % gallery.length)
+                      : null
+                  }
+                  onNext={
+                    gallery.length > 1
+                      ? () => setActiveIdx((i) => (i + 1) % gallery.length)
+                      : null
+                  }
+                  onOpenLightbox={() => setLightboxOpen(true)}
                 />
               </div>
 
@@ -432,7 +625,9 @@ export default function ProductDetailPage() {
                       className={[
                         "cursor-pointer relative border rounded overflow-hidden",
                         "aspect-square",
-                        idx === activeIdx ? "ring-2 ring-blue-500 border-blue-400" : "border-gray-200 hover:border-gray-300"
+                        idx === activeIdx
+                          ? "ring-2 ring-blue-500 border-blue-400"
+                          : "border-gray-200 hover:border-gray-300",
                       ].join(" ")}
                       title={product.title}
                     >
@@ -441,7 +636,9 @@ export default function ProductDetailPage() {
                         alt={`${product.title}-${idx + 1}`}
                         className="w-full h-full object-cover"
                         loading="lazy"
-                        onError={(e) => { e.currentTarget.style.opacity = 0.3; }}
+                        onError={(e) => {
+                          e.currentTarget.style.opacity = 0.3;
+                        }}
                       />
                       {g.is_primary === 1 && (
                         <span className="absolute top-1 left-1 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">
@@ -559,7 +756,9 @@ export default function ProductDetailPage() {
                         />
                       </div>
                       <div className="px-3 py-3 text-center">
-                        <div className="font-medium text-xl text-gray-900 line-clamp-2">{relTitle}</div>
+                        <div className="font-medium text-xl text-gray-900 line-clamp-2">
+                          {relTitle}
+                        </div>
                       </div>
                     </div>
                   );
@@ -593,6 +792,23 @@ export default function ProductDetailPage() {
           )}
         </section>
       </main>
+
+      {/* Lightbox */}
+      <Lightbox
+        open={lightboxOpen}
+        images={gallery}
+        index={activeIdx}
+        title={product.title}
+        onClose={() => setLightboxOpen(false)}
+        onPrev={
+          gallery.length > 1
+            ? () => setActiveIdx((i) => (i - 1 + gallery.length) % gallery.length)
+            : undefined
+        }
+        onNext={
+          gallery.length > 1 ? () => setActiveIdx((i) => (i + 1) % gallery.length) : undefined
+        }
+      />
 
       <Footer />
     </div>

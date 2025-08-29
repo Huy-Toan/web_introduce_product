@@ -239,7 +239,10 @@ productsRouter.get("/", async (c) => {
     const result = await c.env.DB.prepare(sql).bind(...params).all();
     const rows = result?.results ?? [];
 
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(
+      /\/+$/,
+      ""
+    );
 
     const products = rows.map((r) => {
       // images view
@@ -266,24 +269,6 @@ productsRouter.get("/", async (c) => {
     return c.json({ error: "Failed to fetch products" }, 500);
   }
 });
-// Phải đặt TRƯỚC /:idOrSlug
-productsRouter.get("/:id/view", async (c) => {
-  const id = Number(c.req.param("id"));
-  try {
-    if (!hasDB(c.env)) return c.json({ error: "Database not available" }, 503);
-    const res = await c.env.DB
-      .prepare("UPDATE products SET views = views + 1 WHERE id = ?")
-      .bind(id)
-      .run();
-    if ((res.meta?.changes || 0) === 0)
-      return c.json({ error: "Product not found" }, 404);
-
-    return c.json({ ok: true }, 200, { "Cache-Control": "no-store" });
-  } catch (err) {
-    console.error("Error incrementing view:", err);
-    return c.json({ error: "Failed to update views" }, 500);
-  }
-});
 
 /** =========================================================
  * GET /api/products/:idOrSlug
@@ -297,7 +282,12 @@ productsRouter.get("/:idOrSlug", async (c) => {
     const raw = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
     if (!raw) return c.json({ error: "Product not found" }, 404);
 
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(
+      /\/+$/,
+      ""
+    );
+
+    const { images, cover } = buildImagesView(raw.images_json, base);
     const product = {
       ...raw,
       image_url: withBase(base, raw.image_url) || cover || null, // compat
@@ -612,6 +602,24 @@ productsRouter.delete("/:id", async (c) => {
 });
 
 /** =========================================================
+ * NEW: POST /api/products/:id/view  (tăng views)
+ * ========================================================= */
+productsRouter.post("/:id/view", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB(c.env)) return c.json({ error: "Database not available" }, 503);
+    const res = await c.env.DB
+      .prepare("UPDATE products SET views = views + 1 WHERE id = ?")
+      .bind(id)
+      .run();
+    if ((res.meta?.changes || 0) === 0)
+      return c.json({ error: "Product not found" }, 404);
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("Error incrementing view:", err);
+    return c.json({ error: "Failed to update views" }, 500);
+  }
+});
 
 /** ===================== Utils cơ bản ===================== */
 const toStr = (v) => (v == null ? "" : String(v).trim());
