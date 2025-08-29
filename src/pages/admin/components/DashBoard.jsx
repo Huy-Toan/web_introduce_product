@@ -5,7 +5,7 @@ const DashboardOverview = ({ products, parents, news }) => (
     <h2 className="text-2xl font-bold text-gray-900 mb-6">Tổng quan</h2>
     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
       
-      {/* Tổng số sách */}
+      {/* Tổng số*/}
       <div className="bg-white p-6 rounded-lg shadow">
         <div className="flex items-center">
           <div className="bg-blue-100 p-3 rounded-lg mr-4">
