@@ -1,8 +1,8 @@
 // src/routes/productsRouter.js
 import { Hono } from "hono";
-import * as XLSX from 'xlsx';
+import * as XLSX from "xlsx";
 
-// Helpers
+/** ===================== Helpers ===================== */
 const DEFAULT_LOCALE = "vi";
 const getLocale = (c) =>
   (c.req.query("locale") || DEFAULT_LOCALE).toLowerCase();
@@ -12,15 +12,115 @@ const hasDB = (env) => Boolean(env?.DB) || Boolean(env?.DB_AVAILABLE);
 const slugify = (s = "") =>
   s
     .toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9\s-]/g, "")
     .trim()
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
 
-/* ---------------------------------------------------------
- * Resolve product by id or slug (supports translated slug)
- * --------------------------------------------------------- */
+/** URL builder: ghép base vào key tương đối */
+const withBase = (base, u) => {
+  const s = String(u || "").trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s; // đã tuyệt đối
+  return base ? `${base}/${s.replace(/^\/+/, "")}` : s;
+};
+
+/** Chuẩn hoá mảng ảnh về format chuẩn
+ * input có thể là:
+ *  - array<string> (url hoặc key)
+ *  - array<object> {url,is_primary,sort_order}
+ *  - string CSV "a.jpg,b.png"
+ *  - JSON string
+ */
+function normalizeImagesInput(input) {
+  let arr = [];
+  if (Array.isArray(input)) {
+    arr = input;
+  } else if (typeof input === "string") {
+    const s = input.trim();
+    if (!s) arr = [];
+    else {
+      try {
+        const parsed = JSON.parse(s);
+        arr = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        // CSV
+        arr = s.split(/[;,]/).map((x) => x.trim()).filter(Boolean);
+      }
+    }
+  } else {
+    arr = [];
+  }
+
+  // Map về object chuẩn
+  const norm = arr
+    .map((it, idx) => {
+      if (!it) return null;
+      if (typeof it === "string") {
+        return { url: it, is_primary: idx === 0 ? 1 : 0, sort_order: idx };
+      }
+      if (typeof it === "object" && it.url) {
+        return {
+          url: String(it.url).trim(),
+          is_primary:
+            typeof it.is_primary === "number"
+              ? it.is_primary
+              : it.is_primary
+                ? 1
+                : idx === 0
+                  ? 1
+                  : 0,
+          sort_order:
+            typeof it.sort_order === "number" ? it.sort_order : idx,
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+
+  return JSON.stringify(norm);
+}
+
+/** Lấy cover (phần tử is_primary=1; fallback phần tử đầu) */
+function pickCoverFromImagesJson(images_json_text) {
+  try {
+    const arr = JSON.parse(images_json_text || "[]");
+    if (!Array.isArray(arr) || arr.length === 0) return null;
+    const primary =
+      arr.find((x) => (x?.is_primary || 0) === 1 && x?.url) || arr[0];
+    return primary?.url || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Convert images_json (keys/urls) => mảng URL tuyệt đối + cover */
+function buildImagesView(images_json_text, base) {
+  try {
+    const arr = JSON.parse(images_json_text || "[]");
+    if (!Array.isArray(arr) || arr.length === 0)
+      return { images: [], cover: null };
+    const sorted = [...arr].sort(
+      (a, b) => (a?.sort_order ?? 0) - (b?.sort_order ?? 0)
+    );
+    const images = sorted
+      .map((it) => withBase(base, it?.url))
+      .filter(Boolean);
+    const coverObj =
+      sorted.find((x) => (x?.is_primary || 0) === 1) || sorted[0];
+    const cover = withBase(base, coverObj?.url);
+    return { images, cover };
+  } catch {
+    return { images: [], cover: null };
+  }
+}
+
+/** ===================== Core Router ===================== */
+export const productsRouter = new Hono();
+
+/** ----------------- Internal helper: find by id/slug (keep compat) ----------------- */
 const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
   const isNumericId = /^\d+$/.test(idOrSlug);
   const sql = `
@@ -31,6 +131,8 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
       COALESCE(pt.description, p.description)   AS description,
       COALESCE(pt.content,     p.content)       AS content,
       p.image_url,
+      p.images_json,              -- NEW
+      p.views,                    -- NEW
       p.created_at,
       p.updated_at,
 
@@ -52,16 +154,14 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
     : db.prepare(sql).bind(locale, locale, idOrSlug, idOrSlug).first();
 };
 
-export const productsRouter = new Hono();
-
-/**
+/** =========================================================
  * GET /api/products
  * Query:
  *  - locale=vi|en|...
- *  - subcategory_id, sub_slug  (sub_slug hỗ trợ slug dịch)
- *  - q: tìm theo title/description/content/slug (ưu tiên bản dịch)
+ *  - subcategory_id, sub_slug
+ *  - q
  *  - limit, offset
- */
+ * ========================================================= */
 productsRouter.get("/", async (c) => {
   const { subcategory_id, sub_slug, limit, offset, q } = c.req.query();
 
@@ -114,7 +214,9 @@ productsRouter.get("/", async (c) => {
         COALESCE(pt.slug,  p.slug)                AS slug,
         COALESCE(pt.description, p.description)   AS description,
         COALESCE(pt.content,     p.content)       AS content,
-        p.image_url,                 -- KEY trong DB
+        p.image_url,
+        p.images_json,             -- NEW
+        p.views,                   -- NEW
         p.created_at,
         p.updated_at,
 
@@ -137,18 +239,26 @@ productsRouter.get("/", async (c) => {
     const result = await c.env.DB.prepare(sql).bind(...params).all();
     const rows = result?.results ?? [];
 
-    // Build URL từ key
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL ||  "").replace(/\/+$/, "");
-    const products = rows.map(r => ({
-      ...r,
-      image_url: r.image_url ? `${base}/${r.image_url}` : null,
-    }));
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+
+    const products = rows.map((r) => {
+      // images view
+      const { images, cover } = buildImagesView(r.images_json, base);
+      const image_url_abs = withBase(base, r.image_url) || cover || null;
+
+      return {
+        ...r,
+        image_url: image_url_abs, // giữ tương thích FE cũ
+        images,                   // NEW: array url tuyệt đối
+        cover_image: cover,       // NEW: url tuyệt đối
+      };
+    });
 
     return c.json({
       products,
       count: products.length,
       source: "database",
-      locale
+      locale,
       // debug: { sql, params }
     });
   } catch (err) {
@@ -156,13 +266,57 @@ productsRouter.get("/", async (c) => {
     return c.json({ error: "Failed to fetch products" }, 500);
   }
 });
+productsRouter.get("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB(c.env)) return c.json({ error: "Database not available" }, 503);
 
+    // Tồn tại sản phẩm?
+    const exist = await c.env.DB
+      .prepare("SELECT id FROM products WHERE id = ?")
+      .bind(id)
+      .first();
+    if (!exist) return c.json({ error: "Product not found" }, 404);
 
-/**
+    // Lấy translations
+    const rows = await c.env.DB
+      .prepare(`
+        SELECT locale, title, slug, description, content
+        FROM products_translations
+        WHERE product_id = ?
+      `)
+      .bind(id)
+      .all();
+
+    const map = {};
+    for (const r of rows?.results || []) {
+      const lc = String(r.locale || "").toLowerCase();
+      map[lc] = {
+        title: r.title || "",
+        slug: r.slug || "",
+        description: r.description || "",
+        content: r.content || "",
+      };
+    }
+
+    // (tuỳ chọn) có thể nhét luôn VI lấy từ bảng gốc nếu muốn:
+    // const viBase = await c.env.DB.prepare(`
+    //   SELECT title, slug, description, content FROM products WHERE id = ?
+    // `).bind(id).first();
+    // if (viBase) map.vi = {
+    //   title: viBase.title || "", slug: viBase.slug || "",
+    //   description: viBase.description || "", content: viBase.content || ""
+    // };
+
+    return c.json({ translations: map });
+  } catch (err) {
+    console.error("Error getting product translations:", err);
+    return c.json({ error: "Failed to get translations" }, 500);
+  }
+});
+/** =========================================================
  * GET /api/products/:idOrSlug
- * Query: locale
- * - Hỗ trợ resolve bằng slug dịch
- */
+ * ========================================================= */
 productsRouter.get("/:idOrSlug", async (c) => {
   const idOrSlug = c.req.param("idOrSlug");
   try {
@@ -172,10 +326,17 @@ productsRouter.get("/:idOrSlug", async (c) => {
     const raw = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
     if (!raw) return c.json({ error: "Product not found" }, 404);
 
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL ||  "").replace(/\/+$/, "");
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(
+      /\/+$/,
+      ""
+    );
+
+    const { images, cover } = buildImagesView(raw.images_json, base);
     const product = {
       ...raw,
-      image_url: raw.image_url ? `${base}/${raw.image_url}` : null,
+      image_url: withBase(base, raw.image_url) || cover || null, // compat
+      images,                     // NEW
+      cover_image: cover,         // NEW
     };
 
     return c.json({ product, source: "database", locale });
@@ -185,23 +346,14 @@ productsRouter.get("/:idOrSlug", async (c) => {
   }
 });
 
-/**
+/** =========================================================
  * POST /api/products
- * Body:
- * {
- *   title: string,
- *   slug?: string,               // nếu không gửi, BE tự sinh từ title
- *   description?: string,
- *   content: string,
- *   image_url?: string,
- *   subcategory_id?: number,     // có thể null
- *   translations?: {             // optional upsert cùng lúc
- *     en?: { title?, slug?, description?, content? },
- *     ja?: { ... },
- *     ...
- *   }
+ * Body: {
+ *  title, slug?, description?, content, image_url?, images_json?, subcategory_id?, translations?
  * }
- */
+ * - images_json: array<string|object> hoặc JSON string
+ * - Nếu không gửi images_json mà gửi image_url -> tự backfill images_json [{url:image_url,...}]
+ * ========================================================= */
 productsRouter.post("/", async (c) => {
   try {
     if (!hasDB(c.env)) return c.json({ error: "Database not available" }, 503);
@@ -213,8 +365,9 @@ productsRouter.post("/", async (c) => {
       description,
       content,
       image_url,
+      images_json, // NEW
       subcategory_id,
-      translations
+      translations,
     } = body || {};
 
     if (!title?.trim() || !content?.trim()) {
@@ -231,9 +384,17 @@ productsRouter.post("/", async (c) => {
       if (!sub) return c.json({ error: "subcategory_id not found" }, 400);
     }
 
+    // Chuẩn hoá images_json
+    let imagesJsonText = null;
+    if (images_json !== undefined) {
+      imagesJsonText = normalizeImagesInput(images_json);
+    } else if (image_url) {
+      imagesJsonText = normalizeImagesInput([image_url]);
+    }
+
     const sql = `
-      INSERT INTO products (title, slug, description, content, image_url, subcategory_id)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO products (title, slug, description, content, image_url, images_json, subcategory_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
     const runRes = await c.env.DB
       .prepare(sql)
@@ -243,6 +404,7 @@ productsRouter.post("/", async (c) => {
         description || null,
         content,
         image_url || null,
+        imagesJsonText || null,
         subcategory_id == null ? null : Number(subcategory_id)
       )
       .run();
@@ -250,7 +412,7 @@ productsRouter.post("/", async (c) => {
     if (!runRes.success) throw new Error("Insert failed");
     const newId = runRes.meta?.last_row_id;
 
-    // Upsert translations (kèm slug)
+    // Upsert translations
     if (translations && typeof translations === "object") {
       const upsertT = `
         INSERT INTO products_translations(product_id, locale, title, slug, description, content)
@@ -264,15 +426,18 @@ productsRouter.post("/", async (c) => {
       `;
       for (const [lc, tr] of Object.entries(translations)) {
         const tTitle = tr?.title ?? null;
-        const tSlug = tr?.slug ? slugify(tr.slug) : (tTitle ? slugify(tTitle) : null);
-        await c.env.DB.prepare(upsertT).bind(
-          newId,
-          String(lc).toLowerCase(),
-          tTitle,
-          tSlug,
-          tr?.description ?? null,
-          tr?.content ?? null
-        ).run();
+        const tSlug = tr?.slug ? slugify(tr.slug) : tTitle ? slugify(tTitle) : null;
+        await c.env.DB
+          .prepare(upsertT)
+          .bind(
+            newId,
+            String(lc).toLowerCase(),
+            tTitle,
+            tSlug,
+            tr?.description ?? null,
+            tr?.content ?? null
+          )
+          .run();
       }
     }
 
@@ -290,14 +455,11 @@ productsRouter.post("/", async (c) => {
   }
 });
 
-/**
+/** =========================================================
  * PUT /api/products/:id
- * Body:
- * {
- *   title?, slug?, description?, content?, image_url?, subcategory_id?,
- *   translations?: { lc: { title?, slug?, description?, content? } }
- * }
- */
+ * Body có thể cập nhật images_json (array / json string).
+ * Nếu gửi images_json mà không gửi image_url → image_url giữ nguyên (FE sẽ dùng cover từ images_json).
+ * ========================================================= */
 productsRouter.put("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
@@ -310,8 +472,9 @@ productsRouter.put("/:id", async (c) => {
       description,
       content,
       image_url,
+      images_json, // NEW
       subcategory_id,
-      translations
+      translations,
     } = body || {};
 
     if (subcategory_id !== undefined && subcategory_id !== null) {
@@ -324,11 +487,30 @@ productsRouter.put("/:id", async (c) => {
 
     const sets = [];
     const params = [];
-    if (title !== undefined) { sets.push("title = ?"); params.push(title); }
-    if (slug !== undefined) { sets.push("slug = ?"); params.push(slugify(slug)); }
-    if (description !== undefined) { sets.push("description = ?"); params.push(description); }
-    if (content !== undefined) { sets.push("content = ?"); params.push(content); }
-    if (image_url !== undefined) { sets.push("image_url = ?"); params.push(image_url); }
+    if (title !== undefined) {
+      sets.push("title = ?");
+      params.push(title);
+    }
+    if (slug !== undefined) {
+      sets.push("slug = ?");
+      params.push(slugify(slug));
+    }
+    if (description !== undefined) {
+      sets.push("description = ?");
+      params.push(description);
+    }
+    if (content !== undefined) {
+      sets.push("content = ?");
+      params.push(content);
+    }
+    if (image_url !== undefined) {
+      sets.push("image_url = ?");
+      params.push(image_url);
+    }
+    if (images_json !== undefined) {
+      sets.push("images_json = ?");
+      params.push(normalizeImagesInput(images_json));
+    }
     if (subcategory_id !== undefined) {
       sets.push("subcategory_id = ?");
       params.push(subcategory_id == null ? null : Number(subcategory_id));
@@ -342,7 +524,8 @@ productsRouter.put("/:id", async (c) => {
       `;
       params.push(id);
       const res = await c.env.DB.prepare(sql).bind(...params).run();
-      if ((res.meta?.changes || 0) === 0) return c.json({ error: "Product not found" }, 404);
+      if ((res.meta?.changes || 0) === 0)
+        return c.json({ error: "Product not found" }, 404);
     }
 
     if (translations && typeof translations === "object") {
@@ -358,15 +541,18 @@ productsRouter.put("/:id", async (c) => {
       `;
       for (const [lc, tr] of Object.entries(translations)) {
         const tTitle = tr?.title ?? null;
-        const tSlug = tr?.slug ? slugify(tr.slug) : (tTitle ? slugify(tTitle) : null);
-        await c.env.DB.prepare(upsertT).bind(
-          id,
-          String(lc).toLowerCase(),
-          tTitle,
-          tSlug,
-          tr?.description ?? null,
-          tr?.content ?? null
-        ).run();
+        const tSlug = tr?.slug ? slugify(tr.slug) : tTitle ? slugify(tTitle) : null;
+        await c.env.DB
+          .prepare(upsertT)
+          .bind(
+            id,
+            String(lc).toLowerCase(),
+            tTitle,
+            tSlug,
+            tr?.description ?? null,
+            tr?.content ?? null
+          )
+          .run();
       }
     }
 
@@ -384,10 +570,9 @@ productsRouter.put("/:id", async (c) => {
   }
 });
 
-/**
+/** =========================================================
  * PUT /api/products/:id/translations
- * Body: { translations: { en:{title?,slug?,description?,content?}, ja:{...} } }
- */
+ * ========================================================= */
 productsRouter.put("/:id/translations", async (c) => {
   const id = Number(c.req.param("id"));
   try {
@@ -411,15 +596,18 @@ productsRouter.put("/:id/translations", async (c) => {
     `;
     for (const [lc, tr] of Object.entries(translations)) {
       const tTitle = tr?.title ?? null;
-      const tSlug = tr?.slug ? slugify(tr.slug) : (tTitle ? slugify(tTitle) : null);
-      await c.env.DB.prepare(upsertT).bind(
-        id,
-        String(lc).toLowerCase(),
-        tTitle,
-        tSlug,
-        tr?.description ?? null,
-        tr?.content ?? null
-      ).run();
+      const tSlug = tr?.slug ? slugify(tr.slug) : tTitle ? slugify(tTitle) : null;
+      await c.env.DB
+        .prepare(upsertT)
+        .bind(
+          id,
+          String(lc).toLowerCase(),
+          tTitle,
+          tSlug,
+          tr?.description ?? null,
+          tr?.content ?? null
+        )
+        .run();
     }
     return c.json({ ok: true });
   } catch (err) {
@@ -428,41 +616,9 @@ productsRouter.put("/:id/translations", async (c) => {
   }
 });
 
-/**
- * GET /api/products/:id/translations
- * -> { translations: { locale: { title, slug, description, content } } }
- */
-productsRouter.get("/:id/translations", async (c) => {
-  const id = Number(c.req.param("id"));
-  try {
-    if (!hasDB(c.env)) return c.json({ error: "Database not available" }, 503);
-
-    const sql = `
-      SELECT locale, title, slug, description, content
-      FROM products_translations
-      WHERE product_id = ?
-      ORDER BY locale ASC
-    `;
-    const { results = [] } = await c.env.DB.prepare(sql).bind(id).all();
-    const translations = {};
-    for (const row of results) {
-      translations[row.locale] = {
-        title: row.title || "",
-        slug: row.slug || "",
-        description: row.description || "",
-        content: row.content || ""
-      };
-    }
-    return c.json({ translations });
-  } catch (err) {
-    console.error("Error fetching product translations:", err);
-    return c.json({ error: "Failed to fetch translations" }, 500);
-  }
-});
-
-/**
+/** =========================================================
  * DELETE /api/products/:id
- */
+ * ========================================================= */
 productsRouter.delete("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
@@ -489,40 +645,61 @@ productsRouter.delete("/:id", async (c) => {
   }
 });
 
-export default productsRouter;
+/** =========================================================
+ * NEW: POST /api/products/:id/view  (tăng views)
+ * ========================================================= */
+productsRouter.post("/:id/view", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB(c.env)) return c.json({ error: "Database not available" }, 503);
+    const res = await c.env.DB
+      .prepare("UPDATE products SET views = views + 1 WHERE id = ?")
+      .bind(id)
+      .run();
+    if ((res.meta?.changes || 0) === 0)
+      return c.json({ error: "Product not found" }, 404);
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("Error incrementing view:", err);
+    return c.json({ error: "Failed to update views" }, 500);
+  }
+});
 
-
-// ====== Utils cơ bản (nếu đã có ở nơi khác thì bỏ phần này) ======
-const toStr = (v) => (v == null ? '' : String(v).trim());
+/** ===================== Utils cơ bản ===================== */
+const toStr = (v) => (v == null ? "" : String(v).trim());
 
 function csvToJson(text) {
-  const lines = String(text || '').split(/\r?\n/).filter(Boolean);
+  const lines = String(text || "").split(/\r?\n/).filter(Boolean);
   if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split(',');
+    const cols = lines[i].split(",");
     const obj = {};
-    headers.forEach((h, idx) => obj[h] = cols[idx] != null ? cols[idx].trim() : '');
+    headers.forEach(
+      (h, idx) => (obj[h] = cols[idx] != null ? cols[idx].trim() : "")
+    );
     rows.push(obj);
   }
   return rows;
 }
 
-// ====== Sleep & Retry ======
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function withRetry(fn, { tries = 5, delayMs = 400, backoff = 1.5, timeoutMs = 5000 } = {}) {
+async function withRetry(
+  fn,
+  { tries = 5, delayMs = 400, backoff = 1.5, timeoutMs = 5000 } = {}
+) {
   let d = delayMs;
   let lastErr;
   for (let i = 0; i < tries; i++) {
     try {
       const v = await Promise.race([
         Promise.resolve(fn()),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), timeoutMs)),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), timeoutMs)),
       ]);
-      if (v && String(v).trim()) return v; // coi rỗng là fail để lặp tiếp
-      lastErr = new Error('empty result');
+      if (v && String(v).trim()) return v;
+      lastErr = new Error("empty result");
     } catch (e) {
       lastErr = e;
     }
@@ -531,134 +708,155 @@ async function withRetry(fn, { tries = 5, delayMs = 400, backoff = 1.5, timeoutM
       d = Math.round(d * backoff);
     }
   }
-  throw lastErr || new Error('withRetry exhausted');
+  throw lastErr || new Error("withRetry exhausted");
 }
 
-// ====== Clean & Heuristics chống "chưa dịch" ======
-const VI_CHAR_RE_G = /[áàảãạăắằẳẵặâấầẩẫậđéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữự]/gi;
+const VI_CHAR_RE_G =
+  /[áàảãạăắằẳẵặâấầẩẫậđéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữự]/gi;
 
 function cleanLLMOutput(s) {
-  let t = String(s ?? '');
-  t = t.replace(/^\s*```(?:markdown|md|text)?\s*/i, '').replace(/\s*```\s*$/i, '');
-  t = t.replace(/^(?:translation|translated|english|bản dịch|dịch)\s*:\s*/i, '');
+  let t = String(s ?? "");
+  t = t
+    .replace(/^\s*```(?:markdown|md|text)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "");
+  t = t.replace(/^(?:translation|translated|english|bản dịch|dịch)\s*:\s*/i, "");
   return t.trim();
 }
 
 function jaccardTokens(a, b) {
-  const A = new Set(String(a || '').toLowerCase().split(/\s+/).filter(Boolean));
-  const B = new Set(String(b || '').toLowerCase().split(/\s+/).filter(Boolean));
-  const inter = [...A].filter(x => B.has(x)).length;
+  const A = new Set(String(a || "").toLowerCase().split(/\s+/).filter(Boolean));
+  const B = new Set(String(b || "").toLowerCase().split(/\s+/).filter(Boolean));
+  const inter = [...A].filter((x) => B.has(x)).length;
   const uni = new Set([...A, ...B]).size || 1;
   return inter / uni;
 }
 
 function looksUntranslated(src, out, target) {
-  const s = (src || '').trim();
-  const o = (out || '').trim();
+  const s = (src || "").trim();
+  const o = (out || "").trim();
   if (!o) return true;
-  // quá giống câu gốc ⇒ nghi ngờ chưa dịch
   if (jaccardTokens(s, o) > 0.9) return true;
-  // nếu dịch sang non-vi mà đa phần vẫn là ký tự tiếng Việt ⇒ coi như fail
-  if (target !== 'vi') {
+  if (target !== "vi") {
     const viCount = (o.match(VI_CHAR_RE_G) || []).length;
     const ratio = viCount / Math.max(o.length, 1);
-    if (ratio > 0.35) return true; // vẫn cho phép vài tên riêng có dấu
+    if (ratio > 0.35) return true;
   }
   return false;
 }
 
-// ====== Gọi model dịch ======
 async function translateTextInWorker(c, text, source, target) {
-  const out = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+  const out = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
     messages: [
-      { role: 'system', content: `Translate from ${source} to ${target}. Reply with translation only.` },
-      { role: 'user', content: text }
+      {
+        role: "system",
+        content: `Translate from ${source} to ${target}. Reply with translation only.`,
+      },
+      { role: "user", content: text },
     ],
     temperature: 0.2,
   });
-  const ans = cleanLLMOutput(out?.response ?? '');
-  return looksUntranslated(text, ans, target) ? '' : ans;
+  const ans = cleanLLMOutput(out?.response ?? "");
+  return looksUntranslated(text, ans, target) ? "" : ans;
 }
 
 async function translateContentInWorker(c, text, source, target) {
-  const src = String(text || '').trim();
-  if (!src) return '';
-  const out = await c.env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+  const src = String(text || "").trim();
+  if (!src) return "";
+  const out = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
     messages: [
       {
-        role: 'system', content:
-          `Translate from ${source} to ${target}.
+        role: "system",
+        content: `Translate from ${source} to ${target}.
 Return PLAIN TEXT only (no markdown, no code fences, no labels).
-Keep short line breaks. Do not add headings or bullets.` },
-      { role: 'user', content: src }
+Keep short line breaks. Do not add headings or bullets.`,
+      },
+      { role: "user", content: src },
     ],
     temperature: 0,
   });
-  const ans = cleanLLMOutput(out?.response ?? '');
-  return looksUntranslated(src, ans, target) ? '' : ans;
+  const ans = cleanLLMOutput(out?.response ?? "");
+  return looksUntranslated(src, ans, target) ? "" : ans;
 }
 
-// ====== Route import sản phẩm ======
-productsRouter.post('/import', async (c) => {
+/** ===================== IMPORT ===================== */
+/**
+ * POST /api/products/import
+ * - Hỗ trợ các cột ảnh: images_json (JSON), images (CSV), image_urls (CSV), image1..image10, image_url
+ * - Sẽ chuẩn hoá về images_json; image_url sẽ là ảnh đầu (nếu có)
+ */
+productsRouter.post("/import", async (c) => {
   try {
-    if (!hasDB(c.env)) return c.json({ error: 'Database not available' }, 503);
+    if (!hasDB(c.env)) return c.json({ error: "Database not available" }, 503);
 
     // ===== 1) Query flags =====
-    const auto = c.req.query('auto') === '1' || c.req.query('auto') === 'true';
-    const targets = (c.req.query('targets') || '')
-      .split(',').map(s => s.trim().toLowerCase())
-      .filter(lc => lc && lc !== 'vi');
-    const source = c.req.query('source') || 'vi';
-    const dryRun = c.req.query('dry_run') === '1';
+    const auto = c.req.query("auto") === "1" || c.req.query("auto") === "true";
+    const targets = (c.req.query("targets") || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter((lc) => lc && lc !== "vi");
+    const source = c.req.query("source") || "vi";
+    const dryRun = c.req.query("dry_run") === "1";
 
-    const mode = (c.req.query('mode') || 'soft').toLowerCase(); // 'soft' | 'strict'
-    const requireLocales = (c.req.query('require_locales') || '')
-      .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
-    const required = mode === 'strict'
-      ? (requireLocales.length ? requireLocales : targets)
-      : requireLocales;
+    const mode = (c.req.query("mode") || "soft").toLowerCase(); // 'soft' | 'strict'
+    const requireLocales = (c.req.query("require_locales") || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const required =
+      mode === "strict"
+        ? requireLocales.length
+          ? requireLocales
+          : targets
+        : requireLocales;
 
-    const tries = Number(c.req.query('tries') || 5);
-    const delay0 = Number(c.req.query('delay0') || 400);
-    const backoff = Number(c.req.query('backoff') || 1.5);
-    const waitMs = Number(c.req.query('wait_ms') || 0);
+    const tries = Number(c.req.query("tries") || 5);
+    const delay0 = Number(c.req.query("delay0") || 400);
+    const backoff = Number(c.req.query("backoff") || 1.5);
+    const waitMs = Number(c.req.query("wait_ms") || 0);
 
     // ===== 2) File =====
     const form = await c.req.formData();
-    const file = form.get('file');
+    const file = form.get("file");
     if (!file || !file.arrayBuffer) {
-      return c.json({ error: 'Missing file' }, 400);
+      return c.json({ error: "Missing file" }, 400);
     }
     const buf = await file.arrayBuffer();
 
     // ===== 3) Parse rows =====
     let rows = [];
     try {
-      const wb = XLSX.read(buf, { type: 'array' });
+      const wb = XLSX.read(buf, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
     } catch {
-      const text = new TextDecoder('utf-8').decode(buf);
+      const text = new TextDecoder("utf-8").decode(buf);
       rows = csvToJson(text);
     }
 
     if (!rows.length) {
-      return c.json({ ok: true, created: 0, updated: 0, skipped: 0, message: 'No data rows found' });
+      return c.json({
+        ok: true,
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        message: "No data rows found",
+      });
     }
 
-    // Chuẩn hóa key về lowercase
+    // Chuẩn hoá key về lowercase
     rows = rows.map((r) => {
       const out = {};
       for (const k of Object.keys(r)) out[String(k).toLowerCase().trim()] = r[k];
       return out;
     });
 
-    let created = 0, updated = 0, skipped = 0;
+    let created = 0,
+      updated = 0,
+      skipped = 0;
     const errors = [];
-    const locale = getLocale(c); // nếu bạn cần tham chiếu locale hiện tại
+    const locale = getLocale(c);
 
-    // ===== 3.5) Prefetch subcategories (NEW) =====
-    // Điều chỉnh tên bảng/cột cho đúng schema thật của bạn
+    // ===== 3.5) Prefetch subcategories =====
     const subRes = await c.env.DB.prepare(`
       SELECT
         s.id                  AS id,
@@ -676,12 +874,14 @@ productsRouter.post('/import', async (c) => {
     const subById = new Map();
     const keyToId = new Map();
 
-    // helper normalize bỏ dấu
-    const normalizeAscii = (s = '') => String(s).toLowerCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/\s+/g, ' ').trim();
+    const normalizeAscii = (s = "") =>
+      String(s)
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
 
-    // map các khóa -> id (name/slug gốc & dịch), thêm cả dạng slugify + normalize
     for (const r of subRows) {
       const id = Number(r.id);
       if (!Number.isFinite(id)) continue;
@@ -695,21 +895,21 @@ productsRouter.post('/import', async (c) => {
       }
     }
 
-    // Resolve từ 1 hàng Excel
     const resolveSubcategoryId = (row) => {
-      // 1) Ưu tiên id nếu hợp lệ
       const idRaw = row.subcategory_id;
-      if (idRaw != null && String(idRaw).trim() !== '') {
+      if (idRaw != null && String(idRaw).trim() !== "") {
         const n = Number(idRaw);
         if (Number.isFinite(n) && subById.has(n)) return n;
       }
-
-      // 2) Thử theo tên từ nhiều cột
       const nameCandidates = [
-        row.subcategory_name, row.subcategory, row.subcat,
-        row.sub_category, row.sub_cat_name,
-        row['subcategory(vi)'], row['subcategory(en)'],
-      ].filter(v => v != null && String(v).trim() !== '');
+        row.subcategory_name,
+        row.subcategory,
+        row.subcat,
+        row.sub_category,
+        row.sub_cat_name,
+        row["subcategory(vi)"],
+        row["subcategory(en)"],
+      ].filter((v) => v != null && String(v).trim() !== "");
 
       for (const v of nameCandidates) {
         const s = String(v).trim();
@@ -720,6 +920,25 @@ productsRouter.post('/import', async (c) => {
         const k3 = keyToId.get(s.toLowerCase());
         if (k3) return k3;
       }
+      return null;
+    };
+
+    // Helper ảnh cho import
+    const gatherImagesFromRow = (row) => {
+      // priority: images_json -> images/image_urls CSV -> image1..image10 -> image_url
+      if (row.images_json) return normalizeImagesInput(row.images_json);
+
+      const csv = row.images || row.image_urls;
+      if (csv) return normalizeImagesInput(String(csv));
+
+      const many = [];
+      for (let i = 1; i <= 10; i++) {
+        const k = row[`image${i}`];
+        if (k && String(k).trim()) many.push(String(k).trim());
+      }
+      if (many.length) return normalizeImagesInput(many);
+
+      if (row.image_url) return normalizeImagesInput([row.image_url]);
 
       return null;
     };
@@ -729,63 +948,88 @@ productsRouter.post('/import', async (c) => {
       const row = rows[i];
       const title = toStr(row.title);
       const content = toStr(row.content);
-      if (!title || !content) { skipped++; continue; }
+      if (!title || !content) {
+        skipped++;
+        continue;
+      }
 
       let slug = toStr(row.slug) || slugify(title);
       slug = slugify(slug);
 
       const description = toStr(row.description);
       const image_url = toStr(row.image_url);
+      const imagesJsonText = gatherImagesFromRow(row); // NEW
 
-      // === CHANGED: resolve subcategory theo name/id
       const subcategory_id = resolveSubcategoryId(row);
       if (!subcategory_id) {
         skipped++;
         errors.push({
-          row: i + 1, reason: 'subcategory_not_found', value:
-            (row.subcategory_name ?? row.subcategory ?? row.subcat ?? row.sub_category ?? row.sub_cat_name ?? row.subcategory_id) ?? ''
+          row: i + 1,
+          reason: "subcategory_not_found",
+          value:
+            row.subcategory_name ??
+            row.subcategory ??
+            row.subcat ??
+            row.sub_category ??
+            row.sub_cat_name ??
+            row.subcategory_id ??
+            "",
         });
         continue;
       }
 
-      // Dry run: chỉ đếm
-      if (dryRun) { created++; continue; }
+      if (dryRun) {
+        created++;
+        continue;
+      }
 
-      // Base product upsert theo slug
+      // Upsert theo slug
       const exists = await c.env.DB
-        .prepare('SELECT id FROM products WHERE slug = ? LIMIT 1')
+        .prepare("SELECT id FROM products WHERE slug = ? LIMIT 1")
         .bind(slug)
         .first();
 
       let productId;
       if (exists?.id) {
-        const res = await c.env.DB.prepare(`
+        const res = await c.env.DB
+          .prepare(
+            `
           UPDATE products
-          SET title = ?, description = ?, content = ?, image_url = ?, subcategory_id = ?, updated_at = CURRENT_TIMESTAMP
+          SET title = ?, description = ?, content = ?, image_url = ?, images_json = ?, subcategory_id = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).bind(
-          title,
-          description || null,
-          content,
-          image_url || null,
-          Number(subcategory_id),
-          exists.id
-        ).run();
+        `
+          )
+          .bind(
+            title,
+            description || null,
+            content,
+            image_url || null,
+            imagesJsonText,
+            Number(subcategory_id),
+            exists.id
+          )
+          .run();
         productId = exists.id;
         if ((res.meta?.changes || 0) > 0) updated++;
         else skipped++;
       } else {
-        const res = await c.env.DB.prepare(`
-          INSERT INTO products (title, slug, description, content, image_url, subcategory_id)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).bind(
-          title,
-          slug,
-          description || null,
-          content,
-          image_url || null,
-          Number(subcategory_id)
-        ).run();
+        const res = await c.env.DB
+          .prepare(
+            `
+          INSERT INTO products (title, slug, description, content, image_url, images_json, subcategory_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `
+          )
+          .bind(
+            title,
+            slug,
+            description || null,
+            content,
+            image_url || null,
+            imagesJsonText,
+            Number(subcategory_id)
+          )
+          .run();
         if (res.success) {
           productId = res.meta?.last_row_id;
           created++;
@@ -795,7 +1039,7 @@ productsRouter.post('/import', async (c) => {
         }
       }
 
-      // ===== 5) Auto-translate (giữ nguyên logic của bạn) =====
+      // ===== 5) Auto-translate (giữ logic cũ) =====
       if (auto && targets.length > 0 && productId) {
         const upsertT = `
           INSERT INTO products_translations (product_id, locale, title, slug, description, content)
@@ -818,31 +1062,39 @@ productsRouter.post('/import', async (c) => {
           const tCont0 = toStr(row[`${lc}_content`]);
           const tSlug0 = toStr(row[`${lc}_slug`]);
 
-          const tTitle = tTitle0 || await withRetry(
-            () => translateTextInWorker(c, title, source, lc),
-            { tries, delayMs: delay0, backoff, timeoutMs: 8000 }
-          );
-
-          const tDesc = tDesc0 || (description
-            ? await withRetry(
-              () => translateTextInWorker(c, description, source, lc),
-              { tries, delayMs: delay0, backoff, timeoutMs: 8000 }
-            )
-            : ''
-          );
-
-          const tCont = tCont0 || await withRetry(
-            () => translateContentInWorker(c, content, source, lc),
-            {
-              tries: Math.max(tries, 6),
-              delayMs: Math.max(delay0, 600),
+          const tTitle =
+            tTitle0 ||
+            (await withRetry(() => translateTextInWorker(c, title, source, lc), {
+              tries,
+              delayMs: delay0,
               backoff,
-              timeoutMs: 25000
-            }
-          );
+              timeoutMs: 8000,
+            }));
 
-          const okTitle = !!String(tTitle || '').trim();
-          const okContent = !!String(tCont || '').trim();
+          const tDesc =
+            tDesc0 ||
+            (description
+              ? await withRetry(
+                () =>
+                  translateTextInWorker(c, description, source, lc),
+                { tries, delayMs: delay0, backoff, timeoutMs: 8000 }
+              )
+              : "");
+
+          const tCont =
+            tCont0 ||
+            (await withRetry(
+              () => translateContentInWorker(c, content, source, lc),
+              {
+                tries: Math.max(tries, 6),
+                delayMs: Math.max(delay0, 600),
+                backoff,
+                timeoutMs: 25000,
+              }
+            ));
+
+          const okTitle = !!String(tTitle || "").trim();
+          const okContent = !!String(tCont || "").trim();
           const ok = okTitle && okContent;
 
           const slugTranslated = slugify(tSlug0 || tTitle) || `${slug}-${lc}`;
@@ -852,31 +1104,38 @@ productsRouter.post('/import', async (c) => {
             title: tTitle,
             desc: tDesc,
             cont: tCont,
-            slug: slugTranslated
+            slug: slugTranslated,
           };
           if (!ok) {
             trans[lc].reason = !okTitle && !okContent
-              ? 'empty_title_and_content'
-              : !okTitle ? 'empty_title'
-                : 'empty_content_or_untranslated';
+              ? "empty_title_and_content"
+              : !okTitle
+                ? "empty_title"
+                : "empty_content_or_untranslated";
           }
         }
 
-        const missing = required.filter(lc => !trans[lc]?.ok);
-        if (mode === 'strict' && missing.length) {
-          errors.push({ row: i + 1, reason: 'strict_missing_required_locales', locales: missing });
-          // Nếu muốn rollback base khi strict fail, có thể xoá sản phẩm vừa tạo tại đây.
+        const missing = required.filter((lc) => !trans[lc]?.ok);
+        if (mode === "strict" && missing.length) {
+          errors.push({
+            row: i + 1,
+            reason: "strict_missing_required_locales",
+            locales: missing,
+          });
         } else {
           for (const lc of targets) {
             if (!trans[lc]?.ok) continue;
-            await c.env.DB.prepare(upsertT).bind(
-              productId,
-              lc,
-              trans[lc].title || null,
-              trans[lc].slug || null,
-              trans[lc].desc || null,
-              trans[lc].cont || null
-            ).run();
+            await c.env.DB
+              .prepare(upsertT)
+              .bind(
+                productId,
+                lc,
+                trans[lc].title || null,
+                trans[lc].slug || null,
+                trans[lc].desc || null,
+                trans[lc].cont || null
+              )
+              .run();
           }
         }
       }
@@ -884,9 +1143,9 @@ productsRouter.post('/import', async (c) => {
 
     return c.json({ ok: true, created, updated, skipped, errors });
   } catch (err) {
-    console.error('Import products error:', err);
-    return c.json({ error: 'Failed to import' }, 500);
+    console.error("Import products error:", err);
+    return c.json({ error: "Failed to import" }, 500);
   }
 });
 
-
+export default productsRouter;

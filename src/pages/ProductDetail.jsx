@@ -11,6 +11,246 @@ const DEFAULT_LOCALE = "vi";
 const getLocaleFromSearch = (search) =>
   new URLSearchParams(search).get("locale")?.toLowerCase() || "";
 
+/* ================= Helpers for images & cover ================= */
+// Giữ lại cho fallback rất cũ (images_json key tương đối)
+function normalizeImages(input) {
+  let arr = [];
+  if (!input) return [];
+  if (Array.isArray(input)) arr = input;
+  else {
+    try {
+      const j = JSON.parse(input);
+      if (Array.isArray(j)) arr = j;
+    } catch {
+      arr = [];
+    }
+  }
+  const out = arr
+    .map((it, i) => {
+      if (!it) return null;
+      if (typeof it === "string") {
+        return { url: it, is_primary: i === 0 ? 1 : 0, sort_order: i };
+      }
+      if (typeof it === "object" && it.url) {
+        return {
+          url: String(it.url).trim(),
+          is_primary: it.is_primary ? 1 : 0,
+          sort_order: Number.isFinite(it.sort_order) ? it.sort_order : i,
+        };
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => (a?.sort_order ?? 0) - (b?.sort_order ?? 0));
+
+  if (out.length) {
+    const hasPrimary = out.some((x) => x.is_primary === 1);
+    if (!hasPrimary) out[0].is_primary = 1;
+    out.forEach((x, i) => (x.sort_order = i));
+  }
+  return out;
+}
+
+// Ưu tiên cover_image (URL tuyệt đối do BE build sẵn) -> image_url (tuyệt đối) -> images[0] -> fallback images_json cũ
+function coverFromProduct(p) {
+  if (p?.cover_image) return p.cover_image;
+  if (p?.image_url) return p.image_url;
+  if (Array.isArray(p?.images) && p.images.length) return p.images[0];
+  const imgs = normalizeImages(p?.images_json);
+  if (imgs.length) {
+    const primary = imgs.find((x) => x.is_primary === 1) || imgs[0];
+    return primary?.url || "";
+  }
+  return "";
+}
+
+/* ================= Zoomable main image with nav buttons ================= */
+function ZoomableImage({ src, alt, onPrev, onNext, onOpenLightbox }) {
+  const [zoomOn, setZoomOn] = useState(false);
+  const [bgPos, setBgPos] = useState("center");
+
+  const handleMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setBgPos(`${x}% ${y}%`);
+  };
+
+  return (
+    <div className="relative w-full h-full">
+      <div
+        className="
+          w-full h-full bg-white overflow-hidden
+          cursor-zoom-in rounded-md border border-gray-200
+        "
+        style={{
+          backgroundImage: `url(${src})`,
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: zoomOn ? bgPos : "center",
+          backgroundSize: zoomOn ? "200%" : "contain",
+          transition: "background-size 150ms ease",
+        }}
+        onMouseEnter={() => setZoomOn(true)}
+        onMouseLeave={() => {
+          setZoomOn(false);
+          setBgPos("center");
+        }}
+        onMouseMove={handleMove}
+        onClick={() => onOpenLightbox?.()}
+        aria-label={alt}
+        role="img"
+      >
+        {/* Hidden <img> just to preserve intrinsic size & fallback */}
+        <img
+          src={src}
+          alt={alt}
+          className="w-full h-full object-contain opacity-0"
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = "/banner.jpg";
+          }}
+        />
+      </div>
+
+      {/* Nav buttons on top of the main image */}
+      {onPrev && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onPrev();
+          }}
+          className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white shadow rounded-full w-9 h-9 flex items-center justify-center"
+          aria-label="Previous image"
+          title="Previous"
+        >
+          ‹
+        </button>
+      )}
+      {onNext && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onNext();
+          }}
+          className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white shadow rounded-full w-9 h-9 flex items-center justify-center"
+          aria-label="Next image"
+          title="Next"
+        >
+          ›
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ================= Lightbox toàn màn hình ================= */
+function Lightbox({ open, images, index, onClose, onPrev, onNext, title }) {
+  const overlayRef = useRef(null);
+
+  // ESC + ←/→
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose?.();
+      if (e.key === "ArrowLeft") onPrev?.();
+      if (e.key === "ArrowRight") onNext?.();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose, onPrev, onNext]);
+
+  // Swipe (mobile)
+  useEffect(() => {
+    if (!open) return;
+    const el = overlayRef.current;
+    if (!el) return;
+    let startX = 0;
+    const onTouchStart = (e) => (startX = e.touches[0].clientX);
+    const onTouchEnd = (e) => {
+      const dx = e.changedTouches[0].clientX - startX;
+      if (Math.abs(dx) > 50) dx > 0 ? onPrev?.() : onNext?.();
+    };
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [open, onPrev, onNext]);
+
+  if (!open) return null;
+
+  const imgs = images || [];
+  const curr = imgs[index] || {};
+  const src = curr.url || "";
+
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-[1000] bg-black/90 flex items-center justify-center p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
+    >
+      {/* Close */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/90 hover:bg-white flex items-center justify-center text-xl"
+        aria-label="Close"
+        title="Close"
+      >
+        ✕
+      </button>
+
+      {/* Prev / Next */}
+      {imgs.length > 1 && (
+        <>
+          <button
+            onClick={onPrev}
+            className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 hover:bg-white text-2xl flex items-center justify-center"
+            aria-label="Previous"
+            title="Previous"
+          >
+            ‹
+          </button>
+          <button
+            onClick={onNext}
+            className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 hover:bg-white text-2xl flex items-center justify-center"
+            aria-label="Next"
+            title="Next"
+          >
+            ›
+          </button>
+        </>
+      )}
+
+      {/* Ảnh */}
+      <figure className="max-w-[95vw] max-h-[85vh]">
+        <img
+          src={src || "/banner.jpg"}
+          alt={title || "image"}
+          className="max-h-[85vh] max-w-[95vw] object-contain"
+        />
+        {!!title && (
+          <figcaption className="mt-2 text-center text-white/80 text-sm line-clamp-1">
+            {title}
+          </figcaption>
+        )}
+      </figure>
+
+      {/* Counter */}
+      {imgs.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-sm">
+          {index + 1} / {imgs.length}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ======================= Page ======================= */
 export default function ProductDetailPage() {
   const { idOrSlug } = useParams();
   const navigate = useNavigate();
@@ -32,7 +272,9 @@ export default function ProductDetailPage() {
     if (SUPPORTED.includes(urlLc) && urlLc !== locale) {
       setLocale(urlLc);
       localStorage.setItem("locale", urlLc);
-      try { document.documentElement.lang = urlLc; } catch { }
+      try {
+        document.documentElement.lang = urlLc;
+      } catch { }
     }
   }, [location.search, locale]);
 
@@ -43,6 +285,13 @@ export default function ProductDetailPage() {
   const [loading, setLoading] = useState(true);
   const [relLoading, setRelLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Gallery state
+  const [gallery, setGallery] = useState([]); // [{url,is_primary,sort_order}]
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  // Lightbox state
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const fetchParentBySub = async (subSlug, signal) => {
     let res = await fetch(
@@ -86,6 +335,7 @@ export default function ProductDetailPage() {
     noRelated: locale === "vi" ? "Chưa có sản phẩm liên quan." : "No related products.",
     prev: locale === "vi" ? "Trước" : "Prev",
     next: locale === "vi" ? "Sau" : "Next",
+    views: locale === "vi" ? "lượt xem" : "views",
   };
 
   const items = [
@@ -111,12 +361,15 @@ export default function ProductDetailPage() {
     { label: product?.title || t.detail },
   ];
 
+  // Ảnh chính theo gallery
   const imageSrc = useMemo(() => {
-    if (!product?.image_url || product.image_url === "null") return "/banner.jpg";
-    return product.image_url;
-  }, [product]);
+    const g = gallery;
+    if (g && g.length && g[activeIdx]?.url) return g[activeIdx].url;
+    const cov = coverFromProduct(product || {});
+    return cov || "/banner.jpg";
+  }, [gallery, activeIdx, product]);
 
-  // ===== Helpers để resolve slug -> id và chuẩn hoá URL theo locale =====
+  // ===== Helpers resolve & fetch =====
   const isNumeric = (s) => /^\d+$/.test(String(s || "").trim());
 
   const fetchBy = async (key, lc, signal) => {
@@ -125,6 +378,27 @@ export default function ProductDetailPage() {
     if (!r.ok) return null;
     const d = await r.json();
     return d?.product || null;
+  };
+
+  // Bump views best-effort + chống trùng trong phiên (BE là POST)
+  const bumpViews = async (productId) => {
+    if (!productId) return;
+    try {
+      const key = `product:viewed:${productId}`;
+      if (sessionStorage.getItem(key)) return;
+
+      const r = await fetch(`/api/products/${encodeURIComponent(productId)}/view`, {
+        method: "POST",
+        cache: "no-store",
+      });
+
+      if (r.ok) {
+        sessionStorage.setItem(key, "1");
+        setProduct((prev) => (prev ? { ...prev, views: (prev.views || 0) + 1 } : prev));
+      }
+    } catch {
+      // ignore
+    }
   };
 
   useEffect(() => {
@@ -138,20 +412,16 @@ export default function ProductDetailPage() {
 
         let baseProduct = null;
 
-        // 1) Nếu là id thuần số -> fetch thẳng theo id + locale hiện tại
         if (isNumeric(idOrSlug)) {
           baseProduct = await fetchBy(idOrSlug, locale, ac.signal);
         } else {
-          // 2) Thử fetch theo slug với locale hiện tại
           baseProduct = await fetchBy(idOrSlug, locale, ac.signal);
 
-          // 3) Nếu không thấy, thử các locale khác để lấy ra product.id
           if (!baseProduct) {
             for (const lc of SUPPORTED) {
               if (lc === locale) continue;
               const p = await fetchBy(idOrSlug, lc, ac.signal);
               if (p) {
-                // Đã tìm thấy theo slug của ngôn ngữ khác -> fetch lại theo ID + locale hiện tại
                 baseProduct = await fetchBy(p.id, locale, ac.signal);
                 break;
               }
@@ -161,7 +431,7 @@ export default function ProductDetailPage() {
 
         if (!baseProduct) throw new Error("Not found");
 
-        // 4) Chuẩn hoá URL sang slug của locale hiện tại (nhưng giữ ?locale)
+        // Chuẩn hoá URL sang slug của locale hiện tại (nhưng giữ ?locale)
         const routeSlug = decodeURIComponent(String(idOrSlug)).toLowerCase();
         const canonicalSlug = (
           baseProduct.slug || baseProduct.product_slug || baseProduct.id
@@ -176,13 +446,33 @@ export default function ProductDetailPage() {
             )}${qs}`,
             { replace: true }
           );
-          // return ở đây để đợi mount lại với slug mới, tránh nháy nội dung
           return;
         }
 
+        // Setup product + gallery
         setProduct(baseProduct);
 
-        // 5) Bổ sung parent nếu thiếu
+        // Ưu tiên dùng mảng URL tuyệt đối do BE trả về: product.images
+        const imgs = (() => {
+          if (Array.isArray(baseProduct.images) && baseProduct.images.length) {
+            return baseProduct.images.map((u, i) => ({
+              url: u,
+              is_primary: i === 0 ? 1 : 0,
+              sort_order: i,
+            }));
+          }
+          const cov = baseProduct.cover_image || baseProduct.image_url || "";
+          return cov ? [{ url: cov, is_primary: 1, sort_order: 0 }] : [];
+        })();
+
+        const idxPrimary = Math.max(
+          0,
+          imgs.findIndex((x) => x.is_primary === 1)
+        );
+        setGallery(imgs);
+        setActiveIdx(idxPrimary >= 0 ? idxPrimary : 0);
+
+        // Bổ sung parent nếu thiếu
         if (!baseProduct?.parent_slug && baseProduct?.subcategory_slug) {
           const parent = await fetchParentBySub(baseProduct.subcategory_slug, ac.signal);
           if (parent?.parent_slug) {
@@ -190,7 +480,7 @@ export default function ProductDetailPage() {
           }
         }
 
-        // 6) Related theo sub/parent (theo locale hiện tại)
+        // Related theo sub/parent
         setRelLoading(true);
         let relatedList = [];
 
@@ -227,6 +517,9 @@ export default function ProductDetailPage() {
 
         relatedList = relatedList.filter((x) => x.id !== baseProduct?.id).slice(0, 12);
         setRelated(relatedList);
+
+        // Tăng views
+        bumpViews(baseProduct.id || idOrSlug);
       } catch (e) {
         if (e.name !== "AbortError") {
           console.error("Load product error:", e);
@@ -306,29 +599,82 @@ export default function ProductDetailPage() {
       <main className="container mx-auto px-4 py-6 max-w-7xl">
         <div className="card p-4 space-y-6">
           <div className="md:flex gap-10">
+            {/* Khối ảnh */}
             <div className="md:w-1/2 flex-shrink-0 mb-6 md:mb-0">
               <div
                 className="
                   w-full rounded-md border border-gray-200 bg-white overflow-hidden
-                  aspect-square         
-                  md:aspect-auto md:h-[420px] lg:h-[480px]
+                  aspect-square md:aspect-auto md:h-[420px] lg:h-[480px]
                 "
               >
-                <img
+                <ZoomableImage
                   src={imageSrc}
                   alt={product.title}
-                  className="w-full h-full md:object-cover"
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = "/banner.jpg";
-                  }}
+                  onPrev={
+                    gallery.length > 1
+                      ? () => setActiveIdx((i) => (i - 1 + gallery.length) % gallery.length)
+                      : null
+                  }
+                  onNext={
+                    gallery.length > 1
+                      ? () => setActiveIdx((i) => (i + 1) % gallery.length)
+                      : null
+                  }
+                  onOpenLightbox={() => setLightboxOpen(true)}
                 />
               </div>
+
+              {/* Thumbnails */}
+              {gallery.length > 1 && (
+                <div className="mt-3 grid grid-cols-5 sm:grid-cols-6 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                  {gallery.map((g, idx) => (
+                    <button
+                      key={`${g.url}-${idx}`}
+                      type="button"
+                      onClick={() => setActiveIdx(idx)}
+                      className={[
+                        "cursor-pointer relative border rounded overflow-hidden",
+                        "aspect-square",
+                        idx === activeIdx
+                          ? "ring-2 ring-blue-500 border-blue-400"
+                          : "border-gray-200 hover:border-gray-300",
+                      ].join(" ")}
+                      title={product.title}
+                    >
+                      <img
+                        src={g.url}
+                        alt={`${product.title}-${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => {
+                          e.currentTarget.style.opacity = 0.3;
+                        }}
+                      />
+                      {g.is_primary === 1 && (
+                        <span className="absolute top-1 left-1 text-[10px] px-1.5 py-0.5 rounded bg-black/60 text-white">
+                          Cover
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
-
+            {/* Thông tin */}
             <div className="md:w-2/3 lg:w-3/4">
-              <h1 className="text-2xl font-semibold mb-3">{product.title}</h1>
+              <h1 className="text-2xl font-semibold mb-2">{product.title}</h1>
+
+              <div className="flex items-center gap-3 text-sm text-gray-500 mb-4">
+                {product.views != null && (
+                  <span>
+                    {product.views} {t.views}
+                  </span>
+                )}
+                {product.updated_at && (
+                  <span>• {new Date(product.updated_at).toLocaleDateString()}</span>
+                )}
+              </div>
 
               {product.subcategory_name && (
                 <div className="mb-5">
@@ -403,9 +749,12 @@ export default function ProductDetailPage() {
                 className="flex gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar"
               >
                 {related.map((rel) => {
-                  const relImg =
-                    !rel.image_url || rel.image_url === "null" ? "/banner.jpg" : rel.image_url;
                   const relTitle = rel.title || rel.name;
+                  const relCover =
+                    rel.cover_image ||
+                    (Array.isArray(rel.images) && rel.images[0]) ||
+                    coverFromProduct(rel) ||
+                    "/banner.jpg";
                   return (
                     <div
                       key={rel.id}
@@ -414,14 +763,16 @@ export default function ProductDetailPage() {
                     >
                       <div className="w-full aspect-[5/6] overflow-hidden bg-white">
                         <img
-                          src={relImg}
+                          src={relCover}
                           alt={relTitle}
                           className="block w-full h-full object-cover transform transition-transform duration-300 ease-in-out group-hover:scale-110"
                           loading="lazy"
                         />
                       </div>
                       <div className="px-3 py-3 text-center">
-                        <div className="font-medium text-xl text-gray-900 line-clamp-2">{relTitle}</div>
+                        <div className="font-medium text-xl text-gray-900 line-clamp-2">
+                          {relTitle}
+                        </div>
                       </div>
                     </div>
                   );
@@ -455,6 +806,23 @@ export default function ProductDetailPage() {
           )}
         </section>
       </main>
+
+      {/* Lightbox */}
+      <Lightbox
+        open={lightboxOpen}
+        images={gallery}
+        index={activeIdx}
+        title={product.title}
+        onClose={() => setLightboxOpen(false)}
+        onPrev={
+          gallery.length > 1
+            ? () => setActiveIdx((i) => (i - 1 + gallery.length) % gallery.length)
+            : undefined
+        }
+        onNext={
+          gallery.length > 1 ? () => setActiveIdx((i) => (i + 1) % gallery.length) : undefined
+        }
+      />
 
       <Footer />
     </div>

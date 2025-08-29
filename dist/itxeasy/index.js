@@ -31763,6 +31763,63 @@ const DEFAULT_LOCALE$3 = "vi";
 const getLocale$3 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$3).toLowerCase();
 const hasDB$3 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const slugify = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
+const withBase = (base, u) => {
+  const s = String(u || "").trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  return base ? `${base}/${s.replace(/^\/+/, "")}` : s;
+};
+function normalizeImagesInput(input) {
+  let arr = [];
+  if (Array.isArray(input)) {
+    arr = input;
+  } else if (typeof input === "string") {
+    const s = input.trim();
+    if (!s) arr = [];
+    else {
+      try {
+        const parsed = JSON.parse(s);
+        arr = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        arr = s.split(/[;,]/).map((x) => x.trim()).filter(Boolean);
+      }
+    }
+  } else {
+    arr = [];
+  }
+  const norm = arr.map((it, idx) => {
+    if (!it) return null;
+    if (typeof it === "string") {
+      return { url: it, is_primary: idx === 0 ? 1 : 0, sort_order: idx };
+    }
+    if (typeof it === "object" && it.url) {
+      return {
+        url: String(it.url).trim(),
+        is_primary: typeof it.is_primary === "number" ? it.is_primary : it.is_primary ? 1 : idx === 0 ? 1 : 0,
+        sort_order: typeof it.sort_order === "number" ? it.sort_order : idx
+      };
+    }
+    return null;
+  }).filter(Boolean);
+  return JSON.stringify(norm);
+}
+function buildImagesView(images_json_text, base) {
+  try {
+    const arr = JSON.parse(images_json_text || "[]");
+    if (!Array.isArray(arr) || arr.length === 0)
+      return { images: [], cover: null };
+    const sorted = [...arr].sort(
+      (a, b) => (a?.sort_order ?? 0) - (b?.sort_order ?? 0)
+    );
+    const images = sorted.map((it) => withBase(base, it?.url)).filter(Boolean);
+    const coverObj = sorted.find((x) => (x?.is_primary || 0) === 1) || sorted[0];
+    const cover = withBase(base, coverObj?.url);
+    return { images, cover };
+  } catch {
+    return { images: [], cover: null };
+  }
+}
+const productsRouter = new Hono2();
 const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
   const isNumericId = /^\d+$/.test(idOrSlug);
   const sql = `
@@ -31773,6 +31830,8 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
       COALESCE(pt.description, p.description)   AS description,
       COALESCE(pt.content,     p.content)       AS content,
       p.image_url,
+      p.images_json,              -- NEW
+      p.views,                    -- NEW
       p.created_at,
       p.updated_at,
 
@@ -31791,7 +31850,6 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
   `;
   return isNumericId ? db.prepare(sql).bind(locale, locale, Number(idOrSlug)).first() : db.prepare(sql).bind(locale, locale, idOrSlug, idOrSlug).first();
 };
-const productsRouter = new Hono2();
 productsRouter.get("/", async (c) => {
   const { subcategory_id, sub_slug, limit, offset, q } = c.req.query();
   try {
@@ -31837,7 +31895,9 @@ productsRouter.get("/", async (c) => {
         COALESCE(pt.slug,  p.slug)                AS slug,
         COALESCE(pt.description, p.description)   AS description,
         COALESCE(pt.content,     p.content)       AS content,
-        p.image_url,                 -- KEY trong DB
+        p.image_url,
+        p.images_json,             -- NEW
+        p.views,                   -- NEW
         p.created_at,
         p.updated_at,
 
@@ -31859,10 +31919,19 @@ productsRouter.get("/", async (c) => {
     const result = await c.env.DB.prepare(sql).bind(...params).all();
     const rows = result?.results ?? [];
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-    const products = rows.map((r) => ({
-      ...r,
-      image_url: r.image_url ? `${base}/${r.image_url}` : null
-    }));
+    const products = rows.map((r) => {
+      const { images, cover } = buildImagesView(r.images_json, base);
+      const image_url_abs = withBase(base, r.image_url) || cover || null;
+      return {
+        ...r,
+        image_url: image_url_abs,
+        // giữ tương thích FE cũ
+        images,
+        // NEW: array url tuyệt đối
+        cover_image: cover
+        // NEW: url tuyệt đối
+      };
+    });
     return c.json({
       products,
       count: products.length,
@@ -31875,6 +31944,33 @@ productsRouter.get("/", async (c) => {
     return c.json({ error: "Failed to fetch products" }, 500);
   }
 });
+productsRouter.get("/:id/translations", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
+    const exist = await c.env.DB.prepare("SELECT id FROM products WHERE id = ?").bind(id).first();
+    if (!exist) return c.json({ error: "Product not found" }, 404);
+    const rows = await c.env.DB.prepare(`
+        SELECT locale, title, slug, description, content
+        FROM products_translations
+        WHERE product_id = ?
+      `).bind(id).all();
+    const map = {};
+    for (const r of rows?.results || []) {
+      const lc = String(r.locale || "").toLowerCase();
+      map[lc] = {
+        title: r.title || "",
+        slug: r.slug || "",
+        description: r.description || "",
+        content: r.content || ""
+      };
+    }
+    return c.json({ translations: map });
+  } catch (err) {
+    console.error("Error getting product translations:", err);
+    return c.json({ error: "Failed to get translations" }, 500);
+  }
+});
 productsRouter.get("/:idOrSlug", async (c) => {
   const idOrSlug = c.req.param("idOrSlug");
   try {
@@ -31882,10 +31978,19 @@ productsRouter.get("/:idOrSlug", async (c) => {
     const locale = getLocale$3(c);
     const raw = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
     if (!raw) return c.json({ error: "Product not found" }, 404);
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(
+      /\/+$/,
+      ""
+    );
+    const { images, cover } = buildImagesView(raw.images_json, base);
     const product = {
       ...raw,
-      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
+      image_url: withBase(base, raw.image_url) || cover || null,
+      // compat
+      images,
+      // NEW
+      cover_image: cover
+      // NEW
     };
     return c.json({ product, source: "database", locale });
   } catch (err) {
@@ -31903,6 +32008,8 @@ productsRouter.post("/", async (c) => {
       description,
       content,
       image_url,
+      images_json,
+      // NEW
       subcategory_id,
       translations
     } = body || {};
@@ -31914,9 +32021,15 @@ productsRouter.post("/", async (c) => {
       const sub = await c.env.DB.prepare("SELECT id FROM subcategories WHERE id = ?").bind(Number(subcategory_id)).first();
       if (!sub) return c.json({ error: "subcategory_id not found" }, 400);
     }
+    let imagesJsonText = null;
+    if (images_json !== void 0) {
+      imagesJsonText = normalizeImagesInput(images_json);
+    } else if (image_url) {
+      imagesJsonText = normalizeImagesInput([image_url]);
+    }
     const sql = `
-      INSERT INTO products (title, slug, description, content, image_url, subcategory_id)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO products (title, slug, description, content, image_url, images_json, subcategory_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `;
     const runRes = await c.env.DB.prepare(sql).bind(
       title2.trim(),
@@ -31924,6 +32037,7 @@ productsRouter.post("/", async (c) => {
       description || null,
       content,
       image_url || null,
+      imagesJsonText || null,
       subcategory_id == null ? null : Number(subcategory_id)
     ).run();
     if (!runRes.success) throw new Error("Insert failed");
@@ -31972,6 +32086,8 @@ productsRouter.put("/:id", async (c) => {
       description,
       content,
       image_url,
+      images_json,
+      // NEW
       subcategory_id,
       translations
     } = body || {};
@@ -32001,6 +32117,10 @@ productsRouter.put("/:id", async (c) => {
       sets.push("image_url = ?");
       params.push(image_url);
     }
+    if (images_json !== void 0) {
+      sets.push("images_json = ?");
+      params.push(normalizeImagesInput(images_json));
+    }
     if (subcategory_id !== void 0) {
       sets.push("subcategory_id = ?");
       params.push(subcategory_id == null ? null : Number(subcategory_id));
@@ -32013,7 +32133,8 @@ productsRouter.put("/:id", async (c) => {
       `;
       params.push(id);
       const res = await c.env.DB.prepare(sql).bind(...params).run();
-      if ((res.meta?.changes || 0) === 0) return c.json({ error: "Product not found" }, 404);
+      if ((res.meta?.changes || 0) === 0)
+        return c.json({ error: "Product not found" }, 404);
     }
     if (translations && typeof translations === "object") {
       const upsertT = `
@@ -32085,32 +32206,6 @@ productsRouter.put("/:id/translations", async (c) => {
     return c.json({ error: "Failed to upsert translations" }, 500);
   }
 });
-productsRouter.get("/:id/translations", async (c) => {
-  const id = Number(c.req.param("id"));
-  try {
-    if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
-    const sql = `
-      SELECT locale, title, slug, description, content
-      FROM products_translations
-      WHERE product_id = ?
-      ORDER BY locale ASC
-    `;
-    const { results = [] } = await c.env.DB.prepare(sql).bind(id).all();
-    const translations = {};
-    for (const row of results) {
-      translations[row.locale] = {
-        title: row.title || "",
-        slug: row.slug || "",
-        description: row.description || "",
-        content: row.content || ""
-      };
-    }
-    return c.json({ translations });
-  } catch (err) {
-    console.error("Error fetching product translations:", err);
-    return c.json({ error: "Failed to fetch translations" }, 500);
-  }
-});
 productsRouter.delete("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
@@ -32127,6 +32222,19 @@ productsRouter.delete("/:id", async (c) => {
     return c.json({ error: "Failed to delete product" }, 500);
   }
 });
+productsRouter.post("/:id/view", async (c) => {
+  const id = Number(c.req.param("id"));
+  try {
+    if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
+    const res = await c.env.DB.prepare("UPDATE products SET views = views + 1 WHERE id = ?").bind(id).run();
+    if ((res.meta?.changes || 0) === 0)
+      return c.json({ error: "Product not found" }, 404);
+    return c.json({ ok: true });
+  } catch (err) {
+    console.error("Error incrementing view:", err);
+    return c.json({ error: "Failed to update views" }, 500);
+  }
+});
 const toStr = (v) => v == null ? "" : String(v).trim();
 function csvToJson(text) {
   const lines = String(text || "").split(/\r?\n/).filter(Boolean);
@@ -32136,7 +32244,9 @@ function csvToJson(text) {
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(",");
     const obj = {};
-    headers.forEach((h, idx) => obj[h] = cols[idx] != null ? cols[idx].trim() : "");
+    headers.forEach(
+      (h, idx) => obj[h] = cols[idx] != null ? cols[idx].trim() : ""
+    );
     rows.push(obj);
   }
   return rows;
@@ -32192,7 +32302,10 @@ function looksUntranslated(src, out, target) {
 async function translateTextInWorker(c, text, source, target) {
   const out = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
     messages: [
-      { role: "system", content: `Translate from ${source} to ${target}. Reply with translation only.` },
+      {
+        role: "system",
+        content: `Translate from ${source} to ${target}. Reply with translation only.`
+      },
       { role: "user", content: text }
     ],
     temperature: 0.2
@@ -32248,7 +32361,13 @@ productsRouter.post("/import", async (c) => {
       rows = csvToJson(text);
     }
     if (!rows.length) {
-      return c.json({ ok: true, created: 0, updated: 0, skipped: 0, message: "No data rows found" });
+      return c.json({
+        ok: true,
+        created: 0,
+        updated: 0,
+        skipped: 0,
+        message: "No data rows found"
+      });
     }
     rows = rows.map((r) => {
       const out = {};
@@ -32311,6 +32430,19 @@ productsRouter.post("/import", async (c) => {
       }
       return null;
     };
+    const gatherImagesFromRow = (row) => {
+      if (row.images_json) return normalizeImagesInput(row.images_json);
+      const csv = row.images || row.image_urls;
+      if (csv) return normalizeImagesInput(String(csv));
+      const many = [];
+      for (let i = 1; i <= 10; i++) {
+        const k = row[`image${i}`];
+        if (k && String(k).trim()) many.push(String(k).trim());
+      }
+      if (many.length) return normalizeImagesInput(many);
+      if (row.image_url) return normalizeImagesInput([row.image_url]);
+      return null;
+    };
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const title2 = toStr(row.title);
@@ -32323,6 +32455,7 @@ productsRouter.post("/import", async (c) => {
       slug = slugify(slug);
       const description = toStr(row.description);
       const image_url = toStr(row.image_url);
+      const imagesJsonText = gatherImagesFromRow(row);
       const subcategory_id = resolveSubcategoryId(row);
       if (!subcategory_id) {
         skipped++;
@@ -32340,15 +32473,18 @@ productsRouter.post("/import", async (c) => {
       const exists = await c.env.DB.prepare("SELECT id FROM products WHERE slug = ? LIMIT 1").bind(slug).first();
       let productId;
       if (exists?.id) {
-        const res = await c.env.DB.prepare(`
+        const res = await c.env.DB.prepare(
+          `
           UPDATE products
-          SET title = ?, description = ?, content = ?, image_url = ?, subcategory_id = ?, updated_at = CURRENT_TIMESTAMP
+          SET title = ?, description = ?, content = ?, image_url = ?, images_json = ?, subcategory_id = ?, updated_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `).bind(
+        `
+        ).bind(
           title2,
           description || null,
           content,
           image_url || null,
+          imagesJsonText,
           Number(subcategory_id),
           exists.id
         ).run();
@@ -32356,15 +32492,18 @@ productsRouter.post("/import", async (c) => {
         if ((res.meta?.changes || 0) > 0) updated++;
         else skipped++;
       } else {
-        const res = await c.env.DB.prepare(`
-          INSERT INTO products (title, slug, description, content, image_url, subcategory_id)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).bind(
+        const res = await c.env.DB.prepare(
+          `
+          INSERT INTO products (title, slug, description, content, image_url, images_json, subcategory_id)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `
+        ).bind(
           title2,
           slug,
           description || null,
           content,
           image_url || null,
+          imagesJsonText,
           Number(subcategory_id)
         ).run();
         if (res.success) {
@@ -32393,10 +32532,12 @@ productsRouter.post("/import", async (c) => {
           const tDesc0 = toStr(row[`${lc}_description`]);
           const tCont0 = toStr(row[`${lc}_content`]);
           const tSlug0 = toStr(row[`${lc}_slug`]);
-          const tTitle = tTitle0 || await withRetry(
-            () => translateTextInWorker(c, title2, source, lc),
-            { tries, delayMs: delay0, backoff, timeoutMs: 8e3 }
-          );
+          const tTitle = tTitle0 || await withRetry(() => translateTextInWorker(c, title2, source, lc), {
+            tries,
+            delayMs: delay0,
+            backoff,
+            timeoutMs: 8e3
+          });
           const tDesc = tDesc0 || (description ? await withRetry(
             () => translateTextInWorker(c, description, source, lc),
             { tries, delayMs: delay0, backoff, timeoutMs: 8e3 }
@@ -32427,7 +32568,11 @@ productsRouter.post("/import", async (c) => {
         }
         const missing = required.filter((lc) => !trans[lc]?.ok);
         if (mode === "strict" && missing.length) {
-          errors.push({ row: i + 1, reason: "strict_missing_required_locales", locales: missing });
+          errors.push({
+            row: i + 1,
+            reason: "strict_missing_required_locales",
+            locales: missing
+          });
         } else {
           for (const lc of targets) {
             if (!trans[lc]?.ok) continue;

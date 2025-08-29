@@ -16,12 +16,44 @@ const PAGE_SIZE = 9;
 const SUPPORTED = ["vi", "en"];
 const DEFAULT_LOCALE = "vi";
 
-// lấy locale tương tự News.jsx
 function getInitialLocale() {
   const urlLc = new URLSearchParams(window.location.search).get("locale")?.toLowerCase() || "";
   const lsLc = (localStorage.getItem("locale") || "").toLowerCase();
   return SUPPORTED.includes(urlLc) ? urlLc : (SUPPORTED.includes(lsLc) ? lsLc : DEFAULT_LOCALE);
 }
+
+/** Cover helper — ƯU TIÊN field mới từ BE:
+ *  1) cover_image (URL tuyệt đối từ BE)
+ *  2) images[0] (URL tuyệt đối từ BE)
+ *  3) image_url (giữ tương thích cũ nếu BE đã build tuyệt đối)
+ *  4) images_json cũ (nếu còn)
+ */
+// Helper: lấy ảnh cover an toàn từ mọi dạng dữ liệu
+function coverFromProduct(p) {
+  // 1) ưu tiên cover_image (BE đã chuẩn hoá)
+  if (p?.cover_image) return p.cover_image;
+
+  // 2) hoặc ảnh đầu trong mảng images (BE chuẩn hoá)
+  if (Array.isArray(p?.images) && p.images.length) {
+    return p.images[0];
+  }
+
+  // 3) fallback: image_url (có thể đã tuyệt đối nhờ BE)
+  if (p?.image_url) return p.image_url;
+
+  // 4) fallback cũ: parse images_json (khi BE chưa normalize)
+  if (p?.images_json) {
+    try {
+      const arr = Array.isArray(p.images_json) ? p.images_json : JSON.parse(p.images_json);
+      if (Array.isArray(arr) && arr.length) {
+        const primary = arr.find(it => (it?.is_primary || 0) === 1) || arr[0];
+        return primary?.url || "";
+      }
+    } catch { }
+  }
+  return "";
+}
+
 
 export default function Products() {
   const navigate = useNavigate();
@@ -30,7 +62,6 @@ export default function Products() {
 
   const [locale, setLocale] = useState(getInitialLocale());
 
-  // sync khi user đổi ngôn ngữ ở TopNavigation (nó đổi URL ?locale=..)
   useEffect(() => {
     const urlLc = new URLSearchParams(location.search).get("locale")?.toLowerCase() || "";
     if (SUPPORTED.includes(urlLc) && urlLc !== locale) {
@@ -43,7 +74,7 @@ export default function Products() {
   const [parentMeta, setParentMeta] = useState(null);
   const [subMeta, setSubMeta] = useState(null);
 
-  // fetch tên parent theo slug (CÓ locale)
+  // Parent meta
   useEffect(() => {
     let ac = new AbortController();
     (async () => {
@@ -59,7 +90,7 @@ export default function Products() {
     return () => ac.abort();
   }, [parentSlug, locale]);
 
-  // fetch tên sub theo slug (CÓ locale, giữ fallback alias cũ)
+  // Sub meta (kèm alias)
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
@@ -80,7 +111,7 @@ export default function Products() {
     return () => ac.abort();
   }, [subSlug, locale]);
 
-  // --- Breadcrumbs dựa theo URL + meta, GIỮ locale trong link ---
+  // Breadcrumbs
   const items = useMemo(() => {
     const qs = `?locale=${locale}`;
     const arr = [{ label: "Product", to: "/product" + qs }];
@@ -100,24 +131,19 @@ export default function Products() {
     return arr;
   }, [parentSlug, subSlug, parentMeta, subMeta, locale]);
 
-  // Hook cũ vẫn dùng, nhưng để đảm bảo có bản dịch, ta tự fetch theo locale cho 3 chế độ:
-  //  - All
-  //  - Theo parent
-  //  - Theo sub
+  // Hook cũ
   const { products: hookProducts, productsLoading, setSelectedSubcategorySlug } =
     useProducts({ initialSubSlug: subSlug || "" });
-
   useEffect(() => setSelectedSubcategorySlug(subSlug || ""), [subSlug, setSelectedSubcategorySlug]);
 
   const [activeParentSlug, setActiveParentSlug] = useState(parentSlug || null);
   const [activeSubSlug, setActiveSubSlug] = useState(subSlug || null);
-
   useEffect(() => {
     setActiveParentSlug(parentSlug || null);
     setActiveSubSlug(subSlug || null);
   }, [parentSlug, subSlug]);
 
-  // ====== Local fetch để đảm bảo locale ======
+  // ====== Local fetch theo locale ======
   const [allProducts, setAllProducts] = useState([]);
   const [allLoading, setAllLoading] = useState(false);
 
@@ -141,7 +167,7 @@ export default function Products() {
     (async () => {
       try {
         setAllLoading(true);
-        const res = await fetch(`/api/products?locale=${encodeURIComponent(locale)}`, { signal: ac.signal });
+        const res = await fetch(`/api/products?locale=${encodeURIComponent(locale)}`, { signal: ac.signal, cache: "no-store" });
         const data = await res.json();
         setAllProducts(Array.isArray(data?.products) ? data.products : []);
       } catch (e) {
@@ -171,7 +197,7 @@ export default function Products() {
       try {
         setParentLoading(true);
         const url = `/api/parent_categories/${encodeURIComponent(parentSlug)}/products?locale=${encodeURIComponent(locale)}`;
-        const res = await fetch(url, { signal: controller.signal });
+        const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
         const data = await res.json();
         setParentProducts(Array.isArray(data?.products) ? data.products : []);
       } catch (e) {
@@ -187,7 +213,7 @@ export default function Products() {
     return () => { try { controller.abort(); } catch { } };
   }, [parentSlug, subSlug, locale]);
 
-  // Products theo sub (chú ý BE trả product_slug → chuẩn hóa thành slug)
+  // Products theo sub
   useEffect(() => {
     if (!subSlug) {
       setSubProducts([]);
@@ -203,11 +229,11 @@ export default function Products() {
       try {
         setSubLoading(true);
         const url = `/api/sub_categories/${encodeURIComponent(subSlug)}/products?locale=${encodeURIComponent(locale)}`;
-        const res = await fetch(url, { signal: controller.signal });
+        const res = await fetch(url, { signal: controller.signal, cache: "no-store" });
         const data = await res.json();
         const list = Array.isArray(data?.products) ? data.products : [];
-        // map product_slug -> slug để UI hoạt động thống nhất
-        setSubProducts(list.map(p => ({ ...p, slug: p.slug || p.product_slug })));
+        // map product_slug -> slug cho an toàn
+        setSubProducts(list.map((p) => ({ ...p, slug: p.slug || p.product_slug })));
       } catch (e) {
         if (e?.name !== "AbortError") {
           console.error("fetch by sub error:", e);
@@ -225,16 +251,28 @@ export default function Products() {
   const isFilteringByParentOnly = !!parentSlug && !subSlug;
 
   const displayedLoading = isFilteringBySub
-    ? (subLoading || productsLoading) // vẫn OR hook để giữ skeleton nếu hook đang bận
+    ? (subLoading || productsLoading)
     : isFilteringByParentOnly
       ? (parentLoading || productsLoading)
       : (allLoading || productsLoading);
 
-  const displayedProducts = isFilteringBySub
+  const displayedProductsRaw = isFilteringBySub
     ? (subProducts || [])
     : isFilteringByParentOnly
       ? (parentProducts || [])
       : (allProducts.length ? allProducts : (hookProducts || []));
+
+  // Bổ sung cover chuẩn + patch image_url nếu trống
+  const displayedProducts = useMemo(() => {
+    return (displayedProductsRaw || []).map((p) => {
+      const cover = coverFromProduct(p);
+      return {
+        ...p,
+        _cover: cover,
+        image_url: p.image_url || cover, // ProductCard cũ dùng image_url
+      };
+    });
+  }, [displayedProductsRaw]);
 
   const [currentPage, setCurrentPage] = useState(1);
   useEffect(() => setCurrentPage(1), [parentSlug, subSlug, locale]);
@@ -255,9 +293,9 @@ export default function Products() {
   }, [displayedProducts, currentPage]);
 
   const openDetail = (p) =>
-    navigate(`/product/product-detail/${encodeURIComponent(p.slug || p.id)}?locale=${locale}`);
+    navigate(`/product/product-detail/${encodeURIComponent(p.slug || p.product_slug || p.id)}?locale=${locale}`);
 
-  /* ====================== SEO for Products ====================== */
+  /* ====================== SEO ====================== */
   const SITE_URL = getSiteOrigin();
   const BRAND = import.meta.env.VITE_BRAND_NAME || "ITXEASY";
 
@@ -265,9 +303,8 @@ export default function Products() {
     let p = "/product";
     if (parentSlug) p += `/${encodeURIComponent(parentSlug)}`;
     if (subSlug) p += `/${encodeURIComponent(subSlug)}`;
-    // có thể thêm ?locale vào canonical nếu muốn tách theo ngôn ngữ
-    return p; // hoặc `${p}?locale=${locale}`
-  }, [parentSlug, subSlug /*, locale*/]);
+    return p;
+  }, [parentSlug, subSlug]);
   const canonical = `${SITE_URL}${canonicalPath}`;
 
   const pageTitle = useMemo(() => {
@@ -298,13 +335,13 @@ export default function Products() {
       "trái cây",
       "export",
       "agriculture",
-      "Vietnam"
+      "Vietnam",
     ].filter(Boolean);
     return Array.from(new Set(arr));
   }, [subMeta, parentMeta]);
 
   const breadcrumbLd = useMemo(() => {
-    const base = [{ name: "Product", url: `${SITE_URL}/product` }]; // có thể thêm ?locale
+    const base = [{ name: "Product", url: `${SITE_URL}/product` }];
     if (parentSlug) base.push({
       name: parentMeta?.name || decodeURIComponent(parentSlug),
       url: `${SITE_URL}/product/${encodeURIComponent(parentSlug)}`
@@ -325,19 +362,6 @@ export default function Products() {
     };
   }, [SITE_URL, parentSlug, subSlug, parentMeta, subMeta]);
 
-  const collectionPageLd = useMemo(() => ({
-    "@context": "https://schema.org",
-    "@type": "CollectionPage",
-    name: pageTitle,
-    description: pageDesc,
-    url: canonical,
-    isPartOf: {
-      "@type": "WebSite",
-      name: BRAND,
-      url: SITE_URL
-    }
-  }), [pageTitle, pageDesc, canonical, BRAND, SITE_URL]);
-
   const itemListLd = useMemo(() => {
     const items = (paginated || []).map((p, idx) => ({
       "@type": "ListItem",
@@ -345,8 +369,8 @@ export default function Products() {
       item: {
         "@type": "Product",
         name: p.title || p.name,
-        url: `${SITE_URL}/product/product-detail/${encodeURIComponent(p.slug || p.id)}`,
-        image: p.image_url || undefined,
+        url: `${SITE_URL}/product/product-detail/${encodeURIComponent(p.slug || p.product_slug || p.id)}`,
+        image: coverFromProduct(p) || undefined,
         brand: BRAND
       }
     }));
@@ -359,8 +383,6 @@ export default function Products() {
 
   const noindex = !displayedLoading && (displayedProducts || []).length === 0;
 
-  /* ============================================================= */
-
   return (
     <div className="min-h-screen bg-gray-50">
       <SEO
@@ -372,7 +394,7 @@ export default function Products() {
         keywords={keywords}
         ogType="website"
         twitterCard="summary_large_image"
-        jsonLd={[breadcrumbLd, collectionPageLd, itemListLd]}
+        jsonLd={[breadcrumbLd, itemListLd]}
       />
 
       <TopNavigation />
@@ -381,7 +403,6 @@ export default function Products() {
 
       <main className="container mx-auto px-4 py-6 max-w-7xl">
         <div className="flex flex-col md:flex-row gap-6">
-          {/* thêm key để Sidebar re-mount khi đổi locale */}
           <SidebarCategoriesTwoLevel
             key={locale}
             activeParentSlug={activeParentSlug}
@@ -400,7 +421,17 @@ export default function Products() {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                   {paginated.map((p) => (
-                    <ProductCard key={p.id} product={p} onClick={() => openDetail(p)} />
+                    <div
+                      key={p.id}
+                      onClick={() => openDetail(p)}
+                      className="cursor-pointer"
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter') openDetail(p); }}
+                    >
+                      {/* Đảm bảo ProductCard có ảnh: image_url đã được patch với _cover */}
+                      <ProductCard product={{ ...p, image_url: p.image_url || p._cover }} />
+                    </div>
                   ))}
                 </div>
 

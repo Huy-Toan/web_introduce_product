@@ -3,7 +3,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Upload, Loader2, Wand2, Plus, Sparkles, Languages } from 'lucide-react';
 import EditorMd from './EditorMd';
 import R2FolderImportButton from './R2FolderImportButton';
-// Tinh chỉnh import: chờ dịch & retry
+
+// ====== Cấu hình import auto-translate ======
 const IMPORT_TUNE = {
   wait_ms: 600,
   tries: 6,
@@ -13,6 +14,7 @@ const IMPORT_TUNE = {
   require_locales: 'en',
 };
 
+// ====== Utils ======
 const slugify = (s = '') =>
   s
     .toLowerCase()
@@ -145,10 +147,61 @@ async function translateMarkdown(md, source, target) {
   return out.join('\n');
 }
 
+// ====== Chuẩn hoá/tiện ích cho gallery ======
+function normalizeImages(input) {
+  let arr = [];
+  if (Array.isArray(input)) arr = input;
+  else if (typeof input === 'string') {
+    try { const j = JSON.parse(input); arr = Array.isArray(j) ? j : []; }
+    catch { arr = input.split(/[;,]/).map(s => s.trim()).filter(Boolean); }
+  }
+
+  const out = arr
+    .map((it, i) => {
+      if (!it) return null;
+      if (typeof it === 'string') return { url: it, is_primary: i === 0 ? 1 : 0, sort_order: i };
+      if (typeof it === 'object' && it.url) {
+        return {
+          url: String(it.url).trim(),
+          is_primary: it.is_primary ? 1 : 0,
+          sort_order: Number.isFinite(it.sort_order) ? it.sort_order : i
+        };
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => (a?.sort_order ?? 0) - (b?.sort_order ?? 0));
+
+  if (out.length) {
+    const hasPrimary = out.some(x => x.is_primary === 1);
+    if (!hasPrimary) out[0].is_primary = 1;
+    out.forEach((x, idx) => (x.sort_order = idx));
+  }
+  return out;
+}
+
+function makeImagesJson(arr) {
+  const clean = (arr || [])
+    .filter(x => x?.url)
+    .map((x, i) => ({
+      url: x.url,
+      is_primary: x.is_primary ? 1 : 0,
+      sort_order: i
+    }));
+  return JSON.stringify(clean);
+}
+
+function pickCover(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return '';
+  const p = arr.find(x => x.is_primary === 1) || arr[0];
+  return p?.url || '';
+}
+
+// ====== Component chính ======
 const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id);
   const [isR2Importing, setIsR2Importing] = useState(false);
-  const [removedImage, setRemovedImage] = useState(false);
+
   // Base (VI)
   const [base, setBase] = useState({
     title: '',
@@ -170,23 +223,26 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const [activeTab, setActiveTab] = useState('vi');
   const [openLocales, setOpenLocales] = useState(['vi', 'en']);
 
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState('');
+  // ====== Gallery ảnh ======
+  const [images, setImages] = useState([]);            // [{url,is_primary,sort_order}]
+  const [filesToUpload, setFilesToUpload] = useState([]); // File[]
+  const [imagePreview, setImagePreview] = useState('');   // cover lớn
+
+  // Khác
   const [isUploading, setIsUploading] = useState(false);
   const [slugErrorVI, setSlugErrorVI] = useState('');
   const [slugErrorsTr, setSlugErrorsTr] = useState(/** @type {Record<string,string>} */({}));
-
   const [autoTranslate, setAutoTranslate] = useState(true);
   const debounceTimer = useRef(null);
   const lastSourceTitle = useRef('');
   const lastSourceDesc = useRef('');
   const lastSourceContent = useRef('');
 
-  // Import Excel state
+  // Import Excel
   const [isImporting, setIsImporting] = useState(false);
   const fileImportRef = useRef(null);
 
-  // Subcategories for dropdown
+  // Subcategories
   const [subcats, setSubcats] = useState([]);
   const [subcatsLoading, setSubcatsLoading] = useState(false);
 
@@ -227,14 +283,23 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
       subcategory_id: subFromData,
     });
 
-    setImagePreview(initialData.image_url || '');
+    // NẠP GALLERY: từ images (url tuyệt đối) -> hoặc images_json -> fallback image_url
+    let initImages = [];
+    if (Array.isArray(initialData.images) && initialData.images.length) {
+      initImages = normalizeImages(initialData.images);
+    } else if (initialData.images_json) {
+      initImages = normalizeImages(initialData.images_json);
+    } else if (initialData.image_url) {
+      initImages = normalizeImages([initialData.image_url]);
+    }
+    setImages(initImages);
+    setImagePreview(pickCover(initImages) || '');
+
     setActiveTab('vi');
     setSlugErrorVI('');
     setSlugErrorsTr({});
     lastSourceTitle.current = initialData.title || '';
     lastSourceDesc.current = viDesc;
-
-    setRemovedImage(false);
 
     const initTr = { ...(initialData.translations || {}) };
     delete initTr.vi;
@@ -253,8 +318,10 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     );
     const nextOpen = Array.from(new Set(['vi', 'en', ...Object.keys(initTr)]));
     setOpenLocales(nextOpen);
-    setTouched({});
     setTimeout(() => editorVIRef.current?.refresh?.(), 0);
+
+    // reset batch upload
+    setFilesToUpload([]);
   }, [isOpen, initialData?.id]);
 
   // Load translations if editing
@@ -293,7 +360,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     );
   }, [isUploading, isImporting, isR2Importing]);
 
-  // Auto-translate title + description from VI (+ tự sinh slug nếu trống/chưa touch)
+  // Auto-translate title + description from VI
   useEffect(() => {
     if (!autoTranslate) return;
     const srcTitle = base.title?.trim() || '';
@@ -338,7 +405,6 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
           const curr = prev[lc] || { title: '', slug: '', description: '', content: '' };
           const nextTitle = !touchedLC.title && newTitle ? newTitle : curr.title;
           const nextDesc = !touchedLC.description && newDesc ? newDesc : curr.description;
-          // chỉ tự sinh slug nếu đang trống và chưa touch slug
           const currSlug = (curr.slug || '').trim();
           const nextSlug = (currSlug || touchedLC.slug) ? currSlug : (nextTitle ? slugify(nextTitle) : '');
           return { ...prev, [lc]: { ...curr, title: nextTitle, description: nextDesc, slug: nextSlug } };
@@ -348,6 +414,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
     return () => clearTimeout(debounceTimer.current);
   }, [base.title, base.description, autoTranslate, openLocales, touched]);
+
   // Auto-translate CONTENT (Markdown) from VI -> other locales
   useEffect(() => {
     if (!autoTranslate) return;
@@ -357,7 +424,6 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
     clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(async () => {
-      // Nếu content không đổi thì bỏ qua
       if (lastSourceContent.current === srcContent) return;
       lastSourceContent.current = srcContent;
 
@@ -365,11 +431,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
 
       for (const lc of targets) {
         const touchedLC = touched[lc] || {};
-        // Nếu user đã sửa content ở locale đó rồi => không tự động ghi đè
         if (touchedLC.content) continue;
-
-        // Nếu đã có content sẵn, và bạn không muốn override => có thể skip:
-        // if ((translations[lc]?.content || '').trim()) continue;
 
         try {
           const translatedMd = await translateMarkdown(srcContent, 'vi', lc);
@@ -382,11 +444,9 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
               content: translatedMd,
             },
           }));
-        } catch {
-          // bỏ qua lỗi 1 locale, tiếp tục locale khác
-        }
+        } catch { /* noop */ }
       }
-    }, 600); // tăng debounce lên một chút để giảm số lần gọi API khi đang gõ
+    }, 600);
 
     return () => clearTimeout(debounceTimer.current);
   }, [base.content, autoTranslate, openLocales, touched]);
@@ -448,6 +508,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     setSlugErrorsTr(prev => ({ ...prev, [lc]: s && !isValidSlug(s) ? 'Slug không hợp lệ.' : '' }));
   };
 
+  // Upload 1 ảnh (server trả về image_key + displayUrl/url)
   const uploadImage = async (file) => {
     const formData = new FormData();
     formData.append('image', file);
@@ -455,8 +516,8 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     if (!response.ok) throw new Error('Upload failed');
     const data = await response.json();
     return {
-      image_key: data.image_key,                
-      previewUrl: data.displayUrl || data.url,  
+      image_key: data.image_key,
+      previewUrl: data.displayUrl || data.url,
     };
   };
 
@@ -484,7 +545,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     const ok = confirm(
       'Import sản phẩm từ file Excel.\n' +
       '- Cột yêu cầu: title, content, subcategory_name (hoặc subcategory).\n' +
-      '- Tùy chọn: description, image_url, slug.\n' +
+      '- Tùy chọn: description, images/images_json/image_url/slug.\n' +
       'Tiếp tục?'
     );
 
@@ -521,11 +582,7 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
         `- Bỏ qua: ${data.skipped ?? 0}`
       );
 
-      // Phát sự kiện để trang danh sách reload (nếu bạn lắng nghe ở ngoài)
       window.dispatchEvent(new CustomEvent('products:imported'));
-
-      // Nếu muốn đóng modal sau import:
-      // onClose();
     } catch (err) {
       console.error(err);
       alert(err.message || 'Có lỗi khi import!');
@@ -535,106 +592,106 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     }
   }
 
-  // Submit
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!base.title?.trim()) { alert('Vui lòng nhập Tên sản phẩm'); return; }
-  if (!base.content?.trim()) { alert('Vui lòng nhập Nội dung sản phẩm'); return; }
+  // ===== Submit =====
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!base.title?.trim()) { alert('Vui lòng nhập Tên sản phẩm'); return; }
+    if (!base.content?.trim()) { alert('Vui lòng nhập Nội dung sản phẩm'); return; }
 
-  if (isEditing) {
-    if (!base.slug) { setSlugErrorVI('Vui lòng nhập slug hoặc dùng “Tạo từ tên”.'); return; }
-    if (!isValidSlug(base.slug)) { setSlugErrorVI('Slug không hợp lệ.'); return; }
-  }
-  for (const lc of Object.keys(slugErrorsTr)) {
-    if (slugErrorsTr[lc]) { alert(`Slug (${lc.toUpperCase()}) không hợp lệ.`); return; }
-  }
+    if (isEditing) {
+      if (!base.slug) { setSlugErrorVI('Vui lòng nhập slug hoặc dùng “Tạo từ tên”.'); return; }
+      if (!isValidSlug(base.slug)) { setSlugErrorVI('Slug không hợp lệ.'); return; }
+    }
+    for (const lc of Object.keys(slugErrorsTr)) {
+      if (slugErrorsTr[lc]) { alert(`Slug (${lc.toUpperCase()}) không hợp lệ.`); return; }
+    }
 
-  setIsUploading(true);
-  try {
-    let image_url = base.image_url;
-
-    if (imageFile) {
-      // chọn ảnh mới -> upload & dùng key mới
-      const uploaded = await uploadImage(imageFile);
-      image_url = uploaded.image_key;
-      setImagePreview(uploaded.previewUrl);
-    } else if (isEditing) {
-      // đang edit, không upload ảnh mới
-      if (removedImage) {
-        // đã bấm xoá -> gửi null để BE xoá ảnh
-        image_url = null;
-      } else {
-        // không đụng ảnh -> KHÔNG GỬI field image_url
-        image_url = undefined;
+    setIsUploading(true);
+    try {
+      // 1) Upload batch các file mới
+      const uploadedKeys = [];
+      for (const f of filesToUpload) {
+        const up = await uploadImage(f);
+        uploadedKeys.push(up.image_key);
       }
-    } else {
-      // tạo mới
-      image_url = base.image_url ? base.image_url : undefined;
+
+      // 2) Thay dataURL tạm bằng key thật (theo thứ tự đã chọn)
+      let keyIdx = 0;
+      const mergedImages = images.map((x) => {
+        const isData = String(x.url || '').startsWith('data:');
+        const finalUrl = isData ? (uploadedKeys[keyIdx++] || '') : x.url;
+        return { ...x, url: finalUrl };
+      }).filter(x => x.url);
+
+      // 3) Chuẩn lại sort_order & cover
+      const normalized = normalizeImages(mergedImages);
+      const images_json_text = makeImagesJson(normalized);
+      const coverKey = pickCover(normalized); // key/relative url
+
+      // 4) Build payload
+      let payloadBase = {
+        title: base.title,
+        description: base.description,
+        content: base.content,
+        subcategory_id: base.subcategory_id ?? null,
+        images_json: JSON.parse(images_json_text), // gửi mảng để BE dễ xử lý
+        image_url: coverKey || undefined,          // tương thích cũ
+      };
+      if (isEditing) payloadBase.slug = slugify(base.slug || '');
+
+      if (!isEditing && payloadBase.slug) {
+        const { slug, ...rest } = payloadBase;
+        payloadBase = rest; // tạo mới: để BE tự sinh slug nếu muốn
+      }
+
+      // translations payload
+      const cleanTranslations = {};
+      for (const [lc, v] of Object.entries(translations)) {
+        const hasAny = (v?.title || v?.description || v?.content || v?.slug);
+        if (!hasAny) continue;
+
+        const tSlugRaw = (v?.slug || '').trim();
+        const tSlug = tSlugRaw ? slugify(tSlugRaw) : '';
+
+        const entry = {};
+        if (v.title) entry.title = v.title;
+        if (v.description) entry.description = v.description;
+        if (v.content) entry.content = v.content;
+        if (tSlug && isValidSlug(tSlug)) entry.slug = tSlug;
+
+        cleanTranslations[lc] = entry;
+      }
+
+      const finalPayload = {
+        ...payloadBase,
+        ...(Object.keys(cleanTranslations).length ? { translations: cleanTranslations } : {}),
+      };
+      if (initialData.id) finalPayload.id = initialData.id;
+
+      await onSubmit(finalPayload);
+      onClose();
+
+      // reset
+      setBase({ title: '', slug: '', description: '', content: '', image_url: '', subcategory_id: null });
+      setTranslations({});
+      setTouched({});
+      setOpenLocales(['vi', 'en']);
+      setActiveTab('vi');
+      setImages([]);
+      setFilesToUpload([]);
+      setImagePreview('');
+      setSlugErrorVI('');
+      setSlugErrorsTr({});
+      lastSourceTitle.current = '';
+      lastSourceDesc.current = '';
+      lastSourceContent.current = '';
+    } catch (err) {
+      console.error(err);
+      alert('Có lỗi xảy ra khi upload ảnh hoặc gửi dữ liệu. Vui lòng thử lại!');
+    } finally {
+      setIsUploading(false);
     }
-
-    // Base payload
-    let payloadBase = {
-      title: base.title,
-      description: base.description,
-      content: base.content,
-      subcategory_id: base.subcategory_id ?? null,
-      ...(image_url !== undefined ? { image_url } : {}), 
-    };
-    if (isEditing) payloadBase.slug = slugify(base.slug || '');
-
-    if (!isEditing && payloadBase.slug) {
-      const { slug, ...rest } = payloadBase;
-      payloadBase = rest; // tạo mới: để BE tự sinh slug nếu muốn
-    }
-
-    // translations payload
-    const cleanTranslations = {};
-    for (const [lc, v] of Object.entries(translations)) {
-      const hasAny = (v?.title || v?.description || v?.content || v?.slug);
-      if (!hasAny) continue;
-
-      const tSlugRaw = (v?.slug || '').trim();
-      const tSlug = tSlugRaw ? slugify(tSlugRaw) : '';
-
-      const entry = {};
-      if (v.title) entry.title = v.title;
-      if (v.description) entry.description = v.description;
-      if (v.content) entry.content = v.content;
-      if (tSlug && isValidSlug(tSlug)) entry.slug = tSlug;
-
-      cleanTranslations[lc] = entry;
-    }
-
-    const finalPayload = {
-      ...payloadBase,
-      ...(Object.keys(cleanTranslations).length ? { translations: cleanTranslations } : {}),
-    };
-    if (initialData.id) finalPayload.id = initialData.id;
-
-    await onSubmit(finalPayload);
-    onClose();
-
-    // reset form
-    setBase({ title: '', slug: '', description: '', content: '', image_url: '', subcategory_id: null });
-    setTranslations({});
-    setTouched({});
-    setOpenLocales(['vi', 'en']);
-    setActiveTab('vi');
-    setImageFile(null);
-    setImagePreview('');
-    setSlugErrorVI('');
-    setSlugErrorsTr({});
-    setRemovedImage(false); // NEW: reset cờ
-    lastSourceTitle.current = '';
-    lastSourceDesc.current = '';
-  } catch (err) {
-    console.error(err);
-    alert('Có lỗi xảy ra khi upload ảnh hoặc gửi dữ liệu. Vui lòng thử lại!');
-  } finally {
-    setIsUploading(false);
-  }
-};
-
+  };
 
   if (!isOpen) return null;
   const siteURL = import.meta?.env?.VITE_SITE_URL || '';
@@ -667,7 +724,6 @@ const handleSubmit = async (e) => {
               className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
               title="Import sản phẩm từ Excel"
             >
-
               <Upload size={16} />
               {isImporting ? 'Đang import...' : 'Import Excel'}
             </button>
@@ -684,7 +740,7 @@ const handleSubmit = async (e) => {
               folder=""
               concurrent={3}
               className="inline-block"
-              onBusyChange={setIsR2Importing}       // NEW: nhận busy từ child
+              onBusyChange={setIsR2Importing}
             />
 
             <button onClick={onClose} className="cursor-pointer text-gray-400 hover:text-gray-600" disabled={isUploading || isImporting}>
@@ -815,14 +871,15 @@ const handleSubmit = async (e) => {
                 />
               </div>
 
-              {/* Image */}
-              <ImagePicker
+              {/* Gallery ảnh (nhiều ảnh) */}
+              <ImageGalleryPicker
+                images={images}
+                setImages={setImages}
+                filesToUpload={filesToUpload}
+                setFilesToUpload={setFilesToUpload}
                 imagePreview={imagePreview}
                 setImagePreview={setImagePreview}
-                setImageFile={setImageFile}
-                setBase={setBase}
-                isUploading={isUploading || isImporting}
-                onRemove={() => setRemovedImage(true)}
+                isBusy={isUploading || isImporting}
               />
             </div>
           )}
@@ -952,6 +1009,7 @@ const handleSubmit = async (e) => {
   );
 };
 
+// ====== Tabs chọn locale ======
 function LocaleTabs({ openLocales, activeTab, setActiveTab, addLocale, removeLocale }) {
   const canAdd = ALL_LOCALES.filter(lc => !openLocales.includes(lc));
   return (
@@ -1003,58 +1061,177 @@ function LocaleTabs({ openLocales, activeTab, setActiveTab, addLocale, removeLoc
   );
 }
 
-function ImagePicker({ imagePreview, setImagePreview, setImageFile, setBase, isUploading }) {
+// ====== Picker gallery nhiều ảnh (có kéo-thả) ======
+function ImageGalleryPicker({
+  images, setImages,
+  filesToUpload, setFilesToUpload,
+  imagePreview, setImagePreview,
+  isBusy
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  const acceptFiles = (fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    const valid = files.filter(f => f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024);
+    if (valid.length !== files.length) {
+      alert('Chỉ chọn ảnh hợp lệ và ≤ 5MB/ảnh.');
+    }
+    // Tạo preview tạm & đưa vào danh sách upload
+    valid.forEach((f) => {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        const tempUrl = String(evt.target?.result || '');
+        setImages(prev => {
+          const next = [...prev, { url: tempUrl, is_primary: prev.length ? 0 : 1, sort_order: prev.length }];
+          if (!next.some(x => x.is_primary === 1) && next.length) next[0].is_primary = 1;
+          next.forEach((x, i) => (x.sort_order = i));
+          return next;
+        });
+        setImagePreview(prev => prev || tempUrl);
+      };
+      reader.readAsDataURL(f);
+    });
+    setFilesToUpload(prev => [...prev, ...valid]);
+  };
+
+  // Kéo-thả
+  const onDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isBusy) setIsDragging(true);
+  };
+  const onDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isBusy) setIsDragging(true);
+  };
+  const onDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+  const onDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (isBusy) return;
+    const dt = e.dataTransfer;
+    if (dt?.files?.length) acceptFiles(dt.files);
+  };
+
+  // Paste từ clipboard (tuỳ chọn)
+  const onPaste = (e) => {
+    if (isBusy) return;
+    const items = e.clipboardData?.items || [];
+    const files = [];
+    for (const it of items) {
+      if (it.kind === 'file') {
+        const f = it.getAsFile();
+        if (f) files.push(f);
+      }
+    }
+    if (files.length) acceptFiles(files);
+  };
+
+  const setPrimary = (idx) => {
+    setImages(prev => prev.map((x, i) => ({ ...x, is_primary: i === idx ? 1 : 0 })));
+    setImagePreview(images[idx]?.url || '');
+  };
+
+  const move = (idx, dir) => {
+    setImages(prev => {
+      const next = [...prev];
+      const to = idx + dir;
+      if (to < 0 || to >= next.length) return prev;
+      const [item] = next.splice(idx, 1);
+      next.splice(to, 0, item);
+      next.forEach((x, i) => (x.sort_order = i));
+      return next;
+    });
+  };
+
+  const removeAt = (idx) => {
+    setImages(prev => {
+      const next = prev.filter((_, i) => i !== idx);
+      next.forEach((x, i) => (x.sort_order = i));
+      if (next.length && !next.some(x => x.is_primary === 1)) next[0].is_primary = 1;
+      if (!next.length) setImagePreview('');
+      else if (next[0].is_primary === 1) setImagePreview(next[0].url);
+      return next;
+    });
+    // Nếu muốn: có thể lọc filesToUpload tương ứng, nhưng vì preview tạm là data: khó map 1-1 ⇒ để BE bỏ qua data:
+  };
+
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">Hình ảnh sản phẩm</label>
+      <label className="block text-sm font-medium text-gray-700 mb-1">Hình ảnh sản phẩm (nhiều ảnh)</label>
+
+      {/* Cover lớn */}
       {imagePreview && (
-        <div className="mb-3 relative inline-block">
-          <img src={imagePreview} alt="Preview" className="w-40 h-40 object-cover rounded-md border" />
-          <button
-            type="button"
-            onClick={() => {
-              setImageFile(null);
-              setImagePreview('');
-              setBase(prev => ({ ...prev, image_url: '' }));
-              onRemove?.();
-            }}
-            disabled={isUploading}
-            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600 disabled:bg-gray-400"
-          >
-            <X size={12} />
-          </button>
+        <div className="mb-3">
+          <img src={imagePreview} alt="Cover" className="w-full max-h-72 object-cover rounded-md border" />
+          <p className="text-xs text-gray-500 mt-1">Ảnh đại diện (cover)</p>
         </div>
       )}
 
-      <div className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center hover:border-blue-400 transition-colors">
+      {/* Lưới ảnh */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-3">
+        {images.map((it, idx) => (
+          <div key={`${it.url}-${idx}`} className="relative border rounded p-2">
+            <img src={it.url} alt={`img-${idx}`} className="w-full h-28 object-cover rounded" />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" onClick={() => setPrimary(idx)} className="text-xs px-2 py-1 rounded bg-gray-100">
+                {it.is_primary ? '✔ Đại diện' : 'Đặt làm đại diện'}
+              </button>
+              <button type="button" onClick={() => move(idx, -1)} className="text-xs px-2 py-1 rounded bg-gray-100">↑</button>
+              <button type="button" onClick={() => move(idx, +1)} className="text-xs px-2 py-1 rounded bg-gray-100">↓</button>
+              <button type="button" onClick={() => removeAt(idx)} className="text-xs px-2 py-1 rounded bg-red-100 text-red-700">Xoá</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Khu vực upload + kéo-thả + dán */}
+      <div
+        onDragOver={onDragOver}
+        onDragEnter={onDragEnter}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        onPaste={onPaste}
+        className={[
+          "border-2 border-dashed rounded-md p-4 text-center transition-colors",
+          isDragging ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-blue-400",
+          isBusy ? "opacity-50 cursor-not-allowed" : ""
+        ].join(" ")}
+        title="Kéo thả ảnh vào đây, dán ảnh (Ctrl/Cmd+V) hoặc bấm để chọn"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') document.getElementById('product-images-upload')?.click(); }}
+      >
         <input
           type="file"
           accept="image/*"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            if (!file.type.startsWith('image/')) { alert('Vui lòng chọn file ảnh hợp lệ!'); return; }
-            if (file.size > 5 * 1024 * 1024) { alert('Kích thước ảnh không vượt quá 5MB!'); return; }
-            setImageFile(file);
-            const reader = new FileReader();
-            reader.onload = (evt) => setImagePreview(String(evt.target?.result || ''));
-            reader.readAsDataURL(file);
-          }}
-          disabled={isUploading}
+          multiple
+          onChange={(e) => acceptFiles(e.target.files)}
+          disabled={isBusy}
           className="hidden"
-          id="product-image-upload"
+          id="product-images-upload"
         />
         <label
-          htmlFor="product-image-upload"
-          className={`cursor-pointer flex flex-col items-center space-y-2 ${isUploading ? 'cursor-not-allowed opacity-50' : ''}`}
+          htmlFor="product-images-upload"
+          className={`cursor-pointer flex flex-col items-center space-y-2 ${isBusy ? 'pointer-events-none' : ''}`}
         >
-          {isUploading ? <Loader2 className="animate-spin text-blue-500" size={24} /> : <Upload className="text-gray-400" size={24} />}
-          <span className="text-sm text-gray-600">{isUploading ? 'Đang upload...' : 'Chọn ảnh từ máy tính'}</span>
-          <span className="text-xs text-gray-400">PNG, JPG, GIF tối đa 5MB</span>
+          {isBusy ? <Loader2 className="animate-spin text-blue-500" size={24} /> : <Upload className="text-gray-400" size={24} />}
+          <span className="text-sm text-gray-600">
+            {isBusy ? 'Đang xử lý...' : (isDragging ? 'Thả ảnh vào đây' : 'Chọn ảnh, hoặc kéo-thả / Ctrl+V để dán')}
+          </span>
+          <span className="text-xs text-gray-400">PNG, JPG, GIF ≤ 5MB/ảnh</span>
         </label>
       </div>
     </div>
   );
 }
+
 
 export default ProductFormModal;
