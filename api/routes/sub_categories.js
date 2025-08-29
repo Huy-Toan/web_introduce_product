@@ -139,7 +139,7 @@ subCategoriesRouter.get("/", async (c) => {
     }
 
     // build full URL từ key
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     subcategories = subcategories.map(s => ({
       ...s,
       image_url: s.image_url ? `${base}/${s.image_url}` : null,
@@ -210,7 +210,7 @@ subCategoriesRouter.get("/:idOrSlug", async (c) => {
     }
 
     // build full URL từ key
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const subcategory = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null,
@@ -582,7 +582,7 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
     const rows = res?.results ?? [];
 
     // Build full URL từ key
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL ||  "").replace(/\/+$/, "");
     const products = rows.map(r => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null,

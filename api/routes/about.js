@@ -61,7 +61,7 @@ aboutRouter.get("/", async (c) => {
 
     // build full URL
     const base =
-      (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+      (c.env.PUBLIC_R2_URL ||c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const about = results.map(r => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -87,7 +87,7 @@ aboutRouter.get("/:id", async (c) => {
 
     // build full URL cho detail
     const base =
-      (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+      (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL ||  "").replace(/\/+$/, "");
     const about = {
       ...item,
       image_url: item.image_url ? `${base}/${item.image_url}` : null

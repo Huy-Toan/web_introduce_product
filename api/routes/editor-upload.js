@@ -38,7 +38,7 @@ editorUploadRouter.post('/', async (c) => {
     });
 
     // Build URL hiển thị
-    const baseUrl = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || '').replace(/\/+$/, '');
+    const baseUrl = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || '').replace(/\/+$/, '');
     const publicUrl = `${baseUrl}/${fileName}`;
 
     return c.json({

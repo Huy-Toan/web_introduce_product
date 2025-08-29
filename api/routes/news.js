@@ -104,7 +104,7 @@ newsRouter.get("/", async (c) => {
     const params = [locale];
     const { results = [] } = await c.env.DB.prepare(sql).bind(...params).all();
 
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const news = results.map(r => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -143,7 +143,7 @@ newsRouter.get("/:idOrSlug", async (c) => {
 
     const translations = await getAllTranslations(c.env.DB, newsId);
 
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null

@@ -138,7 +138,7 @@ productsRouter.get("/", async (c) => {
     const rows = result?.results ?? [];
 
     // Build URL từ key
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL ||  "").replace(/\/+$/, "");
     const products = rows.map(r => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null,
@@ -172,7 +172,7 @@ productsRouter.get("/:idOrSlug", async (c) => {
     const raw = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
     if (!raw) return c.json({ error: "Product not found" }, 404);
 
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL ||  "").replace(/\/+$/, "");
     const product = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null,
