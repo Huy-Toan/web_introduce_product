@@ -12,6 +12,7 @@ const getLocaleFromSearch = (search) =>
   new URLSearchParams(search).get("locale")?.toLowerCase() || "";
 
 /* ================= Helpers for images & cover ================= */
+// Giữ lại cho fallback rất cũ (images_json key tương đối)
 function normalizeImages(input) {
   let arr = [];
   if (!input) return [];
@@ -50,8 +51,11 @@ function normalizeImages(input) {
   return out;
 }
 
+// Ưu tiên cover_image (URL tuyệt đối do BE build sẵn) -> image_url (tuyệt đối) -> images[0] -> fallback images_json cũ
 function coverFromProduct(p) {
+  if (p?.cover_image) return p.cover_image;
   if (p?.image_url) return p.image_url;
+  if (Array.isArray(p?.images) && p.images.length) return p.images[0];
   const imgs = normalizeImages(p?.images_json);
   if (imgs.length) {
     const primary = imgs.find((x) => x.is_primary === 1) || imgs[0];
@@ -376,7 +380,7 @@ export default function ProductDetailPage() {
     return d?.product || null;
   };
 
-  // Bump views best-effort + chống trùng trong phiên
+  // Bump views best-effort + chống trùng trong phiên (BE là POST)
   const bumpViews = async (productId) => {
     if (!productId) return;
     try {
@@ -384,7 +388,7 @@ export default function ProductDetailPage() {
       if (sessionStorage.getItem(key)) return;
 
       const r = await fetch(`/api/products/${encodeURIComponent(productId)}/view`, {
-        method: "GET",
+        method: "POST",
         cache: "no-store",
       });
 
@@ -448,10 +452,16 @@ export default function ProductDetailPage() {
         // Setup product + gallery
         setProduct(baseProduct);
 
+        // Ưu tiên dùng mảng URL tuyệt đối do BE trả về: product.images
         const imgs = (() => {
-          const normalized = normalizeImages(baseProduct.images_json);
-          if (normalized.length) return normalized;
-          const cov = coverFromProduct(baseProduct);
+          if (Array.isArray(baseProduct.images) && baseProduct.images.length) {
+            return baseProduct.images.map((u, i) => ({
+              url: u,
+              is_primary: i === 0 ? 1 : 0,
+              sort_order: i,
+            }));
+          }
+          const cov = baseProduct.cover_image || baseProduct.image_url || "";
           return cov ? [{ url: cov, is_primary: 1, sort_order: 0 }] : [];
         })();
 
@@ -740,7 +750,11 @@ export default function ProductDetailPage() {
               >
                 {related.map((rel) => {
                   const relTitle = rel.title || rel.name;
-                  const relCover = coverFromProduct(rel) || "/banner.jpg";
+                  const relCover =
+                    rel.cover_image ||
+                    (Array.isArray(rel.images) && rel.images[0]) ||
+                    coverFromProduct(rel) ||
+                    "/banner.jpg";
                   return (
                     <div
                       key={rel.id}
