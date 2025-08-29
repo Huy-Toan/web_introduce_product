@@ -50,7 +50,7 @@ cerPartnerRouter.get("/", async (c) => {
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
 
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const items = results.map(r => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -88,7 +88,7 @@ cerPartnerRouter.get("/type/:type", async (c) => {
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale, t).all();
 
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const items = results.map(r => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -111,7 +111,7 @@ cerPartnerRouter.get("/:id", async (c) => {
     const raw = await getMergedById(c.env.DB, id, locale);
     if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
 
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
