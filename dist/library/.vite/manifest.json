@@ -1,8 +1,0 @@
-{
-  "api/index.js": {
-    "file": "index.js",
-    "name": "index",
-    "src": "api/index.js",
-    "isEntry": true
-  }
-}
