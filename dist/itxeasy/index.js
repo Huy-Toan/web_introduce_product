@@ -2286,17 +2286,16 @@ uploadImageRouter.post("/", async (c) => {
         contentDisposition: `inline; filename="${key.split("/").pop()}"`
       }
     });
-    if (!c.env.PUBLIC_R2_URL) {
-      return c.json({ error: "Thiếu PUBLIC_R2_URL trong cấu hình môi trường" }, 500);
+    if (!c.env.INTERNAL_R2_URL && !c.env.PUBLIC_R2_URL) {
+      return c.json({ error: "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL" }, 500);
     }
-    const storageBase = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
-    const displayBase = (c.env.DISPLAY_BASE_URL || storageBase).replace(/\/+$/, "");
+    const storageBase = (c.env.INTERNAL_R2_URL || c.env.PUBLIC_R2_URL).replace(/\/+$/, "");
+    const displayBase = (c.env.PUBLIC_R2_URL || storageBase).replace(/\/+$/, "");
     const storageUrl = `${storageBase}/${key}`;
     const displayUrl = `${displayBase}/${key}`;
     return c.json({
       success: true,
       image_key: key,
-      url: storageUrl,
       displayUrl,
       fileName: key.split("/").pop(),
       alt: baseSlug,
@@ -2337,7 +2336,7 @@ editorUploadRouter.post("/", async (c) => {
     await r2.put(fileName, await file.arrayBuffer(), {
       httpMetadata: { contentType: file.type }
     });
-    const baseUrl2 = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const baseUrl2 = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const publicUrl = `${baseUrl2}/${fileName}`;
     return c.json({
       success: 1,
@@ -2397,7 +2396,7 @@ aboutRouter.get("/", async (c) => {
       ORDER BY a.id ASC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const about = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -2415,7 +2414,7 @@ aboutRouter.get("/:id", async (c) => {
     const locale = getLocale$7(c);
     const item = await getMergedAboutById(c.env.DB, id, locale);
     if (!item) return c.json({ error: "Not found" }, 404);
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const about = {
       ...item,
       image_url: item.image_url ? `${base}/${item.image_url}` : null
@@ -2648,7 +2647,7 @@ newsRouter.get("/", async (c) => {
     `;
     const params = [locale];
     const { results = [] } = await c.env.DB.prepare(sql).bind(...params).all();
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const news = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -2680,7 +2679,7 @@ newsRouter.get("/:idOrSlug", async (c) => {
     const raw = await getMergedNewsById(c.env.DB, newsId, locale);
     if (!raw) return c.json({ error: "Not found" }, 404);
     const translations = await getAllTranslations(c.env.DB, newsId);
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -3206,7 +3205,7 @@ parentsRouter.get("/", async (c) => {
     if (hasOffset) params.push(Number(offset));
     const result = await c.env.DB.prepare(baseSql).bind(...params).all();
     let parents = result?.results ?? [];
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const toFullUrl = (k) => k ? `${base}/${k}` : null;
     if (String(with_counts) === "1" && parents.length) {
       const ids = parents.map((p) => p.id);
@@ -3316,7 +3315,7 @@ parentsRouter.get("/:idOrSlug", async (c) => {
     `;
     const parent = await c.env.DB.prepare(sql).bind(locale, parentId).first();
     if (!parent) return c.json({ error: "Parent category not found" }, 404);
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const toFullUrl = (k) => k ? `${base}/${k}` : null;
     const outParent = {
       ...parent,
@@ -3572,7 +3571,7 @@ parentsRouter.get("/:slug/products", async (c) => {
     `;
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, parentId).all();
     const rawProducts = res?.results ?? [];
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const products = rawProducts.map((p) => ({
       ...p,
       image_url: p.image_url ? `${base}/${p.image_url}` : null
@@ -3607,7 +3606,7 @@ parentsRouter.get("/:idOrSlug/subcategories", async (c) => {
     `;
     const res = await c.env.DB.prepare(subsSql).bind(locale, parentId).all();
     const rawSubs = res?.results ?? [];
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const subcategories = rawSubs.map((s) => ({
       ...s,
       image_url: s.image_url ? `${base}/${s.image_url}` : null
@@ -3715,7 +3714,7 @@ subCategoriesRouter.get("/", async (c) => {
       }, {});
       subcategories = subcategories.map((s) => ({ ...s, product_count: counts[s.id] || 0 }));
     }
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     subcategories = subcategories.map((s) => ({
       ...s,
       image_url: s.image_url ? `${base}/${s.image_url}` : null
@@ -3766,7 +3765,7 @@ subCategoriesRouter.get("/:idOrSlug", async (c) => {
       const cnt = await c.env.DB.prepare(`SELECT COUNT(*) AS product_count FROM products WHERE subcategory_id = ?`).bind(raw.id).first();
       product_count = Number(cnt?.product_count || 0);
     }
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const subcategory = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null,
@@ -4036,7 +4035,7 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
     `;
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, subId).all();
     const rows = res?.results ?? [];
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const products = rows.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -31830,7 +31829,7 @@ productsRouter.get("/", async (c) => {
     `;
     const result = await c.env.DB.prepare(sql).bind(...params).all();
     const rows = result?.results ?? [];
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const products = rows.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -31854,7 +31853,7 @@ productsRouter.get("/:idOrSlug", async (c) => {
     const locale = getLocale$3(c);
     const raw = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
     if (!raw) return c.json({ error: "Product not found" }, 404);
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const product = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -33317,7 +33316,7 @@ bannerRouter.get("/", async (c) => {
       ORDER BY b.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -33336,7 +33335,7 @@ bannerRouter.get("/:id", async (c) => {
     const locale = getLocale$2(c);
     const raw = await getMergedBannerById(c.env.DB, id, locale);
     if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -33518,7 +33517,7 @@ fieldRouter.get("/", async (c) => {
       ORDER BY f.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -33543,7 +33542,7 @@ fieldRouter.get("/:id", async (c) => {
     const locale = getLocale$1(c);
     const raw = await getMergedFieldById(c.env.DB, id, locale);
     if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -33740,7 +33739,7 @@ cerPartnerRouter.get("/", async (c) => {
       ORDER BY c.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -33773,7 +33772,7 @@ cerPartnerRouter.get("/type/:type", async (c) => {
       ORDER BY c.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale, t).all();
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -33792,7 +33791,7 @@ cerPartnerRouter.get("/:id", async (c) => {
     const locale = getLocale(c);
     const raw = await getMergedById(c.env.DB, id, locale);
     if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
