@@ -105,7 +105,7 @@ parentsRouter.get("/", async (c) => {
     let parents = result?.results ?? [];
 
     // ---- helper build URL (an toàn khi env rỗng) ----
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const toFullUrl = (k) => (k ? `${base}/${k}` : null);
 
     // with_counts (giữ nguyên)
@@ -236,7 +236,7 @@ parentsRouter.get("/:idOrSlug", async (c) => {
     const parent = await c.env.DB.prepare(sql).bind(locale, parentId).first();
     if (!parent) return c.json({ error: "Parent category not found" }, 404);
 
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL ||c.env.INTERNAL_R2_URL ||  "").replace(/\/+$/, "");
     const toFullUrl = (k) => (k ? `${base}/${k}` : null);
 
     // không reassign const parent
@@ -583,7 +583,7 @@ parentsRouter.get("/:slug/products", async (c) => {
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, parentId).all();
     const rawProducts = res?.results ?? [];
 
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL ||  "").replace(/\/+$/, "");
     const products = rawProducts.map(p => ({
       ...p,
       image_url: p.image_url ? `${base}/${p.image_url}` : null,
@@ -630,7 +630,7 @@ parentsRouter.get("/:idOrSlug/subcategories", async (c) => {
     const res = await c.env.DB.prepare(subsSql).bind(locale, parentId).all();
     const rawSubs = res?.results ?? [];
 
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
+    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const subcategories = rawSubs.map(s => ({
       ...s,
       image_url: s.image_url ? `${base}/${s.image_url}` : null,

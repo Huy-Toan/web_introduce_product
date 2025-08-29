@@ -112,19 +112,18 @@ uploadImageRouter.post('/', async (c) => {
       },
     });
 
-    if (!c.env.PUBLIC_R2_URL) {
-      return c.json({ error: 'Thiếu PUBLIC_R2_URL trong cấu hình môi trường' }, 500);
-    }
-    const storageBase = c.env.PUBLIC_R2_URL.replace(/\/+$/, '');
-    const displayBase = (c.env.DISPLAY_BASE_URL || storageBase).replace(/\/+$/, '');
+    if (!c.env.INTERNAL_R2_URL && !c.env.PUBLIC_R2_URL) {
+          return c.json({ error: 'Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL' }, 500);
+        }
+        const storageBase = (c.env.INTERNAL_R2_URL || c.env.PUBLIC_R2_URL).replace(/\/+$/, '');
+        const displayBase = (c.env.PUBLIC_R2_URL || storageBase).replace(/\/+$/, '');
 
     const storageUrl = `${storageBase}/${key}`;
     const displayUrl = `${displayBase}/${key}`;
 
     return c.json({
       success: true,
-      image_key: key,     
-      url: storageUrl,      
+      image_key: key,         
       displayUrl,       
       fileName: key.split('/').pop(),
       alt: baseSlug,
