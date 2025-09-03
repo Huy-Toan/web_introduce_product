@@ -5,6 +5,8 @@ import TopNavigation from "../components/Navigation";
 import MarkdownOnly from "../components/MarkdownOnly";
 import Footer from "../components/Footer";
 import Breadcrumbs from "../components/Breadcrumbs";
+import { trackViewItem, trackSelectItem } from "../lib/ga";
+
 
 const SUPPORTED = ["vi", "en"];
 const DEFAULT_LOCALE = "vi";
@@ -550,11 +552,28 @@ export default function ProductDetailPage() {
     }
   };
 
+  // GA4: chỉ bắn 1 lần mỗi ID/phiên
+  useEffect(() => {
+    if (!product?.id) return;
+
+    // chống bắn lặp lại trong cùng phiên
+    const key = `ga:view_item:${product.id}`;
+    if (sessionStorage.getItem(key)) return;
+
+    trackViewItem(product);
+    sessionStorage.setItem(key, "1");
+  }, [product?.id]);
+
+
   const handleRelatedClick = (item) => {
+    trackSelectItem(item, "related_products"); // ghi lại chọn item
+
     const target = item.slug || item.product_slug || item.id || item.product_id;
     if (!target) return;
     navigate(`/product/product-detail/${encodeURIComponent(target)}${qs}`);
   };
+
+
 
   if (loading) {
     return (
