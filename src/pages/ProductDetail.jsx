@@ -5,7 +5,7 @@ import TopNavigation from "../components/Navigation";
 import MarkdownOnly from "../components/MarkdownOnly";
 import Footer from "../components/Footer";
 import Breadcrumbs from "../components/Breadcrumbs";
-import { trackViewItem, trackSelectItem } from "../lib/ga";
+import { trackViewItem, trackSelectItem, trackPageView } from "../lib/ga";
 
 
 const SUPPORTED = ["vi", "en"];
@@ -552,17 +552,36 @@ export default function ProductDetailPage() {
     }
   };
 
-  // GA4: chỉ bắn 1 lần mỗi ID/phiên
+  // Page view cho trang chi tiết SP: bắn SAU khi có product
   useEffect(() => {
     if (!product?.id) return;
 
-    // chống bắn lặp lại trong cùng phiên
-    const key = `ga:view_item:${product.id}`;
+    const path = location.pathname + location.search;
+    const title = `${product.title} | ITXEASY`;
+
+    document.title = title; // đổi tiêu đề trước
+
+    // chống double-fire trong cùng phiên + đảm bảo title đã kịp cập nhật 1 frame
+    const key = `ga:pv:product:${product.id}:${path}`;
     if (sessionStorage.getItem(key)) return;
 
-    trackViewItem(product);
-    sessionStorage.setItem(key, "1");
-  }, [product?.id]);
+    requestAnimationFrame(() => {
+      trackPageView(title, path);
+      sessionStorage.setItem(key, "1");
+    });
+  }, [product?.id, location.pathname, location.search]);
+
+  // GA4: chỉ bắn 1 lần mỗi ID/phiên
+  // useEffect(() => {
+  //   if (!product?.id) return;
+
+  //   // chống bắn lặp lại trong cùng phiên
+  //   const key = `ga:view_item:${product.id}`;
+  //   if (sessionStorage.getItem(key)) return;
+
+  //   trackViewItem(product);
+  //   sessionStorage.setItem(key, "1");
+  // }, [product?.id]);
 
 
   const handleRelatedClick = (item) => {
