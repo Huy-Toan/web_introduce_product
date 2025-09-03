@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import "./index.css";
 import "./i18n.js";
 import { TProvider } from "./context/TContext";
-
+import GA4Listener from "./components/GA4Listener.jsx";
 import LocaleSwitcherGT from "./components/LocaleSwitcherGT.jsx";
 import TestTranslateBox from "./components/TestTranslate.jsx";
 import HomePage from "./pages/Home";
@@ -30,6 +30,7 @@ createRoot(document.getElementById("root")).render(
                 <LocaleSwitcherGT />
                 <ScrollToTop />
                 <GlobalWhatsApp />
+                <GA4Listener />
                 <Routes>
                     <Route path="/*" element={<HomePage />} />
                     <Route path="/news/news-detail/:slug" element={<News_Detail />} />

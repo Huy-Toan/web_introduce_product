@@ -6,7 +6,7 @@ import Footer from "../components/Footer";
 import NewsDetail from "../components/NewsDetail";
 import SidebarNews from "../components/NewsSidebar";
 import Breadcrumbs from "../components/Breadcrumbs";
-
+import { trackViewArticle, trackSelectArticle } from "../lib/ga";
 const SUPPORTED = ["vi", "en"];
 const DEFAULT_LOCALE = "vi";
 
@@ -110,7 +110,21 @@ function News_Detail() {
   }, [slug, locale, navigate]);
 
   // Handler khi click vào bài khác trong sidebar: giữ ?locale
+  // GA4: view_article (1 lần/phiên/ID)
+  useEffect(() => {
+    const article = newsData?.news;
+    if (!article?.id) return;
+
+    const key = `ga:view_article:${article.id}`;
+    if (sessionStorage.getItem(key)) return;
+
+    trackViewArticle({ id: article.id, slug: article.slug, title: article.title });
+    sessionStorage.setItem(key, "1");
+  }, [newsData?.news?.id]);
+
   const handleSelectNews = (n) => {
+    // GA: người dùng chọn một bài trong sidebar
+    trackSelectArticle(n, "news_sidebar");
     navigate(`/news/news-detail/${encodeURIComponent(n.slug)}?locale=${locale}`);
   };
 
