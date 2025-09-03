@@ -27,6 +27,29 @@ const slugify = (s = '') =>
 const isValidSlug = (s = '') => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s);
 const ALL_LOCALES = ['vi', 'en', 'ja', 'ko', 'zh', 'fr', 'de'];
 
+// ==== R2 absolute ⇄ key helpers ====
+const PUBLIC_R2_URL =
+  (import.meta.env?.VITE_PUBLIC_R2_URL || '').replace(/\/+$/, '');
+
+const isAbsoluteHttp = (u = '') => /^https?:\/\//i.test(u);
+
+const toR2Key = (u = '') => {
+  if (!u) return '';
+  if (u.startsWith('data:')) return u; // preview tạm, không gửi lên
+  // 1) Nếu trùng prefix R2 đã biết, cắt prefix
+  if (PUBLIC_R2_URL && u.startsWith(PUBLIC_R2_URL)) {
+    return u.slice(PUBLIC_R2_URL.length).replace(/^\/+/, '');
+  }
+  // 2) Nếu là URL tuyệt đối khác, lấy pathname làm key
+  try {
+    const url = new URL(u);
+    return url.pathname.replace(/^\/+/, '');
+  } catch {
+    // 3) Đã là key tương đối
+    return u;
+  }
+};
+
 /** Nhãn & placeholder theo locale */
 const LABELS = {
   vi: {
@@ -615,12 +638,14 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
         uploadedKeys.push(up.image_key);
       }
 
-      // 2) Thay dataURL tạm bằng key thật (theo thứ tự đã chọn)
+      // 2) Thay dataURL tạm bằng key thật (theo thứ tự đã chọn) & strip absolute URL -> key
       let keyIdx = 0;
       const mergedImages = images.map((x) => {
         const isData = String(x.url || '').startsWith('data:');
         const finalUrl = isData ? (uploadedKeys[keyIdx++] || '') : x.url;
-        return { ...x, url: finalUrl };
+        // Strip absolute URL -> R2 key để tránh dư tiền tố khi BE gắn prefix
+        const urlAsKey = isAbsoluteHttp(finalUrl) ? toR2Key(finalUrl) : finalUrl;
+        return { ...x, url: urlAsKey };
       }).filter(x => x.url);
 
       // 3) Chuẩn lại sort_order & cover
@@ -1232,6 +1257,5 @@ function ImageGalleryPicker({
     </div>
   );
 }
-
 
 export default ProductFormModal;
