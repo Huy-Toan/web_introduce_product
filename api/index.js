@@ -17,6 +17,7 @@ import fieldRouter from "./routes/field";
 import cerPartnerRouter from "./routes/cer-partner";
 import translateRouter from "./routes/translate";
 import { seoRoot, sitemaps } from "./routes/seo-sitemap.js";
+import ga4Router from "./routes/ga4.js";
 import adminRouter from "./admin/admin.js";
 import { requireAdminAuth, requirePerm } from "./auth/authMidleware.js";
 import { jwtVerify } from "jose";
@@ -414,8 +415,8 @@ app.use("/api/users", requireAdminAuth);
 app.use("/api/users/*", requireAdminAuth);
 app.use("/api/users", requirePerm("users.manage"));
 app.use("/api/users/*", requirePerm("users.manage"));
-app.route("/", seoRoot);          
-app.route("/sitemaps", sitemaps); 
+app.route("/", seoRoot);
+app.route("/sitemaps", sitemaps);
 
 app.route("/api/seo", seoApp);
 app.route("/api/auth", authRouter);
@@ -432,6 +433,7 @@ app.route("/api/cer-partners", cerPartnerRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
+app.route("/api/ga4", ga4Router);
 
 /* ====================== 5) Health check ====================== */
 app.get("/api/health", (c) =>
