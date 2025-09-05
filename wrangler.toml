@@ -43,5 +43,6 @@ BRAND_NAME     = "ITXEASY"
 EMAIL_PROVIDER = "resend"
 CANONICAL_HOST = "itxeasy.dev.com"
 GA4_PROPERTY_ID = "401273146"
+LOGO_KEY = "itxeasy-logo.png"
 upload_source_maps = true
 

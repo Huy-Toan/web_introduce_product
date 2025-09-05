@@ -2351,53 +2351,37 @@ editorUploadRouter.post("/", async (c) => {
 });
 const router = new Hono2();
 router.post("/", async (c) => {
-  const stage = { at: "start" };
-  try {
-    const { IMAGES, IMGPROC, ASSETS } = c.env;
-    if (!IMAGES) return c.json({ ok: false, error: "Missing IMAGES binding" }, 500);
-    if (!IMGPROC) return c.json({ ok: false, error: "Missing IMGPROC binding" }, 500);
-    if (!ASSETS) return c.json({ ok: false, error: "Missing ASSETS binding" }, 500);
-    const url = new URL(c.req.url);
-    const pos = (url.searchParams.get("pos") || "br").toLowerCase();
-    const logoWidth = parseInt(url.searchParams.get("logoWidth") || "160", 10);
-    const opacity = clamp01(parseFloat(url.searchParams.get("opacity") || "0.95"));
-    const LOGO_PATH = url.searchParams.get("logo") || "/itxeasy-logo.png";
-    stage.at = "parse body";
-    const body = await c.req.json().catch(() => ({}));
-    const key = (body?.key || "").toString().trim();
-    if (!key) return c.json({ ok: false, error: "Missing key" }, 400);
-    stage.at = "get source";
-    const src = await IMAGES.get(key);
-    if (!src?.body) return c.json({ ok: false, error: `Source not found: ${key}` }, 404);
-    stage.at = "fetch logo";
-    const logoRes = await ASSETS.fetch(new URL(LOGO_PATH, c.req.url));
-    if (!logoRes.ok) {
-      return c.json({ ok: false, error: `Logo not found in ASSETS: ${LOGO_PATH}`, status: logoRes.status }, 500);
-    }
-    const logoBuf = await logoRes.arrayBuffer();
-    stage.at = "compose";
-    const overlay = IMGPROC.input(logoBuf).resize({ width: logoWidth });
-    const anchor = toAnchor(pos);
-    const margin = 16;
-    const outFormat = toOutFormatFromKey(key);
-    const out = await IMGPROC.input(src.body).draw(overlay, {
-      opacity,
-      ...anchor,
-      top: anchor.top !== void 0 ? margin : void 0,
-      right: anchor.right !== void 0 ? margin : void 0,
-      bottom: anchor.bottom !== void 0 ? margin : void 0,
-      left: anchor.left !== void 0 ? margin : void 0
-    }).output({ format: outFormat }).blob();
-    stage.at = "put result";
-    const wmKey = withWatermarkKey(key);
-    await IMAGES.put(wmKey, out, {
-      httpMetadata: { contentType: mimeFromKey(key), cacheControl: "public, max-age=31536000, immutable" }
-    });
-    return c.json({ ok: true, key: wmKey });
-  } catch (e) {
-    console.error("[watermark] failed at", stage.at, e);
-    return c.json({ ok: false, error: String(e?.message || e), stage: stage.at }, 500);
-  }
+  const { IMAGES, IMGPROC } = c.env;
+  const url = new URL(c.req.url);
+  const pos = (url.searchParams.get("pos") || "br").toLowerCase();
+  const logoWidth = parseInt(url.searchParams.get("logoWidth") || "160", 10);
+  const opacity = clamp01(parseFloat(url.searchParams.get("opacity") || "0.95"));
+  const logoKey = url.searchParams.get("logoKey") || c.env.LOGO_KEY || "itxeasy-logo.png";
+  const body = await c.req.json().catch(() => ({}));
+  const srcKey = String(body?.key || body?.imageKey || "").trim();
+  if (!srcKey) return c.json({ ok: false, error: "Missing key" }, 400);
+  const srcObj = await IMAGES.get(srcKey);
+  if (!srcObj?.body) return c.json({ ok: false, error: `Source not found: ${srcKey}` }, 404);
+  const logoObj = await IMAGES.get(logoKey);
+  if (!logoObj?.body) return c.json({ ok: false, error: `Logo not found in R2: ${logoKey}` }, 500);
+  const logoBuf = await logoObj.arrayBuffer();
+  const overlay = IMGPROC.input(logoBuf).transform({ width: logoWidth });
+  const anchor = toAnchor(pos);
+  const margin = 16;
+  const outMime = mimeFromKey(srcKey);
+  const out = await IMGPROC.input(srcObj.body).draw(overlay, {
+    opacity,
+    ...anchor,
+    top: anchor.top !== void 0 ? margin : void 0,
+    right: anchor.right !== void 0 ? margin : void 0,
+    bottom: anchor.bottom !== void 0 ? margin : void 0,
+    left: anchor.left !== void 0 ? margin : void 0
+  }).output({ format: outMime }).blob();
+  const wmKey = withWatermarkKey(srcKey);
+  await IMAGES.put(wmKey, out, {
+    httpMetadata: { contentType: outMime, cacheControl: "public, max-age=31536000, immutable" }
+  });
+  return c.json({ ok: true, key: wmKey, original: srcKey });
 });
 function clamp01(n) {
   if (!Number.isFinite(n)) return 0.95;
@@ -2418,15 +2402,6 @@ function mimeFromKey(k) {
   if (ext === "avif") return "image/avif";
   if (ext === "gif") return "image/gif";
   return "image/jpeg";
-}
-function toOutFormatFromKey(k) {
-  const m = mimeFromKey(k);
-  if (m.includes("jpeg")) return "jpeg";
-  if (m.includes("png")) return "png";
-  if (m.includes("webp")) return "webp";
-  if (m.includes("avif")) return "avif";
-  if (m.includes("gif")) return "gif";
-  return "jpeg";
 }
 const DEFAULT_LOCALE$7 = "vi";
 const getLocale$7 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$7).toLowerCase();
