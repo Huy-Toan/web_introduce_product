@@ -229,18 +229,22 @@ function Lightbox({ open, images, index, onClose, onPrev, onNext, title }) {
       )}
 
       {/* Ảnh */}
-      <figure className="max-w-[95vw] max-h-[85vh]">
+      {/* Ảnh: khung cố định để mọi ảnh cùng kích thước */}
+      <div className="w-[min(95vw,1100px)] h-[85vh] max-h-[85vh] flex items-center justify-center">
         <img
           src={src || "/banner.jpg"}
           alt={title || "image"}
-          className="max-h-[85vh] max-w-[95vw] object-contain"
+          className="w-full h-full object-contain"
+          loading="eager"
+          onError={(e) => (e.currentTarget.src = "/banner.jpg")}
         />
-        {!!title && (
-          <figcaption className="mt-2 text-center text-white/80 text-sm line-clamp-1">
-            {title}
-          </figcaption>
-        )}
-      </figure>
+      </div>
+      {!!title && (
+        <div className="mt-2 text-center text-white/80 text-sm line-clamp-1">
+          {title}
+        </div>
+      )}
+
 
       {/* Counter */}
       {imgs.length > 1 && (
