@@ -49,11 +49,6 @@ const toR2Key = (u = '') => {
     return u;
   }
 };
-const buildR2Url = (key = '') => {
-  if (!key) return '';
-  if (isAbsoluteHttp(key)) return key;
-  return PUBLIC_R2_URL ? `${PUBLIC_R2_URL.replace(/\/+$/, '')}/${key.replace(/^\/+/, '')}` : key;
-};
 
 /** Nhãn & placeholder theo locale */
 const LABELS = {
@@ -536,33 +531,18 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     setSlugErrorsTr(prev => ({ ...prev, [lc]: s && !isValidSlug(s) ? 'Slug không hợp lệ.' : '' }));
   };
 
-  // Upload 1 ảnh -> upload-image (gốc) -> watermark (-wm) -> trả về key cuối cùng để lưu
+  // Upload 1 ảnh (server trả về image_key + displayUrl/url)
   const uploadImage = async (file) => {
-    // a) upload gốc
-    const fd = new FormData();
-    fd.append('image', file);
-    const upRes = await fetch('/api/upload-image', { method: 'POST', body: fd });
-    if (!upRes.ok) throw new Error('Upload failed');
-    const up = await upRes.json();
-    if (!up?.image_key) throw new Error('Upload: missing image_key');
-
-    // b) watermark (logo từ R2: LOGO_KEY = "itxeasy-logo.png")
-    let finalKey = up.image_key;
-    try {
-      const wmRes = await fetch('/api/watermark?pos=tr&logoWidth=180&opacity=0.95', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: up.image_key })
-      });
-      const wm = await wmRes.json().catch(() => ({}));
-      if (wmRes.ok && wm?.ok && wm.key) finalKey = wm.key;
-    } catch (e) {
-      console.warn('Watermark error:', e);
-    }
-
-    return { image_key: finalKey, previewUrl: buildR2Url(finalKey) };
+    const formData = new FormData();
+    formData.append('image', file);
+    const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
+    if (!response.ok) throw new Error('Upload failed');
+    const data = await response.json();
+    return {
+      image_key: data.image_key,
+      previewUrl: data.displayUrl || data.url,
+    };
   };
-
 
   const translateContentFromVI = async (lc) => {
     const src = base.content?.trim() || '';
