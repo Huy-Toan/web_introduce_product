@@ -2255,11 +2255,6 @@ uploadImageRouter.post("/", async (c) => {
       return c.json({ error: "Kích thước ảnh không được vượt quá 5MB!" }, 400);
     }
     const urlObj = new URL(c.req.url);
-    const doWatermark = (urlObj.searchParams.get("watermark") ?? "1") !== "0";
-    const pos = (urlObj.searchParams.get("pos") || "br").toLowerCase();
-    const logoWidth = parseInt(urlObj.searchParams.get("logoWidth") || "160", 10);
-    const opacity = clamp01$1(parseFloat(urlObj.searchParams.get("opacity") || "0.95"));
-    const logoPath = urlObj.searchParams.get("logo") || "/itxeasy-logo.png";
     const rawSeoName = formData.get("seoName") || urlObj.searchParams.get("seoName") || (file.name ? file.name.replace(/\.[^.]+$/, "") : "image");
     const baseSlug = toSlug(rawSeoName) || "image";
     const rawFolder = formData.get("folder") || urlObj.searchParams.get("folder") || c.env.R2_PREFIX || "";
@@ -2284,41 +2279,13 @@ uploadImageRouter.post("/", async (c) => {
       }
     }
     const r2 = c.env.IMAGES;
-    const buf = await file.arrayBuffer();
-    await r2.put(key, buf, {
+    await r2.put(key, await file.arrayBuffer(), {
       httpMetadata: {
         contentType: file.type,
         cacheControl: "public, max-age=31536000, immutable",
         contentDisposition: `inline; filename="${key.split("/").pop()}"`
       }
     });
-    let wmKey = null;
-    if (doWatermark && c.env.IMGPROC && c.env.ASSETS) {
-      const assetUrl = new URL(logoPath, c.req.url);
-      const logoRes = await c.env.ASSETS.fetch(new Request(assetUrl.toString(), { method: "GET" }));
-      if (!logoRes.ok || !logoRes.body) {
-        console.warn("Watermark: logo not found in ASSETS:", logoPath);
-      } else {
-        const overlay = c.env.IMGPROC.input(logoRes.body).resize({ width: logoWidth });
-        const anchor = toAnchor$1(pos);
-        const margin = 16;
-        const out = await c.env.IMGPROC.input(buf).draw(overlay, {
-          opacity,
-          ...anchor,
-          top: anchor.top !== void 0 ? margin : void 0,
-          right: anchor.right !== void 0 ? margin : void 0,
-          bottom: anchor.bottom !== void 0 ? margin : void 0,
-          left: anchor.left !== void 0 ? margin : void 0
-        }).output({ format: file.type }).blob();
-        wmKey = withWatermarkKey$1(key);
-        await r2.put(wmKey, out, {
-          httpMetadata: {
-            contentType: file.type,
-            cacheControl: "public, max-age=31536000, immutable"
-          }
-        });
-      }
-    }
     if (!c.env.INTERNAL_R2_URL && !c.env.PUBLIC_R2_URL) {
       return c.json({ error: "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL" }, 500);
     }
@@ -2326,17 +2293,11 @@ uploadImageRouter.post("/", async (c) => {
     const displayBase = (c.env.PUBLIC_R2_URL || storageBase).replace(/\/+$/, "");
     const storageUrl = `${storageBase}/${key}`;
     const displayUrl = `${displayBase}/${key}`;
-    const wmStorageUrl = wmKey ? `${storageBase}/${wmKey}` : null;
-    const wmDisplayUrl = wmKey ? `${displayBase}/${wmKey}` : null;
     return c.json({
       success: true,
-      // Gốc
       image_key: key,
       displayUrl,
-      // Watermark (nếu có)
-      wm_key: wmKey || void 0,
-      wm_displayUrl: wmDisplayUrl || void 0,
-      fileName: (wmKey || key).split("/").pop(),
+      fileName: key.split("/").pop(),
       alt: baseSlug,
       prefix
     });
@@ -2348,27 +2309,6 @@ uploadImageRouter.post("/", async (c) => {
     }, 500);
   }
 });
-function clamp01$1(n) {
-  if (!Number.isFinite(n)) return 0.95;
-  return Math.max(0, Math.min(1, n));
-}
-function toAnchor$1(pos) {
-  switch (pos) {
-    case "tl":
-      return { top: 0, left: 0 };
-    case "tr":
-      return { top: 0, right: 0 };
-    case "bl":
-      return { bottom: 0, left: 0 };
-    case "br":
-    default:
-      return { bottom: 0, right: 0 };
-  }
-}
-function withWatermarkKey$1(k) {
-  const i = k.lastIndexOf(".");
-  return i < 0 ? `${k}-wm` : `${k.slice(0, i)}-wm${k.slice(i)}`;
-}
 function uuidv4() {
   return ("10000000-1000-4000-8000" + -1e11).replace(
     /[018]/g,
@@ -2416,18 +2356,15 @@ function mountWatermarkAssetsRoute(app2) {
     const pos = (url.searchParams.get("pos") || "br").toLowerCase();
     const logoWidth = parseInt(url.searchParams.get("logoWidth") || "160", 10);
     const opacity = clamp01(parseFloat(url.searchParams.get("opacity") || "0.95"));
-    const LOGO_PATH = "/itxeasy-logo.png";
+    const LOGO_PATH = url.searchParams.get("logo") || "/itxeasy-logo.png";
     const body = await c.req.json().catch(() => ({}));
     const key = (body?.key || "").toString().trim();
     if (!key) return c.json({ ok: false, error: "Missing key" }, 400);
     const src = await IMAGES.get(key);
     if (!src?.body) return c.json({ ok: false, error: "Source not found" }, 404);
-    const assetUrl = new URL(LOGO_PATH, c.req.url);
-    const logoRes = await ASSETS.fetch(new Request(assetUrl.toString(), { method: "GET" }));
-    if (!logoRes.ok || !logoRes.body) {
-      return c.json({ ok: false, error: "Logo not found in ASSETS (/public)" }, 500);
-    }
-    const overlay = IMGPROC.input(logoRes.body).resize({ width: logoWidth });
+    const logoRes = await ASSETS.fetch(new URL(LOGO_PATH, c.req.url));
+    if (!logoRes.ok || !logoRes.body) return c.json({ ok: false, error: "Logo not found in ASSETS" }, 500);
+    const overlay = IMGPROC.input(await logoRes.arrayBuffer()).resize({ width: logoWidth });
     const anchor = toAnchor(pos);
     const margin = 16;
     const out = await IMGPROC.input(src.body).draw(overlay, {
@@ -2437,7 +2374,7 @@ function mountWatermarkAssetsRoute(app2) {
       right: anchor.right !== void 0 ? margin : void 0,
       bottom: anchor.bottom !== void 0 ? margin : void 0,
       left: anchor.left !== void 0 ? margin : void 0
-    }).output({ format: mimeFromKey(key) }).blob();
+    }).output({ format: toOutFormat(key) }).blob();
     const wmKey = withWatermarkKey(key);
     await IMAGES.put(wmKey, out, { httpMetadata: { contentType: mimeFromKey(key) } });
     return c.json({ ok: true, key: wmKey });
@@ -2447,39 +2384,20 @@ function clamp01(n) {
   if (!Number.isFinite(n)) return 0.95;
   return Math.max(0, Math.min(1, n));
 }
-function toAnchor(pos) {
-  switch (pos) {
-    case "tl":
-      return { top: 0, left: 0 };
-    case "tr":
-      return { top: 0, right: 0 };
-    case "bl":
-      return { bottom: 0, left: 0 };
-    case "br":
-    default:
-      return { bottom: 0, right: 0 };
-  }
-}
-function mimeFromKey(k) {
-  const ext = (k.toLowerCase().match(/\.(jpe?g|png|webp|avif|gif)$/)?.[1] || "jpg").replace("jpeg", "jpg");
-  switch (ext) {
-    case "jpg":
-      return "image/jpeg";
-    case "png":
-      return "image/png";
-    case "webp":
-      return "image/webp";
-    case "avif":
-      return "image/avif";
-    case "gif":
-      return "image/gif";
-    default:
-      return "image/jpeg";
-  }
+function toAnchor(p) {
+  return p === "tl" ? { top: 0, left: 0 } : p === "tr" ? { top: 0, right: 0 } : p === "bl" ? { bottom: 0, left: 0 } : { bottom: 0, right: 0 };
 }
 function withWatermarkKey(k) {
   const i = k.lastIndexOf(".");
   return i < 0 ? `${k}-wm` : `${k.slice(0, i)}-wm${k.slice(i)}`;
+}
+function mimeFromKey(k) {
+  const ext = (k.toLowerCase().match(/\.(jpe?g|png|webp|avif|gif)$/)?.[1] || "jpg").replace("jpeg", "jpg");
+  return ext === "jpg" ? "image/jpeg" : ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "avif" ? "image/avif" : ext === "gif" ? "image/gif" : "image/jpeg";
+}
+function toOutFormat(k) {
+  const m = mimeFromKey(k);
+  return m.includes("jpeg") ? "jpeg" : m.includes("png") ? "png" : m.includes("webp") ? "webp" : m.includes("avif") ? "avif" : m.includes("gif") ? "gif" : "jpeg";
 }
 const DEFAULT_LOCALE$7 = "vi";
 const getLocale$7 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$7).toLowerCase();

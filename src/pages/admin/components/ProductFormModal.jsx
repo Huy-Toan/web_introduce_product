@@ -49,6 +49,11 @@ const toR2Key = (u = '') => {
     return u;
   }
 };
+const buildR2Url = (key = '') => {
+  if (!key) return '';
+  if (isAbsoluteHttp(key)) return key;
+  return PUBLIC_R2_URL ? `${PUBLIC_R2_URL.replace(/\/+$/, '')}/${key.replace(/^\/+/, '')}` : key;
+};
 
 /** Nhãn & placeholder theo locale */
 const LABELS = {
@@ -531,16 +536,40 @@ const ProductFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
     setSlugErrorsTr(prev => ({ ...prev, [lc]: s && !isValidSlug(s) ? 'Slug không hợp lệ.' : '' }));
   };
 
-  // Upload 1 ảnh (server trả về image_key + displayUrl/url)
+  // Upload 1 ảnh -> upload-image (gốc) -> watermark (-wm) -> trả về key cuối cùng để lưu
   const uploadImage = async (file) => {
+    // a) upload gốc
     const formData = new FormData();
     formData.append('image', file);
-    const response = await fetch('/api/upload-image', { method: 'POST', body: formData });
-    if (!response.ok) throw new Error('Upload failed');
-    const data = await response.json();
+
+    const upRes = await fetch('/api/upload-image', { method: 'POST', body: formData });
+    if (!upRes.ok) throw new Error('Upload failed');
+    const up = await upRes.json();
+
+    if (!up?.image_key) throw new Error('Upload: missing image_key');
+
+    // b) watermark (dán logo từ public)
+    //    Có thể tùy chỉnh: ?pos=tr&logoWidth=160&opacity=0.95
+    let finalKey = up.image_key;
+    try {
+      const wmRes = await fetch('/api/watermark?pos=tr&logoWidth=160&opacity=0.95', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: up.image_key }),
+      });
+      const wm = await wmRes.json().catch(() => ({}));
+      if (wmRes.ok && wm?.ok && wm?.key) {
+        finalKey = wm.key; // dùng bản -wm
+      } else {
+        console.warn('Watermark skip/fail:', wm?.error || wm);
+      }
+    } catch (e) {
+      console.warn('Watermark error:', e);
+    }
+
     return {
-      image_key: data.image_key,
-      previewUrl: data.displayUrl || data.url,
+      image_key: finalKey,               // <-- luôn trả về key cuối (ưu tiên -wm)
+      previewUrl: buildR2Url(finalKey),  // để hiện thử nếu cần
     };
   };
 
