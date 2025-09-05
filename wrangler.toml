@@ -39,6 +39,6 @@ CONTACT_TO     = "info@itxeasy.com"
 BRAND_NAME     = "ITXEASY"
 EMAIL_PROVIDER = "resend"
 CANONICAL_HOST = "itxeasy.dev.com"
-
+GA4_PROPERTY_ID = "401273146"
 upload_source_maps = true
 
