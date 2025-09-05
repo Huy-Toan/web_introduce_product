@@ -34383,6 +34383,200 @@ ${parentItems.map((i) => `  <url><loc>${esc(i.loc)}</loc>${i.lastmod ? `<lastmod
     "cache-control": "public, s-maxage=3600"
   });
 });
+const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
+function b64url(u8) {
+  const s = typeof u8 === "string" ? u8 : String.fromCharCode(...u8);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+async function getAccessToken(env2) {
+  const email = env2.GOOGLE_CLIENT_EMAIL;
+  const pkPem = env2.GOOGLE_PRIVATE_KEY;
+  if (!email || !pkPem) throw new Error("Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY");
+  const now = Math.floor(Date.now() / 1e3);
+  const header = { alg: "RS256", typ: "JWT" };
+  const payload = {
+    iss: email,
+    scope: SCOPE,
+    aud: OAUTH_TOKEN_URL,
+    iat: now,
+    exp: now + 3600
+  };
+  const unsigned = b64url(new TextEncoder().encode(JSON.stringify(header))) + "." + b64url(new TextEncoder().encode(JSON.stringify(payload)));
+  const pkcs8 = pkPem.replace(/-----BEGIN PRIVATE KEY-----/g, "").replace(/-----END PRIVATE KEY-----/g, "").replace(/\s+/g, "");
+  const keyData = Uint8Array.from(atob(pkcs8), (c) => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey(
+    "pkcs8",
+    keyData,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sigBuf = await crypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    new TextEncoder().encode(unsigned)
+  );
+  const jwt = unsigned + "." + b64url(new Uint8Array(sigBuf));
+  const resp = await fetch(OAUTH_TOKEN_URL, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt
+    })
+  });
+  if (!resp.ok) throw new Error(`OAuth ${resp.status} ${await resp.text()}`);
+  const json = await resp.json();
+  return json.access_token;
+}
+async function ga4RunReport(env2, body) {
+  const token = await getAccessToken(env2);
+  const property = env2.GA4_PROPERTY_ID;
+  if (!property) throw new Error("Missing GA4_PROPERTY_ID");
+  const url = `https://analyticsdata.googleapis.com/v1beta/properties/${property}:runReport`;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(`runReport ${r.status} ${await r.text()}`);
+  return r.json();
+}
+async function ga4RunRealtime(env2, body) {
+  const token = await getAccessToken(env2);
+  const property = env2.GA4_PROPERTY_ID;
+  if (!property) throw new Error("Missing GA4_PROPERTY_ID");
+  const url = `https://analyticsdata.googleapis.com/v1beta/properties/${property}:runRealtimeReport`;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(`realtime ${r.status} ${await r.text()}`);
+  return r.json();
+}
+const ga4Router = new Hono2();
+ga4Router.all("*", async (c, next) => {
+  c.header("Access-Control-Allow-Origin", "*");
+  c.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  c.header("Access-Control-Allow-Headers", "content-type,authorization");
+  if (c.req.method === "OPTIONS") return c.text("", 204);
+  await next();
+});
+ga4Router.post("/report", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const query = body?.query ?? {
+    dateRanges: [{ startDate: "28daysAgo", endDate: "today" }],
+    metrics: [
+      { name: "activeUsers" },
+      { name: "newUsers" },
+      { name: "screenPageViews" },
+      { name: "averageSessionDuration" }
+    ]
+  };
+  try {
+    const data = await ga4RunReport(c.env, query);
+    return c.json(data);
+  } catch (e) {
+    return c.json({ error: String(e.message || e) }, 500);
+  }
+});
+ga4Router.get("/realtime", async (c) => {
+  const query = {
+    metrics: [{ name: "activeUsers" }],
+    dimensions: [{ name: "country" }],
+    orderBys: [{ metric: { metricName: "activeUsers" }, desc: true }],
+    limit: 25
+  };
+  try {
+    const data = await ga4RunRealtime(c.env, query);
+    return c.json(data);
+  } catch (e) {
+    return c.json({ error: String(e.message || e) }, 500);
+  }
+});
+ga4Router.get("/top-pages", async (c) => {
+  const url = new URL(c.req.url);
+  const days2 = url.searchParams.get("days") || "28";
+  const limit = Number(url.searchParams.get("limit") || "20");
+  const query = {
+    dateRanges: [{ startDate: `${days2}daysAgo`, endDate: "today" }],
+    dimensions: [{ name: "pagePath" }, { name: "pageTitle" }],
+    metrics: [{ name: "screenPageViews" }, { name: "totalUsers" }],
+    orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
+    limit
+  };
+  try {
+    const data = await ga4RunReport(c.env, query);
+    return c.json(data);
+  } catch (e) {
+    return c.json({ error: String(e.message || e) }, 500);
+  }
+});
+async function getByPrefixWithTitle(env2, prefix, days2 = "28", limit = 50) {
+  const query = {
+    dateRanges: [{ startDate: `${days2}daysAgo`, endDate: "today" }],
+    dimensions: [
+      { name: "pagePath" },
+      { name: "pageTitle" }
+      // lấy luôn tên trang
+    ],
+    metrics: [{ name: "screenPageViews" }, { name: "totalUsers" }],
+    orderBys: [{ metric: { metricName: "screenPageViews" }, desc: true }],
+    limit: 1e4,
+    dimensionFilter: {
+      filter: {
+        fieldName: "pagePath",
+        stringFilter: { value: prefix, matchType: "BEGINS_WITH" }
+      }
+    }
+  };
+  const raw = await ga4RunReport(env2, query);
+  const items = (raw.rows || []).map((r) => {
+    const path = r.dimensionValues?.[0]?.value || "";
+    const title2 = r.dimensionValues?.[1]?.value || "";
+    const views = Number(r.metricValues?.[0]?.value || 0);
+    return { name: title2 || path, views, path };
+  }).reduce((acc, cur) => {
+    const key = cur.name;
+    acc.set(key, { ...cur, views: (acc.get(key)?.views || 0) + cur.views });
+    return acc;
+  }, /* @__PURE__ */ new Map()).values();
+  return Array.from(items).sort((a, b) => b.views - a.views).slice(0, limit);
+}
+ga4Router.get("/products-views", async (c) => {
+  const url = new URL(c.req.url);
+  const days2 = url.searchParams.get("days") || "28";
+  const limit = Number(url.searchParams.get("limit") || "50");
+  try {
+    const items = await getByPrefixWithTitle(
+      c.env,
+      "/product/product-detail/",
+      days2,
+      limit
+    );
+    return c.json({ items, count: items.length });
+  } catch (e) {
+    return c.json({ error: String(e.message || e) }, 500);
+  }
+});
+ga4Router.get("/news-views", async (c) => {
+  const url = new URL(c.req.url);
+  const days2 = url.searchParams.get("days") || "28";
+  const limit = Number(url.searchParams.get("limit") || "50");
+  try {
+    const items = await getByPrefixWithTitle(
+      c.env,
+      "/news/news-detail/",
+      days2,
+      limit
+    );
+    return c.json({ items, count: items.length });
+  } catch (e) {
+    return c.json({ error: String(e.message || e) }, 500);
+  }
+});
 const app$1 = new Hono2();
 app$1.use("*", requireAdminAuth);
 app$1.post("/users", requirePerm("users.manage"), (c) => {
@@ -34913,6 +35107,7 @@ app.route("/api/cer-partners", cerPartnerRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
+app.route("/api/ga4", ga4Router);
 app.get(
   "/api/health",
   (c) => c.json({

@@ -40,6 +40,7 @@ BRAND_NAME     = "ITXEASY"
 EMAIL_PROVIDER = "resend"
 CANONICAL_HOST = "https://beta.itxeasy.com/"
 PUBLIC_R2_URL = "https://images.itxeasy.com"
+GA4_PROPERTY_ID = "401273146"
 
 upload_source_maps = true
 
