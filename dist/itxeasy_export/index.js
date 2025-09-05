@@ -34722,6 +34722,9 @@ ${parentItems.map((i) => `  <url><loc>${esc(i.loc)}</loc>${i.lastmod ? `<lastmod
   });
 });
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 9a5e679 (fix ga4)
 const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 function b64url(u8) {
@@ -34797,6 +34800,7 @@ async function ga4RunRealtime(env2, body) {
 }
 const ga4Router = new Hono2();
 ga4Router.all("*", async (c, next) => {
+<<<<<<< HEAD
   const origin = c.req.header("Origin") || "";
   const allowed = [
     "http://localhost:5173",
@@ -34814,6 +34818,12 @@ ga4Router.all("*", async (c, next) => {
   if (c.req.method === "OPTIONS") {
     return c.text("", 204);
   }
+=======
+  c.header("Access-Control-Allow-Origin", "*");
+  c.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  c.header("Access-Control-Allow-Headers", "content-type,authorization");
+  if (c.req.method === "OPTIONS") return c.text("", 204);
+>>>>>>> 9a5e679 (fix ga4)
   await next();
 });
 ga4Router.post("/report", async (c) => {
@@ -34929,8 +34939,11 @@ ga4Router.get("/news-views", async (c) => {
     return c.json({ error: String(e.message || e) }, 500);
   }
 });
+<<<<<<< HEAD
 =======
 >>>>>>> 05698dd (update)
+=======
+>>>>>>> 9a5e679 (fix ga4)
 const app$1 = new Hono2();
 app$1.use("*", requireAdminAuth);
 app$1.post("/users", requirePerm("users.manage"), (c) => {
@@ -35613,10 +35626,14 @@ app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
 <<<<<<< HEAD
+<<<<<<< HEAD
 app.route("/api/ga4", ga4Router);
 app.route("/api/watermark", router);
 =======
 >>>>>>> 05698dd (update)
+=======
+app.route("/api/ga4", ga4Router);
+>>>>>>> 9a5e679 (fix ga4)
 app.get(
   "/api/health",
   (c) => c.json({
