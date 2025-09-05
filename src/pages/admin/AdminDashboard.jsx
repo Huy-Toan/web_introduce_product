@@ -14,6 +14,7 @@ import ParentCategoriesCard from './components/ParentCategoriesCard';
 import ParentCategoriesFormModal from './components/ParentCategoriesFormModal';
 import useParentCategories from './hook/UseParentCategories';
 import ProductsTab from './components/productTab.jsx';
+import AnalyticsPanel from './components/AnalyticsPanel';
 
 import useSubCategories from './hook/UseSubCategories';
 import SubCategoriesCard from './components/SubCategoriesCard';
@@ -39,111 +40,111 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
 
   const {
-      news,
-      newsLoading,
-      isNewsModalOpen,
-      newsToEdit,
-      handleOpenNewsModal,
-      handleCloseNewsModal,
-      handleAddNews,
-      handleUpdateNews,
-      handleDeleteNews,
-    } = useNews();
+    news,
+    newsLoading,
+    isNewsModalOpen,
+    newsToEdit,
+    handleOpenNewsModal,
+    handleCloseNewsModal,
+    handleAddNews,
+    handleUpdateNews,
+    handleDeleteNews,
+  } = useNews();
 
-    const {
-      about,
-      aboutLoading,
-      isAboutModalOpen,
-      aboutToEdit,
-      handleOpenAboutModal,
-      handleCloseAboutModal,
-      handleAddAbout,
-      handleUpdateAbout,
-      handleDeleteAbout,
-    } = useAbout();
+  const {
+    about,
+    aboutLoading,
+    isAboutModalOpen,
+    aboutToEdit,
+    handleOpenAboutModal,
+    handleCloseAboutModal,
+    handleAddAbout,
+    handleUpdateAbout,
+    handleDeleteAbout,
+  } = useAbout();
 
-    const {
-      parents,
-      parentsLoading,
-      totalParents,
-      isParentModalOpen,
-      parentToEdit,
-      handleOpenParentModal,
-      handleCloseParentModal,
-      fetchParents,
-      handleAddParent,
-      handleUpdateParent,
-      handleDeleteParent,
-    } = useParentCategories();
+  const {
+    parents,
+    parentsLoading,
+    totalParents,
+    isParentModalOpen,
+    parentToEdit,
+    handleOpenParentModal,
+    handleCloseParentModal,
+    fetchParents,
+    handleAddParent,
+    handleUpdateParent,
+    handleDeleteParent,
+  } = useParentCategories();
 
 
-    const {
-      products,
-      productsLoading,
-      isProductModalOpen,
-      productToEdit,
-      openProductModal,
-      closeProductModal,
-      addProduct,
-      updateProduct,
-      deleteProduct,
+  const {
+    products,
+    productsLoading,
+    isProductModalOpen,
+    productToEdit,
+    openProductModal,
+    closeProductModal,
+    addProduct,
+    updateProduct,
+    deleteProduct,
 
-    } = useProducts();
+  } = useProducts();
 
-    const {
-      banners,
-      bannerLoading,
-      isBannerModalOpen,
-      bannerToEdit,
-      handleOpenBannerModal,
-      handleCloseBannerModal,
-      handleAddBanner,
-      handleUpdateBanner,
-      handleDeleteBanner,
-    } = useBanner();
+  const {
+    banners,
+    bannerLoading,
+    isBannerModalOpen,
+    bannerToEdit,
+    handleOpenBannerModal,
+    handleCloseBannerModal,
+    handleAddBanner,
+    handleUpdateBanner,
+    handleDeleteBanner,
+  } = useBanner();
 
-    const {
-      fields,
-      fieldsLoading,
-      isFieldModalOpen,
-      fieldToEdit,
-      handleOpenFieldModal,
-      handleCloseFieldModal,
-      handleAddField,
-      handleUpdateField,
-      handleDeleteField,
-    } = useField();
+  const {
+    fields,
+    fieldsLoading,
+    isFieldModalOpen,
+    fieldToEdit,
+    handleOpenFieldModal,
+    handleCloseFieldModal,
+    handleAddField,
+    handleUpdateField,
+    handleDeleteField,
+  } = useField();
 
-    const {
-      // data
-      itemsCerPartner,
-      loadingCerPartner,
-      isModalOpenCerPartner,
-      editingItemCerPartner,
-      openCerPartnerModal,
-      closeCerPartnerModal,
-      createCerPartner,
-      updateCerPartner,
-      deleteCerPartner,
-    } = useCerPartner();
+  const {
+    // data
+    itemsCerPartner,
+    loadingCerPartner,
+    isModalOpenCerPartner,
+    editingItemCerPartner,
+    openCerPartnerModal,
+    closeCerPartnerModal,
+    createCerPartner,
+    updateCerPartner,
+    deleteCerPartner,
+  } = useCerPartner();
 
-    const {
-      subcategories,
-      subcategoriesLoading,
-      totalSubcategories,
-      currentParentFilter,
-      setParentAndFetch,
-      isSubModalOpen,
-      subToEdit,
-      handleOpenSubModal,
-      handleCloseSubModal,
-      fetchSubCategories,
-      handleAddSub,
-      handleUpdateSub,
-      handleDeleteSub,
-    } = useSubCategories();
+  const {
+    subcategories,
+    subcategoriesLoading,
+    totalSubcategories,
+    currentParentFilter,
+    setParentAndFetch,
+    isSubModalOpen,
+    subToEdit,
+    handleOpenSubModal,
+    handleCloseSubModal,
+    fetchSubCategories,
+    handleAddSub,
+    handleUpdateSub,
+    handleDeleteSub,
+  } = useSubCategories();
 
-    async function doLogout() {
+  async function doLogout() {
     try {
       const token = localStorage.getItem('access_token');
       if (token) {
@@ -157,7 +158,7 @@ const AdminDashboard = () => {
     } finally {
       localStorage.removeItem('access_token');
       localStorage.removeItem('user');
-        navigate('/admin/login', { replace: true });
+      navigate('/admin/login', { replace: true });
     }
   }
 
@@ -176,16 +177,18 @@ const AdminDashboard = () => {
             Đăng xuất
           </button>
         </div>
-      
+
         {activeTab === 'dashboard' && (
-          <DashboardOverview 
-            products={products.length} 
-            parents={parents.length} 
-            news={news.length} 
+          <DashboardOverview
+            products={products.length}
+            parents={parents.length}
+            news={news.length}
           />
         )}
+        {activeTab === 'analytics' && <AnalyticsPanel />}
 
-{/* news */}
+
+        {/* news */}
         {activeTab === 'news' && (
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -223,7 +226,7 @@ const AdminDashboard = () => {
           </div>
         )}
 
-{/* about */}
+        {/* about */}
         {activeTab === 'about_us' && (
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -251,7 +254,7 @@ const AdminDashboard = () => {
                 ))}
               </div>
             )}
-            
+
 
             <AboutFormModal
               isOpen={isAboutModalOpen}
@@ -263,7 +266,7 @@ const AdminDashboard = () => {
         )}
 
 
-{/* parent category */}
+        {/* parent category */}
         {activeTab === 'parent_categories' && (
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -291,7 +294,7 @@ const AdminDashboard = () => {
                 ))}
               </div>
             )}
-            
+
             <ParentCategoriesFormModal
               isOpen={isParentModalOpen}
               onClose={handleCloseParentModal}
@@ -301,7 +304,7 @@ const AdminDashboard = () => {
           </div>
         )}
 
-{/* sub category */}
+        {/* sub category */}
         {activeTab === 'sub_categories' && (
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -329,7 +332,7 @@ const AdminDashboard = () => {
                 ))}
               </div>
             )}
-            
+
             <SubCategoriesFormModal
               isOpen={isSubModalOpen}
               onClose={handleCloseSubModal}
@@ -339,22 +342,22 @@ const AdminDashboard = () => {
           </div>
         )}
 
-{/* products */}
-{activeTab === 'products' && (
-  <ProductsTab
-    products={products}
-    productsLoading={productsLoading}
-    openProductModal={openProductModal}
-    closeProductModal={closeProductModal}
-    isProductModalOpen={isProductModalOpen}
-    productToEdit={productToEdit}
-    addProduct={addProduct}
-    updateProduct={updateProduct}
-    deleteProduct={deleteProduct}
-  />
-)}
+        {/* products */}
+        {activeTab === 'products' && (
+          <ProductsTab
+            products={products}
+            productsLoading={productsLoading}
+            openProductModal={openProductModal}
+            closeProductModal={closeProductModal}
+            isProductModalOpen={isProductModalOpen}
+            productToEdit={productToEdit}
+            addProduct={addProduct}
+            updateProduct={updateProduct}
+            deleteProduct={deleteProduct}
+          />
+        )}
 
-{/* Banner */}
+        {/* Banner */}
         {activeTab === 'banners' && (
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -382,7 +385,7 @@ const AdminDashboard = () => {
                 ))}
               </div>
             )}
-            
+
             <BannerFormModal
               isOpen={isBannerModalOpen}
               onClose={handleCloseBannerModal}
@@ -392,7 +395,7 @@ const AdminDashboard = () => {
           </div>
         )}
 
-{/* Cer_Partner */}
+        {/* Cer_Partner */}
         {activeTab === 'cer_partner' && (
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -420,7 +423,7 @@ const AdminDashboard = () => {
                 ))}
               </div>
             )}
-            
+
             <CertPartnerFormModal
               isOpen={isModalOpenCerPartner}
               onClose={closeCerPartnerModal}
@@ -430,7 +433,7 @@ const AdminDashboard = () => {
           </div>
         )}
 
-{/* Field */}
+        {/* Field */}
         {activeTab === 'fields' && (
           <div>
             <div className="flex items-center justify-between mb-4">
@@ -458,7 +461,7 @@ const AdminDashboard = () => {
                 ))}
               </div>
             )}
-            
+
             <FieldFormModal
               isOpen={isFieldModalOpen}
               onClose={handleCloseFieldModal}
@@ -470,7 +473,7 @@ const AdminDashboard = () => {
 
         {activeTab === 'users' && <UsersPanel />}
         {activeTab === 'contacts' && <ContactsPanel />}
-          {activeTab === 'chat' && <AdminChat />}
+        {activeTab === 'chat' && <AdminChat />}
       </main>
     </div>
   );
