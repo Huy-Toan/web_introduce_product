@@ -2349,22 +2349,25 @@ editorUploadRouter.post("/", async (c) => {
     return c.json({ success: 0, message: error.message }, 500);
   }
 });
-function mountWatermarkRoute(app2) {
+function mountWatermarkAssetsRoute(app2) {
   app2.post("/api/watermark", async (c) => {
-    const { IMAGES, IMGPROC } = c.env;
+    const { IMAGES, IMGPROC, ASSETS } = c.env;
     const url = new URL(c.req.url);
     const pos = (url.searchParams.get("pos") || "br").toLowerCase();
     const logoWidth = parseInt(url.searchParams.get("logoWidth") || "160", 10);
     const opacity = clamp01(parseFloat(url.searchParams.get("opacity") || "0.95"));
-    const LOGO_KEY = "branding/itxeasy-logo.png";
+    const LOGO_PATH = "/itxeasy-logo.png";
     const body = await c.req.json().catch(() => ({}));
     const key = (body?.key || "").toString().trim();
     if (!key) return c.json({ ok: false, error: "Missing key" }, 400);
     const src = await IMAGES.get(key);
     if (!src?.body) return c.json({ ok: false, error: "Source not found" }, 404);
-    const logo = await IMAGES.get(LOGO_KEY);
-    if (!logo?.body) return c.json({ ok: false, error: "Logo not found in R2" }, 500);
-    const overlay = IMGPROC.input(logo.body).resize({ width: logoWidth });
+    const assetUrl = new URL(LOGO_PATH, c.req.url);
+    const logoRes = await ASSETS.fetch(new Request(assetUrl.toString(), { method: "GET" }));
+    if (!logoRes.ok || !logoRes.body) {
+      return c.json({ ok: false, error: "Logo not found in ASSETS (/public)" }, 500);
+    }
+    const overlay = IMGPROC.input(logoRes.body).resize({ width: logoWidth });
     const anchor = toAnchor(pos);
     const margin = 16;
     const out = await IMGPROC.input(src.body).draw(overlay, {
@@ -34936,7 +34939,7 @@ app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
 app.route("/api/ga4", ga4Router);
-mountWatermarkRoute(app);
+mountWatermarkAssetsRoute(app);
 app.get(
   "/api/health",
   (c) => c.json({
