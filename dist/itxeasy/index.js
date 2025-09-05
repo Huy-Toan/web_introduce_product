@@ -2012,20 +2012,20 @@ var SmartRouter = class {
     let i = 0;
     let res;
     for (; i < len; i++) {
-      const router = routers[i];
+      const router2 = routers[i];
       try {
         for (let i2 = 0, len2 = routes.length; i2 < len2; i2++) {
-          router.add(...routes[i2]);
+          router2.add(...routes[i2]);
         }
-        res = router.match(method, path);
+        res = router2.match(method, path);
       } catch (e) {
         if (e instanceof UnsupportedPathError) {
           continue;
         }
         throw e;
       }
-      this.match = router.match.bind(router);
-      this.#routers = [router];
+      this.match = router2.match.bind(router2);
+      this.#routers = [router2];
       this.#routes = void 0;
       break;
     }
@@ -2349,24 +2349,37 @@ editorUploadRouter.post("/", async (c) => {
     return c.json({ success: 0, message: error.message }, 500);
   }
 });
-function mountWatermarkAssetsRoute(app2) {
-  app2.post("/api/watermark", async (c) => {
+const router = new Hono2();
+router.post("/", async (c) => {
+  const stage = { at: "start" };
+  try {
     const { IMAGES, IMGPROC, ASSETS } = c.env;
+    if (!IMAGES) return c.json({ ok: false, error: "Missing IMAGES binding" }, 500);
+    if (!IMGPROC) return c.json({ ok: false, error: "Missing IMGPROC binding" }, 500);
+    if (!ASSETS) return c.json({ ok: false, error: "Missing ASSETS binding" }, 500);
     const url = new URL(c.req.url);
     const pos = (url.searchParams.get("pos") || "br").toLowerCase();
     const logoWidth = parseInt(url.searchParams.get("logoWidth") || "160", 10);
     const opacity = clamp01(parseFloat(url.searchParams.get("opacity") || "0.95"));
     const LOGO_PATH = url.searchParams.get("logo") || "/itxeasy-logo.png";
+    stage.at = "parse body";
     const body = await c.req.json().catch(() => ({}));
     const key = (body?.key || "").toString().trim();
     if (!key) return c.json({ ok: false, error: "Missing key" }, 400);
+    stage.at = "get source";
     const src = await IMAGES.get(key);
-    if (!src?.body) return c.json({ ok: false, error: "Source not found" }, 404);
+    if (!src?.body) return c.json({ ok: false, error: `Source not found: ${key}` }, 404);
+    stage.at = "fetch logo";
     const logoRes = await ASSETS.fetch(new URL(LOGO_PATH, c.req.url));
-    if (!logoRes.ok || !logoRes.body) return c.json({ ok: false, error: "Logo not found in ASSETS" }, 500);
-    const overlay = IMGPROC.input(await logoRes.arrayBuffer()).resize({ width: logoWidth });
+    if (!logoRes.ok) {
+      return c.json({ ok: false, error: `Logo not found in ASSETS: ${LOGO_PATH}`, status: logoRes.status }, 500);
+    }
+    const logoBuf = await logoRes.arrayBuffer();
+    stage.at = "compose";
+    const overlay = IMGPROC.input(logoBuf).resize({ width: logoWidth });
     const anchor = toAnchor(pos);
     const margin = 16;
+    const outFormat = toOutFormatFromKey(key);
     const out = await IMGPROC.input(src.body).draw(overlay, {
       opacity,
       ...anchor,
@@ -2374,12 +2387,18 @@ function mountWatermarkAssetsRoute(app2) {
       right: anchor.right !== void 0 ? margin : void 0,
       bottom: anchor.bottom !== void 0 ? margin : void 0,
       left: anchor.left !== void 0 ? margin : void 0
-    }).output({ format: toOutFormat(key) }).blob();
+    }).output({ format: outFormat }).blob();
+    stage.at = "put result";
     const wmKey = withWatermarkKey(key);
-    await IMAGES.put(wmKey, out, { httpMetadata: { contentType: mimeFromKey(key) } });
+    await IMAGES.put(wmKey, out, {
+      httpMetadata: { contentType: mimeFromKey(key), cacheControl: "public, max-age=31536000, immutable" }
+    });
     return c.json({ ok: true, key: wmKey });
-  });
-}
+  } catch (e) {
+    console.error("[watermark] failed at", stage.at, e);
+    return c.json({ ok: false, error: String(e?.message || e), stage: stage.at }, 500);
+  }
+});
 function clamp01(n) {
   if (!Number.isFinite(n)) return 0.95;
   return Math.max(0, Math.min(1, n));
@@ -2392,12 +2411,22 @@ function withWatermarkKey(k) {
   return i < 0 ? `${k}-wm` : `${k.slice(0, i)}-wm${k.slice(i)}`;
 }
 function mimeFromKey(k) {
-  const ext = (k.toLowerCase().match(/\.(jpe?g|png|webp|avif|gif)$/)?.[1] || "jpg").replace("jpeg", "jpg");
-  return ext === "jpg" ? "image/jpeg" : ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : ext === "avif" ? "image/avif" : ext === "gif" ? "image/gif" : "image/jpeg";
+  const ext = k.toLowerCase().match(/\.(jpe?g|png|webp|avif|gif)$/)?.[1] || "jpg";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "avif") return "image/avif";
+  if (ext === "gif") return "image/gif";
+  return "image/jpeg";
 }
-function toOutFormat(k) {
+function toOutFormatFromKey(k) {
   const m = mimeFromKey(k);
-  return m.includes("jpeg") ? "jpeg" : m.includes("png") ? "png" : m.includes("webp") ? "webp" : m.includes("avif") ? "avif" : m.includes("gif") ? "gif" : "jpeg";
+  if (m.includes("jpeg")) return "jpeg";
+  if (m.includes("png")) return "png";
+  if (m.includes("webp")) return "webp";
+  if (m.includes("avif")) return "avif";
+  if (m.includes("gif")) return "gif";
+  return "jpeg";
 }
 const DEFAULT_LOCALE$7 = "vi";
 const getLocale$7 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$7).toLowerCase();
@@ -34917,7 +34946,7 @@ app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
 app.route("/api/ga4", ga4Router);
-mountWatermarkAssetsRoute(app);
+app.route("/api/watermark", router);
 app.get(
   "/api/health",
   (c) => c.json({

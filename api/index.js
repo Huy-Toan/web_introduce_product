@@ -3,7 +3,7 @@ import { Hono } from "hono";
 
 import uploadImageRouter from "./routes/upload-image";
 import editorUploadRouter from "./routes/editor-upload";
-import mountWatermarkAssetsRoute from "./routes/watermark-assets.js";
+import watermarkRouter from './routes/watermark-assets.js';
 import aboutRouter from "./routes/about";
 import newsRouter from "./routes/news";
 import seoApp from "./routes/seo";
@@ -435,7 +435,7 @@ app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
 app.route("/api/ga4", ga4Router);
-mountWatermarkAssetsRoute(app);
+app.route('/api/watermark', watermarkRouter);
 
 
 /* ====================== 5) Health check ====================== */
