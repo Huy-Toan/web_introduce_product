@@ -2255,6 +2255,11 @@ uploadImageRouter.post("/", async (c) => {
       return c.json({ error: "Kích thước ảnh không được vượt quá 5MB!" }, 400);
     }
     const urlObj = new URL(c.req.url);
+    const doWatermark = (urlObj.searchParams.get("watermark") ?? "1") !== "0";
+    const pos = (urlObj.searchParams.get("pos") || "br").toLowerCase();
+    const logoWidth = parseInt(urlObj.searchParams.get("logoWidth") || "160", 10);
+    const opacity = clamp01$1(parseFloat(urlObj.searchParams.get("opacity") || "0.95"));
+    const logoPath = urlObj.searchParams.get("logo") || "/itxeasy-logo.png";
     const rawSeoName = formData.get("seoName") || urlObj.searchParams.get("seoName") || (file.name ? file.name.replace(/\.[^.]+$/, "") : "image");
     const baseSlug = toSlug(rawSeoName) || "image";
     const rawFolder = formData.get("folder") || urlObj.searchParams.get("folder") || c.env.R2_PREFIX || "";
@@ -2279,13 +2284,41 @@ uploadImageRouter.post("/", async (c) => {
       }
     }
     const r2 = c.env.IMAGES;
-    await r2.put(key, await file.arrayBuffer(), {
+    const buf = await file.arrayBuffer();
+    await r2.put(key, buf, {
       httpMetadata: {
         contentType: file.type,
         cacheControl: "public, max-age=31536000, immutable",
         contentDisposition: `inline; filename="${key.split("/").pop()}"`
       }
     });
+    let wmKey = null;
+    if (doWatermark && c.env.IMGPROC && c.env.ASSETS) {
+      const assetUrl = new URL(logoPath, c.req.url);
+      const logoRes = await c.env.ASSETS.fetch(new Request(assetUrl.toString(), { method: "GET" }));
+      if (!logoRes.ok || !logoRes.body) {
+        console.warn("Watermark: logo not found in ASSETS:", logoPath);
+      } else {
+        const overlay = c.env.IMGPROC.input(logoRes.body).resize({ width: logoWidth });
+        const anchor = toAnchor$1(pos);
+        const margin = 16;
+        const out = await c.env.IMGPROC.input(buf).draw(overlay, {
+          opacity,
+          ...anchor,
+          top: anchor.top !== void 0 ? margin : void 0,
+          right: anchor.right !== void 0 ? margin : void 0,
+          bottom: anchor.bottom !== void 0 ? margin : void 0,
+          left: anchor.left !== void 0 ? margin : void 0
+        }).output({ format: file.type }).blob();
+        wmKey = withWatermarkKey$1(key);
+        await r2.put(wmKey, out, {
+          httpMetadata: {
+            contentType: file.type,
+            cacheControl: "public, max-age=31536000, immutable"
+          }
+        });
+      }
+    }
     if (!c.env.INTERNAL_R2_URL && !c.env.PUBLIC_R2_URL) {
       return c.json({ error: "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL" }, 500);
     }
@@ -2293,11 +2326,17 @@ uploadImageRouter.post("/", async (c) => {
     const displayBase = (c.env.PUBLIC_R2_URL || storageBase).replace(/\/+$/, "");
     const storageUrl = `${storageBase}/${key}`;
     const displayUrl = `${displayBase}/${key}`;
+    const wmStorageUrl = wmKey ? `${storageBase}/${wmKey}` : null;
+    const wmDisplayUrl = wmKey ? `${displayBase}/${wmKey}` : null;
     return c.json({
       success: true,
+      // Gốc
       image_key: key,
       displayUrl,
-      fileName: key.split("/").pop(),
+      // Watermark (nếu có)
+      wm_key: wmKey || void 0,
+      wm_displayUrl: wmDisplayUrl || void 0,
+      fileName: (wmKey || key).split("/").pop(),
       alt: baseSlug,
       prefix
     });
@@ -2309,6 +2348,27 @@ uploadImageRouter.post("/", async (c) => {
     }, 500);
   }
 });
+function clamp01$1(n) {
+  if (!Number.isFinite(n)) return 0.95;
+  return Math.max(0, Math.min(1, n));
+}
+function toAnchor$1(pos) {
+  switch (pos) {
+    case "tl":
+      return { top: 0, left: 0 };
+    case "tr":
+      return { top: 0, right: 0 };
+    case "bl":
+      return { bottom: 0, left: 0 };
+    case "br":
+    default:
+      return { bottom: 0, right: 0 };
+  }
+}
+function withWatermarkKey$1(k) {
+  const i = k.lastIndexOf(".");
+  return i < 0 ? `${k}-wm` : `${k.slice(0, i)}-wm${k.slice(i)}`;
+}
 function uuidv4() {
   return ("10000000-1000-4000-8000" + -1e11).replace(
     /[018]/g,
