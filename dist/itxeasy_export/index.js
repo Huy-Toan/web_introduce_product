@@ -34399,13 +34399,16 @@ async function getColumnSet(db, table) {
 function maybeAddColumn(stmts, colsSet, table, colSql) {
   const colName = colSql.split(/\s+/)[0].replace(/"/g, "");
   if (!colsSet.has(colName)) {
-    stmts.push(
-      {
-        sql: `ALTER TABLE ${table} ADD COLUMN ${colSql};`,
-        args: []
-      }
-    );
+    stmts.push({ sql: `ALTER TABLE ${table} ADD COLUMN ${colSql};`, args: [] });
   }
+}
+async function hasTable(db, table) {
+  const rs = await db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?1;`).bind(table).all();
+  return !!(rs.results && rs.results.length);
+}
+async function getDDL(db, table) {
+  const rs = await db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name=?1;`).bind(table).all();
+  return rs.results?.[0]?.sql ?? null;
 }
 migrate0012.post("/migrations/0012/apply", async (c) => {
   try {
@@ -34423,17 +34426,19 @@ migrate0012.post("/migrations/0012/apply", async (c) => {
         args: []
       });
     }
-    const backfillSQL = `
-      UPDATE products
-      SET images_json = json(
-        '[{"url":' || quote(image_url) || ',"is_primary":1,"sort_order":0}]'
-      )
-      WHERE
-        (images_json IS NULL OR trim(images_json) = '')
-        AND image_url IS NOT NULL
-        AND trim(image_url) <> '';
-    `;
-    statements.push({ sql: backfillSQL, args: [] });
+    statements.push({
+      sql: `
+        UPDATE products
+        SET images_json = json(
+          '[{"url":' || quote(image_url) || ',"is_primary":1,"sort_order":0}]'
+        )
+        WHERE
+          (images_json IS NULL OR trim(images_json) = '')
+          AND image_url IS NOT NULL
+          AND trim(image_url) <> '';
+      `,
+      args: []
+    });
     statements.push({ sql: `DROP TRIGGER IF EXISTS products_updated_at;`, args: [] });
     statements.push({
       sql: `CREATE TRIGGER products_updated_at
@@ -34445,7 +34450,16 @@ migrate0012.post("/migrations/0012/apply", async (c) => {
       args: []
     });
     if (statements.length === 0) {
-      return c.json({ ok: true, message: "Nothing to apply (already up-to-date)." });
+      const schemaProducts2 = await c.env.DB.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='products';`).all();
+      const schemaNews2 = await c.env.DB.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='news';`).all();
+      return c.json({
+        ok: true,
+        message: "Nothing to apply (already up-to-date).",
+        schemas: {
+          products: schemaProducts2.results?.[0]?.sql ?? null,
+          news: schemaNews2.results?.[0]?.sql ?? null
+        }
+      });
     }
     const prepared = statements.map((s) => c.env.DB.prepare(s.sql));
     await c.env.DB.batch(prepared);
@@ -34453,7 +34467,7 @@ migrate0012.post("/migrations/0012/apply", async (c) => {
     const schemaNews = await c.env.DB.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='news';`).all();
     return c.json({
       ok: true,
-      message: "Migration 0012 applied successfully",
+      message: "Migration 0012 (products/news) applied successfully",
       executed: statements.map((s) => s.sql.trim()),
       schemas: {
         products: schemaProducts.results?.[0]?.sql ?? null,
@@ -34461,7 +34475,7 @@ migrate0012.post("/migrations/0012/apply", async (c) => {
       }
     });
   } catch (err) {
-    console.error("migration 0012 error:", err);
+    console.error("migration 0012 apply error:", err);
     return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
   }
 });
@@ -34480,6 +34494,52 @@ migrate0012.get("/migrations/0012/preview", async (c) => {
     plan.push(`DROP TRIGGER IF EXISTS products_updated_at;`);
     plan.push(`CREATE TRIGGER products_updated_at AFTER UPDATE ON products FOR EACH ROW BEGIN UPDATE products SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id; END;`);
     return c.json({ ok: true, plan });
+  } catch (err) {
+    return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
+  }
+});
+const ABOUT_US_SQL = 'CREATE TABLE about_us (  id INTEGER PRIMARY KEY AUTOINCREMENT,  title VARCHAR(255) NOT NULL,  "content" TEXT NOT NULL,  image_url VARCHAR(255),  created_at TEXT DEFAULT (CURRENT_TIMESTAMP));';
+async function createAboutUsPlan(db) {
+  const exists = await hasTable(db, "about_us");
+  const plan = [];
+  if (exists) plan.push("DROP TABLE IF EXISTS about_us;");
+  plan.push(ABOUT_US_SQL);
+  return { exists, plan };
+}
+async function applyAboutUs(db) {
+  const exists = await hasTable(db, "about_us");
+  if (exists) {
+    await db.prepare("DROP TABLE IF EXISTS about_us;").run();
+  }
+  await db.prepare(ABOUT_US_SQL).run();
+  const schema = await getDDL(db, "about_us");
+  return { created: true, schema, dropped: exists };
+}
+migrate0012.get("/migrations/0012/preview-about-us", async (c) => {
+  if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
+  const { exists, plan } = await createAboutUsPlan(c.env.DB);
+  return c.json({ ok: true, table: "about_us", already_exists: exists, plan });
+});
+migrate0012.post("/migrations/0012/apply-about-us", async (c) => {
+  try {
+    if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
+    const { created, schema, dropped } = await applyAboutUs(c.env.DB);
+    return c.json({
+      ok: true,
+      message: dropped ? "about_us dropped and re-created" : "about_us created",
+      schema
+    });
+  } catch (err) {
+    console.error("apply-about-us error:", err);
+    return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
+  }
+});
+migrate0012.get("/migrations/0012/check-about-us", async (c) => {
+  try {
+    if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
+    const exists = await hasTable(c.env.DB, "about_us");
+    const ddl = exists ? await getDDL(c.env.DB, "about_us") : null;
+    return c.json({ ok: true, table_exists: exists, ddl });
   } catch (err) {
     return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
   }
@@ -34531,7 +34591,6 @@ migrate0012.get("/migrations/0012/check", async (c) => {
         trigger_products_updated_at_exists: Boolean(triggerSql)
       },
       debug: {
-        // giúp bạn nhìn nhanh
         products_columns: prodCols.results,
         news_columns: newsCols.results,
         products_trigger_sql: triggerSql
