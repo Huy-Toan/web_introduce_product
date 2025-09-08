@@ -89,7 +89,7 @@ function ZoomableImage({ src, alt, onPrev, onNext, onOpenLightbox }) {
           backgroundImage: `url(${src})`,
           backgroundRepeat: "no-repeat",
           backgroundPosition: zoomOn ? bgPos : "center",
-          backgroundSize: zoomOn ? "200%" : "contain",
+          backgroundSize: zoomOn ? "200%" : "cover",
           transition: "background-size 150ms ease",
         }}
         onMouseEnter={() => setZoomOn(true)}
@@ -146,8 +146,7 @@ function ZoomableImage({ src, alt, onPrev, onNext, onOpenLightbox }) {
     </div>
   );
 }
-
-/* ================= Lightbox toàn màn hình ================= */
+/* ================= Lightbox toàn màn hình (đồng nhất kích thước) ================= */
 function Lightbox({ open, images, index, onClose, onPrev, onNext, title }) {
   const overlayRef = useRef(null);
 
@@ -210,7 +209,7 @@ function Lightbox({ open, images, index, onClose, onPrev, onNext, title }) {
       {imgs.length > 1 && (
         <>
           <button
-            onClick={onPrev}
+            onClick={(e) => { e.stopPropagation(); onPrev?.(); }}
             className="absolute left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 hover:bg-white text-2xl flex items-center justify-center"
             aria-label="Previous"
             title="Previous"
@@ -218,7 +217,7 @@ function Lightbox({ open, images, index, onClose, onPrev, onNext, title }) {
             ‹
           </button>
           <button
-            onClick={onNext}
+            onClick={(e) => { e.stopPropagation(); onNext?.(); }}
             className="absolute right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/90 hover:bg-white text-2xl flex items-center justify-center"
             aria-label="Next"
             title="Next"
@@ -228,19 +227,23 @@ function Lightbox({ open, images, index, onClose, onPrev, onNext, title }) {
         </>
       )}
 
-      {/* Ảnh */}
-      <figure className="max-w-[95vw] max-h-[85vh]">
+      {/* Ảnh trong khung đồng nhất (vuông) */}
+      <div className="w-[min(90vw,90vh)] h-[min(90vw,90vh)] bg-white rounded-xl shadow-xl overflow-hidden flex items-center justify-center">
         <img
           src={src || "/banner.jpg"}
           alt={title || "image"}
-          className="max-h-[85vh] max-w-[95vw] object-contain"
+          className="w-full h-full"
+          loading="eager"
+          onError={(e) => (e.currentTarget.src = "/banner.jpg")}
         />
-        {!!title && (
-          <figcaption className="mt-2 text-center text-white/80 text-sm line-clamp-1">
-            {title}
-          </figcaption>
-        )}
-      </figure>
+      </div>
+
+      {/* Caption ở dưới, căn giữa */}
+      {!!title && (
+        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 text-white/85 text-sm px-3 py-1">
+          {title}
+        </div>
+      )}
 
       {/* Counter */}
       {imgs.length > 1 && (
@@ -251,6 +254,7 @@ function Lightbox({ open, images, index, onClose, onPrev, onNext, title }) {
     </div>
   );
 }
+
 
 /* ======================= Page ======================= */
 export default function ProductDetailPage() {
