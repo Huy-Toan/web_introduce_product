@@ -1,6 +1,56 @@
-# Hướng dẫn Deploy dự án lên Cloudflare thông qua GitHub
+# AllXone
 
-## Yêu cầu trước khi bắt đầu
+Ứng dụng web toàn stack được xây dựng bằng React, Cloudflare Workers, D1 SQLite và R2
+lưu trữ. Dự án giúp bạn triển khai một thư viện trực tuyến nhỏ với khả năng quản lý nội dung,
+lưu trữ hình ảnh và các tiện ích mở rộng khác.
+
+## Tổng quan dự án
+
+- **Công nghệ chính**: React, Vite, Cloudflare Workers, D1, R2, TailwindCSS
+- **Mục đích**: cung cấp mẫu dự án để triển khai nhanh một ứng dụng fullstack trên hạ tầng Cloudflare
+- **Cấu trúc thư mục**:
+  - `src/` – mã nguồn phía client và server
+  - `functions/` – các Cloudflare Worker functions
+  - `migrations/` – các tệp migration cho D1
+  - `public/` – tài nguyên tĩnh
+
+## Chạy và phát triển local
+
+```bash
+npm install         # cài đặt phụ thuộc
+npm run dev         # chạy môi trường phát triển
+npm run lint        # kiểm tra lint trước khi commit
+```
+
+## Biến môi trường
+
+Tạo file `.env` và thiết lập các biến sau:
+
+| Tên biến | Mô tả |
+| --- | --- |
+| `VITE_WA_PHONE` | Số điện thoại dùng cho liên hệ qua WhatsApp |
+| `VITE_WA_BASEMSG` | Tin nhắn mặc định khi mở WhatsApp |
+| `VITE_WA_UTM` | Chuỗi UTM đính kèm khi gửi tin |
+| `VITE_API_BASE_URL` | URL API backend |
+| `RESEND_API_KEY` | API key của dịch vụ Resend |
+| `FROM_EMAIL` | Địa chỉ email gửi đi |
+| `CONTACT_TO` | Địa chỉ email nhận liên hệ |
+| `BRAND_NAME` | Tên thương hiệu hiển thị trong email |
+| `VITE_GA4_ID` | Mã đo lường Google Analytics 4 |
+| `VITE_GA_ALLOWED_HOSTS` | Danh sách host được phép gửi dữ liệu GA4 |
+
+Khi triển khai lên Cloudflare, cần thêm các secrets như `CLOUDFLARE_ACCOUNT_ID`,
+`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` và `PUBLIC_R2_URL` trong phần
+Environment Variables của Pages.
+
+## Tài liệu
+
+- [Tài liệu yêu cầu (SRS)](docs/SRS.md)
+- [Thiết kế hệ thống](docs/SYSTEM_DESIGN.md)
+
+## Hướng dẫn Deploy dự án lên Cloudflare thông qua GitHub
+
+### Yêu cầu trước khi bắt đầu
 
 - Tài khoản GitHub
 - Tài khoản Cloudflare (miễn phí)
