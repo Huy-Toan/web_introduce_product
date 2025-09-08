@@ -51,6 +51,7 @@ LOGO_KEY = "itxeasy-logo.png"
 WM_POS = "tr"          # tl|tr|bl|br
 WM_LOGO_WIDTH = "180"  # px
 WM_OPACITY = "0.95"    # 0..1
+GOOGLE_CLIENT_EMAIL="ga4-reporter@itxeasy.iam.gserviceaccount.com"
 
 upload_source_maps = true
 
