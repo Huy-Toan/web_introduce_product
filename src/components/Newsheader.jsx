@@ -1,18 +1,28 @@
-import { useT } from "../context/TContext";
-
-export const NewsHeaderBanner = () => {
-  const { t } = useT();
-
+function NewsHeaderBanner() {
   return (
-    <section className="bg-gradient-to-r from-blue-200 to-blue-800 text-white py-12">
-      <div className="container mx-auto px-4 text-center">
-        <h1 className="text-4xl md:text-5xl font-bold mb-4">
-          {t("news_header.title")}
-        </h1>
-        <p className="text-xl text-blue-100 max-w-2xl mx-auto">
-          {t("news_header.subtitle")}
-        </p>
+    <div className="relative h-48 md:h-80 bg-gradient-to-r from-gray-900 to-gray-800 overflow-hidden">
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{
+          backgroundImage: "url('/news.jpg')",
+        }}
+      >
       </div>
-    </section>
+
+      {/* Content */}
+      <div className="relative z-10 flex items-center justify-center h-full">
+        <div className="text-center text-white px-4">
+          <h1 className="text-4xl md:text-6xl font-bold mb-4 tracking-wider !text-white">
+            NEWS
+          </h1>
+        </div>
+      </div>
+
+      {/* Decorative Elements */}
+      <div className="absolute top-4 right-4 w-16 h-16 border-2 border-yellow-400 opacity-20 rotate-45"></div>
+      <div className="absolute bottom-4 left-4 w-12 h-12 border-2 border-yellow-400 opacity-20 rotate-12"></div>
+    </div>
   );
-};
+}
+
+export default NewsHeaderBanner;

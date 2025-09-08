@@ -5,7 +5,7 @@ import TopNavigation from "../components/Navigation";
 import { getSiteOrigin, getCanonicalBase } from "../lib/siteUrl";
 import Footer from "../components/Footer";
 import { NewsCard } from "../components/NewsCard";
-import { NewsHeaderBanner } from "../components/Newsheader";
+import NewsHeaderBanner from "../components/Newsheader";
 import Breadcrumbs from "../components/Breadcrumbs";
 import SEO, { stripMd } from "../components/SEOhead";
 

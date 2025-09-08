@@ -6,8 +6,8 @@ const FieldCard = ({ field, onEdit, onDelete }) => {
 
       {/* Ảnh bên trái */}
         <img
-        src={field.image_url}
-        className="w-48 h-full object-contain bg-gray-100 flex-shrink-0"
+        src={field.image_url || "/banner.jpg"}
+        className="w-70 self-stretch object-cover bg-gray-100 flex-shrink-0"
         onError={(e) => {
             e.target.src = '/banner.jpg';
         }}

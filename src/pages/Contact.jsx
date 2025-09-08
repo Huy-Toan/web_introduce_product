@@ -24,7 +24,7 @@ function ContactPage() {
 
   /* =================== SEO cho Contact =================== */
   const SITE_URL = getSiteOrigin();
-  const BRAND = import.meta.env.VITE_BRAND_NAME || "ALLXONE";
+  const BRAND = import.meta.env.VITE_BRAND_NAME || "ITXEASY";
     const canonical = `${getCanonicalBase()}/contact`;
 
   const pageTitle = `Contact | ${BRAND}`;
@@ -183,14 +183,14 @@ function ContactPage() {
           {/* Bản đồ */}
           <div className="w-full h-[550px]">
             <iframe
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d4868.086271788683!2d106.70651917591793!3d10.814179189336869!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x317528971c1abe1f%3A0x41b605213a5e13c3!2zMTQwIMSQLiBOZ3V54buFbiBYw60sIFBoxrDhu51uZyAyNiwgQsOsbmggVGjhuqFuaCwgSOG7kyBDaMOtIE1pbmgsIFZp4buHdCBOYW0!5e1!3m2!1svi!2s!4v1755280383031!5m2!1svi!2s"
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3765.875847108454!2d106.70612387485751!3d10.814355389336745!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31752896e1d6ab59%3A0x5e91fd18b31c2a94!2zMTUwIMSQLiBOZ3V54buFbiBYw60sIFBoxrDhu51uZyAyNiwgQsOsbmggVGjhuqFuaCwgSOG7kyBDaMOtIE1pbmggNzAwMDAwLCBWaeG7h3QgTmFt!5e1!3m2!1svi!2s!4v1757319100387!5m2!1svi!2s"
               width="100%"
               height="100%"
               allowFullScreen=""
               loading="lazy"
               referrerPolicy="no-referrer-when-downgrade"
               className="rounded-md border border-gray-300"
-              title="ALLXONE Location"
+              title="ITXEASY Location"
             />
           </div>
 
@@ -201,7 +201,7 @@ function ContactPage() {
               <p>
                 <strong>Company:</strong> {BRAND}
               </p>
-              <p>140 Nguyen Xi Street, Binh Thanh District, Ho Chi Minh City, Vietnam</p>
+              <p>150 Nguyen Xi Street, Binh Thanh District, Ho Chi Minh City, Vietnam</p>
               <p>
                 <strong>Mobile phone / Whatsapp:</strong> +84 7755 68646
               </p>

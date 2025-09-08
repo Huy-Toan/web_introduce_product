@@ -1,6 +1,7 @@
 import { Menu, X, Globe2, ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import ReactCountryFlag from "react-country-flag";
 import { useT } from "../context/TContext";
 
 const SUPPORTED = ["vi", "en"];
@@ -107,7 +108,7 @@ function TopNavigation() {
                                     key={page}
                                     onClick={() => handlePageNavigation(page)}
                                     className={`px-3 py-2 rounded-md text-lg font-medium transition-colors cursor-pointer
-                  hover:underline hover:underline-offset-4 hover:decoration-2 ${transparentNav
+                                    hover:underline hover:underline-offset-4 hover:decoration-2 ${transparentNav
                                             ? (active ? "text-white" : "text-white")
                                             : (active
                                                 ? "text-blue-700 bg-blue-50"
@@ -123,12 +124,13 @@ function TopNavigation() {
                         <div className="relative">
                             <button
                                 onClick={() => setOpenLang((s) => !s)}
-                                className={`inline-flex items-center gap-2 px-3 py-2 rounded-md border
-                  ${transparentNav ? "text-white border-white/40 hover:bg-white/10" : "text-gray-700 border-gray-200 hover:bg-gray-50"}`}
+                                className={`cursor-pointer inline-flex items-center gap-2 px-3 py-2 rounded-md border
+                                ${transparentNav ? "text-white border-white/40 hover:bg-white/10" : "text-gray-700 border-gray-200 hover:bg-gray-50"}`}
                                 aria-haspopup="listbox"
                                 aria-expanded={openLang}
                             >
-                                <Globe2 className="w-4 h-4" />
+                                <Globe2 className="w-5 h-5 text-blue-600" />
+
                                 <span className="uppercase">{locale}</span>
                                 <ChevronDown className="w-4 h-4" />
                             </button>
@@ -137,24 +139,35 @@ function TopNavigation() {
                                     className="absolute right-0 mt-2 w-36 bg-white border border-gray-200 rounded-md shadow-lg overflow-hidden z-10"
                                     role="listbox"
                                 >
-                                    {SUPPORTED.map((lc) => (
-                                        <li key={lc}>
-                                            <button
-                                                onClick={() => {
-                                                    setOpenLang(false);
-                                                    setLocale(lc);
-                                                    // cập nhật URL hiện tại để mang ?locale mới
-                                                    const url = new URL(window.location.href);
-                                                    url.searchParams.set("locale", lc);
-                                                    navigate(url.pathname + url.search, { replace: true });
-                                                }}
-                                                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${lc === locale ? "font-medium text-blue-700" : "text-gray-700"}`}
-                                                role="option" aria-selected={lc === locale}
-                                            >
-                                                {lc === "vi" ? t('auto.tieng_viet') : t('auto.tieng_anh')}
-                                            </button>
-                                        </li>
-                                    ))}
+                                {SUPPORTED.map((lc) => (
+                                <li key={lc}>
+                                    <button
+                                    onClick={() => {
+                                        setOpenLang(false);
+                                        setLocale(lc);
+                                        // cập nhật URL hiện tại để mang ?locale mới
+                                        const url = new URL(window.location.href);
+                                        url.searchParams.set("locale", lc);
+                                        navigate(url.pathname + url.search, { replace: true });
+                                    }}
+                                    className={`cursor-pointer w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 ${
+                                        lc === locale ? "font-medium text-blue-700" : "text-gray-700"
+                                    }`}
+                                    role="option"
+                                    aria-selected={lc === locale}
+                                    >
+                                    <ReactCountryFlag
+                                        countryCode={lc === "vi" ? "VN" : "US"}
+                                        svg
+                                        style={{ width: "1.25em", height: "1.25em", borderRadius: "2px" }}
+                                    />
+                                    <span>
+                                        {lc === "vi" ? t("auto.tieng_viet") : t("auto.tieng_anh")}
+                                    </span>
+                                    </button>
+                                </li>
+                                ))}
+
                                 </ul>
                             )}
                         </div>

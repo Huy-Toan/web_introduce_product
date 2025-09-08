@@ -262,163 +262,169 @@ function FieldPage() {
   );
   /* ============================================================ */
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* ⬇️ SEO cho trang What we do */}
-      <SEO
-        title={pageTitle}
-        description={pageDesc}
-        url={canonical}
-        image={ogImage}
-        siteName={BRAND}
-        noindex={noindex}
-        publishedTime={publishedTime}
-        modifiedTime={modifiedTime}
-        keywords={keywords}
-        ogType="website"
-        twitterCard="summary_large_image"
-        jsonLd={[breadcrumbLd, collectionPageLd, servicesLd, certificationsLd, partnersLd]}
-      />
+return (
+  <div className="min-h-screen bg-gray-50">
+    {/* ⬇️ SEO */}
+    <SEO
+      title={pageTitle}
+      description={pageDesc}
+      url={canonical}
+      image={ogImage}
+      siteName={BRAND}
+      noindex={noindex}
+      publishedTime={publishedTime}
+      modifiedTime={modifiedTime}
+      keywords={keywords}
+      ogType="website"
+      twitterCard="summary_large_image"
+      jsonLd={[breadcrumbLd, collectionPageLd, servicesLd, certificationsLd, partnersLd]}
+    />
 
-      <TopNavigation />
-      <Breadcrumbs items={items} className="mt-16" />
-      <FieldHeaderBanner />
+    <TopNavigation />
+    <Breadcrumbs items={items} className="mt-16" />
+    <FieldHeaderBanner />
 
-      {loading ? (
-        <div className="flex justify-center items-center py-20">
-          <div className="h-10 w-10 border-2 border-blue-800 border-t-transparent rounded-full animate-spin" />
-        </div>
-      ) : (
-        <main className="bg-white">
-          {fieldContent.length > 0 ? (
-            fieldContent.map((item) => (
-              <section key={item.id} className="py-12 px-4">
-                <div className="max-w-4xl mx-auto">
-                  {/* Tên */}
-                  <h2 className="text-3xl font-bold text-yellow-600 mb-6">{item.name}</h2>
+    {loading ? (
+      <div className="flex justify-center items-center py-20">
+        <div className="h-10 w-10 border-2 border-blue-800 border-t-transparent rounded-full animate-spin" />
+      </div>
+    ) : (
+      <main className="bg-white">
+        {/* ====== Nội dung lĩnh vực ====== */}
+        {fieldContent.length > 0 ? (
+          fieldContent.map((item) => (
+            <section key={item.id} className="py-12 px-4">
+              <div className="max-w-4xl mx-auto">
+                {/* Tên */}
+                <h2 className="text-3xl font-bold text-yellow-600 mb-6">{item.name}</h2>
 
-                  {/* Nội dung (Markdown) */}
-                  <div className="prose max-w-none prose-p:leading-relaxed text-gray-700">
-                    <MarkdownOnly value={item.content} />
-                  </div>
-
-                  {/* Ảnh */}
-                  {item.image_url && (
-                    <div className="mt-8">
-                      <img
-                        src={item.image_url || "/banner.jpg"}
-                        alt={item.name || "Field image"}
-                        className="w-full max-h-[520px] object-cover rounded-lg shadow"
-                        onError={(e) => {
-                          e.currentTarget.onerror = null;
-                          e.currentTarget.src = "/banner.jpg";
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {/* ====== Cer & Partner ====== */}
-                  <div className="mt-10 space-y-10">
-                    {/* Chứng nhận */}
-                    {(loadingCp || certifications.length > 0) && (
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-xl font-semibold text-gray-900">{t.certifications}</h3>
-                          {!loadingCp && (
-                            <span className="text-sm text-gray-500">
-                              {certifications.length} {t.items}
-                            </span>
-                          )}
-                        </div>
-
-                        {loadingCp ? (
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                            {Array.from({ length: 6 }).map((_, i) => (
-                              <div key={`cert-skeleton-${i}`} className="h-40 rounded-lg bg-gray-100 animate-pulse" />
-                            ))}
-                          </div>
-                        ) : certifications.length > 0 ? (
-                          <>
-                            {/* MOBILE */}
-                            <div className="sm:hidden -mx-4 px-4 overflow-x-auto scroll-smooth snap-x snap-mandatory no-scrollbar">
-                              <div className="flex gap-4">
-                                {certifications.map((cp) => (
-                                  <div key={`cert-${cp.id}`} className="snap-center shrink-0 w-[92vw]">
-                                    <CerPartnerLogoCard item={cp} t={t} />
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                            {/* DESKTOP */}
-                            <div className="hidden sm:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                              {certifications.map((cp) => (
-                                <CerPartnerLogoCard key={`cert-grid-${cp.id}`} item={cp} t={t} />
-                              ))}
-                            </div>
-                          </>
-                        ) : (
-                          <p className="text-gray-500 text-sm">{t.noCerts}</p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Đối tác */}
-                    {(loadingCp || partners.length > 0) && (
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-xl font-semibold text-gray-900">{t.partners}</h3>
-                          {!loadingCp && (
-                            <span className="text-sm text-gray-500">
-                              {partners.length} {t.items}
-                            </span>
-                          )}
-                        </div>
-
-                        {loadingCp ? (
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                            {Array.from({ length: 6 }).map((_, i) => (
-                              <div key={`partner-skeleton-${i}`} className="h-40 rounded-lg bg-gray-100 animate-pulse" />
-                            ))}
-                          </div>
-                        ) : partners.length > 0 ? (
-                          <>
-                            {/* MOBILE */}
-                            <div className="sm:hidden -mx-4 px-4 overflow-x-auto scroll-smooth snap-x snap-mandatory no-scrollbar">
-                              <div className="flex gap-4">
-                                {partners.map((cp) => (
-                                  <div key={`partner-${cp.id}`} className="snap-center shrink-0 w-[92vw]">
-                                    <CerPartnerLogoCard item={cp} t={t} />
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                            {/* DESKTOP */}
-                            <div className="hidden sm:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                              {partners.map((cp) => (
-                                <CerPartnerLogoCard key={`partner-grid-${cp.id}`} item={cp} t={t} />
-                              ))}
-                            </div>
-                          </>
-                        ) : (
-                          <p className="text-gray-500 text-sm">{t.noPartners}</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                {/* Nội dung (Markdown) */}
+                <div className="prose max-w-none prose-p:leading-relaxed text-gray-700">
+                  <MarkdownOnly value={item.content} />
                 </div>
-              </section>
-            ))
-          ) : (
-            <div className="text-center py-20 text-gray-500">
-              <p>{t.empty}</p>
-            </div>
-          )}
-        </main>
-      )}
 
-      <Footer />
-    </div>
-  );
+                {/* Ảnh */}
+                {item.image_url && (
+                  <div className="mt-8">
+                    <img
+                      src={item.image_url || "/banner.jpg"}
+                      alt={item.name || "Field image"}
+                      className="w-full max-h-[520px] object-cover rounded-lg shadow"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = "/banner.jpg";
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </section>
+          ))
+        ) : (
+          <div className="text-center py-20 text-gray-500">
+            <p>{t.empty}</p>
+          </div>
+        )}
+
+        {/* ====== DỜI CỤM CHỨNG NHẬN / ĐỐI TÁC XUỐNG CUỐI TRANG ====== */}
+        {(loadingCp || certifications.length > 0 || partners.length > 0) && (
+          <section className="py-12 px-4">
+            <div className="max-w-4xl mx-auto space-y-10">
+              {/* Chứng nhận */}
+              {(loadingCp || certifications.length > 0) && (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-semibold text-gray-900">{t.certifications}</h3>
+                    {!loadingCp && (
+                      <span className="text-sm text-gray-500">
+                        {certifications.length} {t.items}
+                      </span>
+                    )}
+                  </div>
+
+                  {loadingCp ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={`cert-skeleton-${i}`} className="h-40 rounded-lg bg-gray-100 animate-pulse" />
+                      ))}
+                    </div>
+                  ) : certifications.length > 0 ? (
+                    <>
+                      {/* MOBILE */}
+                      <div className="sm:hidden -mx-4 px-4 overflow-x-auto scroll-smooth snap-x snap-mandatory no-scrollbar">
+                        <div className="flex gap-4">
+                          {certifications.map((cp) => (
+                            <div key={`cert-${cp.id}`} className="snap-center shrink-0 w-[92vw]">
+                              <CerPartnerLogoCard item={cp} t={t} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      {/* DESKTOP */}
+                      <div className="hidden sm:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {certifications.map((cp) => (
+                          <CerPartnerLogoCard key={`cert-grid-${cp.id}`} item={cp} t={t} />
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-gray-500 text-sm">{t.noCerts}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Đối tác */}
+              {(loadingCp || partners.length > 0) && (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-semibold text-gray-900">{t.partners}</h3>
+                    {!loadingCp && (
+                      <span className="text-sm text-gray-500">
+                        {partners.length} {t.items}
+                      </span>
+                    )}
+                  </div>
+
+                  {loadingCp ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={`partner-skeleton-${i}`} className="h-40 rounded-lg bg-gray-100 animate-pulse" />
+                      ))}
+                    </div>
+                  ) : partners.length > 0 ? (
+                    <>
+                      {/* MOBILE */}
+                      <div className="sm:hidden -mx-4 px-4 overflow-x-auto scroll-smooth snap-x snap-mandatory no-scrollbar">
+                        <div className="flex gap-4">
+                          {partners.map((cp) => (
+                            <div key={`partner-${cp.id}`} className="snap-center shrink-0 w-[92vw]">
+                              <CerPartnerLogoCard item={cp} t={t} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      {/* DESKTOP */}
+                      <div className="hidden sm:grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {partners.map((cp) => (
+                          <CerPartnerLogoCard key={`partner-grid-${cp.id}`} item={cp} t={t} />
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-gray-500 text-sm">{t.noPartners}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+      </main>
+    )}
+
+    <Footer />
+  </div>
+);
+
 }
 
 export default FieldPage;

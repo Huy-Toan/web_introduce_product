@@ -22,12 +22,7 @@ function getInitialLocale() {
   return SUPPORTED.includes(urlLc) ? urlLc : (SUPPORTED.includes(lsLc) ? lsLc : DEFAULT_LOCALE);
 }
 
-/** Cover helper — ƯU TIÊN field mới từ BE:
- *  1) cover_image (URL tuyệt đối từ BE)
- *  2) images[0] (URL tuyệt đối từ BE)
- *  3) image_url (giữ tương thích cũ nếu BE đã build tuyệt đối)
- *  4) images_json cũ (nếu còn)
- */
+
 // Helper: lấy ảnh cover an toàn từ mọi dạng dữ liệu
 function coverFromProduct(p) {
   // 1) ưu tiên cover_image (BE đã chuẩn hoá)

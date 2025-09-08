@@ -133,7 +133,7 @@ function SidebarCategoriesTwoLevel({
             return (
               <li key={pid} className="rounded-md">
                 {/* Hàng cấp 1 */}
-                <div className="flex items-stretch gap-1 min-w-0">
+                <div className="flex items-stretch min-w-0">
                   <button
                     onClick={() => goParent(parent)}
                     className={`flex-1 min-w-0 text-left px-3 py-2 cursor-pointer rounded-md hover:bg-green-100 uppercase tracking-wide
@@ -141,20 +141,22 @@ function SidebarCategoriesTwoLevel({
                     `}
                     title={parent.name}
                   >
-                    <span className="block w-[180px] md:w-[220px] whitespace-normal break-words leading-tight">
+                    <span className="block truncate whitespace-normal break-words leading-tight">
                       {parent.name}
                     </span>
                   </button>
 
                   <button
                     onClick={() => toggleParent(parent)}
-                    className="shrink-0 w-8 h-8 flex items-center cursor-pointer justify-center rounded-md hover:bg-gray-100"
+                    className="shrink-0 w-8 h-8 flex items-center justify-center cursor-pointer rounded-md hover:bg-gray-100"
                     aria-label={isOpen ? "Thu gọn" : "Mở rộng"}
                     title={isOpen ? "Thu gọn" : "Mở rộng"}
                   >
                     {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                   </button>
                 </div>
+
+
 
                 {/* Danh sách cấp 2 */}
                 {isOpen && (

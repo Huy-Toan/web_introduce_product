@@ -22,11 +22,11 @@ function pickLocale(propLocale, search) {
 const DEFAULTS = {
   vi: [
     { id: "def-vi-1", content: "NÔNG SẢN VIỆT CHẤT LƯỢNG CAO", image_url: "/banner.jpg" },
-    { id: "def-vi-2", content: "XUẤT KHẨU TOÀN CẦU • CHUẨN CHẤT LƯỢNG", image_url: "/banner_header.jpg" },
+    { id: "def-vi-2", content: "XUẤT KHẨU TOÀN CẦU • CHUẨN CHẤT LƯỢNG", image_url: "/banner3.jpg" },
   ],
   en: [
     { id: "def-en-1", content: "PREMIUM VIETNAMESE FRUITS", image_url: "/banner.jpg" },
-    { id: "def-en-2", content: "GLOBAL EXPORT • QUALITY FIRST", image_url: "/banner_header.jpg" },
+    { id: "def-en-2", content: "GLOBAL EXPORT • QUALITY FIRST", image_url: "/banner3.jpg" },
   ],
 };
 
@@ -187,14 +187,14 @@ export default function Banner({ locale: localeProp }) {
           <button
             aria-label="Prev"
             onClick={() => { setPaused(true); prev(); }}
-            className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full hover:bg-black/60 backdrop-blur text-white items-center justify-center"
+            className="cursor-pointer hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full hover:bg-black/60 backdrop-blur text-white items-center justify-center"
           >
             <ChevronLeft />
           </button>
           <button
             aria-label="Next"
             onClick={() => { setPaused(true); next(); }}
-            className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-black/40 hover:bg-black/60 backdrop-blur text-white items-center justify-center"
+            className="cursor-pointer hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full hover:bg-black/60 backdrop-blur text-white items-center justify-center"
           >
             <ChevronRight />
           </button>
@@ -244,7 +244,7 @@ function Slide({ banner }) {
       style={{ backgroundImage: bg }}
     >
       {/* overlay gradient để nội dung nổi hơn */}
-      <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/20 to-black/40" />
+      <div className="absolute inset-0 bg-gradient-to-b" />
     </div>
   );
 }

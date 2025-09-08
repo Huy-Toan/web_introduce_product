@@ -25,12 +25,21 @@ import { jwtVerify } from "jose";
 import { getCookie } from "hono/cookie";
 import { adminCreateTable } from "./routes/createtable.js";
 import { dinoMigrate } from "./routes/dino_migrate.js";
+
 const enc = new TextEncoder();
 const getKey = (secret) => enc.encode(secret);
 
 const GRAPH = "https://graph.facebook.com/v20.0";
 const app = new Hono();
 
+import { homeSSR } from "./routes/ssr/home.js";
+import { contactSSR } from "./routes/ssr/contact.js";
+import { whatWeDoSSR } from "./routes/ssr/whatwedo.js";
+import { aboutSSR } from "./routes/ssr/about.js";
+import { newsListSSR } from "./routes/ssr/newsList.js";
+import { productsListSSR } from "./routes/ssr/productsList.js";
+import { productDetailSSR } from "./routes/ssr/product-detail.js";
+import { newsDetailSSR } from "./routes/ssr/news-detail.js";
 /* ================ 0) Middleware kiểm tra D1 & CORS ================ */
 app.use("*", async (c, next) => {
   try {
@@ -308,6 +317,46 @@ app.get("/wa/history", async (c) => {
   );
 });
 
+// ========================= 4b) SSR SEO cho /about =========================
+["GET", "HEAD"].forEach((m) => {
+  app.on(m, "/", homeSSR);
+  app.on(m, "/home", homeSSR);
+});
+app.get("/contact", contactSSR);
+app.get("/what_we_do", whatWeDoSSR);
+app.get("/about", aboutSSR);
+app.get("/news", newsListSSR);
+app.get("/news/news-detail/:slug", newsDetailSSR);
+app.get("/news/news-detail", (c) => {
+  const u = new URL(c.req.url);
+  return c.redirect(`/news${u.search}`, 301);
+});
+
+// Products list (3 pattern)
+app.get("/product", productsListSSR);
+app.get("/product/product-detail/:idOrSlug", productDetailSSR);
+app.get("/product/product-detail", (c) => {
+  const u = new URL(c.req.url);
+  return c.redirect(`/product${u.search}`, 301);
+});
+app.get("/product/:parent", productsListSSR);
+app.get("/product/:parent/:sub", productsListSSR);
+
+app.get("/__raw", async (c) => {
+  const url = new URL(c.req.url);
+  const res = await c.env.ASSETS.fetch(new Request(url.origin + "/", { method: "GET" }));
+  const headers = new Headers(res.headers);
+  headers.set("cache-control","no-store");
+  return new Response(await res.text(), { headers, status: 200 });
+});
+
+app.get("/__source", async (c) => {
+  const r = await homeSSR(c);
+  const h = new Headers(r.headers);
+  h.set("cache-control","no-store");
+  return new Response(await r.text(), { headers: h, status: 200 });
+});
+
 // ======== Admin page guard and redirects ========
 const verifyAdmin = async (c) => {
   const token = getCookie(c, "token");
@@ -328,12 +377,13 @@ const verifyAdmin = async (c) => {
 };
 
 const serveAdminLogin = async (c) => {
-  const user = await verifyAdmin(c);
-  if (user) return c.redirect("/admin/dashboard", 302);
-  const res = await c.env.ASSETS.fetch(c.req.raw);
-  const headers = new Headers(res.headers);
-  headers.set("Cache-Control", "no-store");
-  return new Response(res.body, { ...res, headers });
+    const user = await verifyAdmin(c);
+    if (user) return c.redirect("/admin/dashboard", 302);
+    const url = new URL(c.req.url);
+    const res = await c.env.ASSETS.fetch(new Request(url.origin + "/", { headers: c.req.headers })); 
+    const headers = new Headers(res.headers);
+    headers.set("Cache-Control", "no-store");
+    return new Response(res.body, { ...res, headers });
 };
 
 app.get("/admin/login", serveAdminLogin);
@@ -352,11 +402,13 @@ app.route("/admin/api", adminRouter);
 
 // Catch-all cho trang admin SPA (chỉ chặn GET)
 app.get("/admin/*", async (c) => {
-  if (c.req.path.startsWith("/admin/api")) return c.notFound();
-  const user = await verifyAdmin(c);
-  if (!user) return c.redirect("/admin/login", 302);
-  // Serve SPA assets for admin pages
-  return c.env.ASSETS.fetch(c.req.raw);
+    if (c.req.path.startsWith("/admin/api")) return c.notFound();
+    const user = await verifyAdmin(c);
+    if (!user) return c.redirect("/admin/login", 302);
+    // Serve SPA assets for admin pages
+    
+    const url = new URL(c.req.url); 
+    return c.env.ASSETS.fetch(new Request(url.origin + "/", { headers: c.req.headers }));
 });
 
 /* ========================= 4) Routers hiện có ========================= */
@@ -392,9 +444,8 @@ app.use("/api/users", requireAdminAuth);
 app.use("/api/users/*", requireAdminAuth);
 app.use("/api/users", requirePerm("users.manage"));
 app.use("/api/users/*", requirePerm("users.manage"));
-
-app.route("/", seoRoot);
-app.route("/sitemaps", sitemaps);
+app.route("/seo", seoRoot);          
+app.route("/sitemaps", sitemaps); 
 
 app.route("/admin", adminCreateTable);
 app.route("/put", dinoMigrate);

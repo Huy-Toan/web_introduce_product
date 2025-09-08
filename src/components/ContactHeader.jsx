@@ -1,10 +1,10 @@
 function ContactHeader() {
   return (
-    <div className="relative h-48 md:h-64 bg-gradient-to-r from-gray-900 to-gray-800 overflow-hidden">
+    <div className="relative h-48 md:h-80 bg-gradient-to-r from-gray-900 to-gray-800 overflow-hidden">
       <div 
         className="absolute inset-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: "url('./banner_contact.jpg')",
+          backgroundImage: "url('/contact.jpg')",
         }}
       >
       </div>

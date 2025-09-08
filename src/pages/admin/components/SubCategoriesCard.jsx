@@ -7,9 +7,9 @@ const SubCategoriesCard = ({ subcategories, onEdit, onDelete }) => {
 
       {/* Ảnh bên trái */}
       <img
-        src={subcategories.image_url}
+        src={subcategories.image_url || "/banner.jpg"}
         alt={subcategories.name}
-        className="w-48 h-full object-contain bg-gray-100 flex-shrink-0"
+        className="w-48 self-stretch object-cover bg-gray-100 flex-shrink-0"
         onError={(e) => {
           e.target.src = '/banner.jpg';
         }}

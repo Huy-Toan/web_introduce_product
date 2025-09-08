@@ -53,17 +53,26 @@ const EditorMd = forwardRef(function EditorMd(
 
     (async () => {
       try {
-        await loadCSS('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/codemirror/codemirror.min.css');
+      await loadCSS('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/codemirror/codemirror.min.css');
+
+        // 1) jQuery (bắt buộc)
+        await loadScript('https://cdn.jsdelivr.net/npm/jquery@3.6.4/dist/jquery.min.js');
+
+        // 2) deps
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/marked.min.js');
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/prettify.min.js');
-        await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/languages/en.js');
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/raphael.min.js');
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/underscore.min.js');
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/sequence-diagram.min.js');
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/flowchart.min.js');
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/jquery.flowchart.min.js');
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/lib/codemirror/codemirror.min.js');
+
+        // 3) core
         await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/editormd.min.js');
+
+        // 4) language (PHẢI sau core)
+        await loadScript('https://cdn.jsdelivr.net/npm/editor.md@1.5.0/languages/en.js');
 
         if (cancelled) return;
         if (!window.editormd) throw new Error('window.editormd not found');

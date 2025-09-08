@@ -9,4 +9,7 @@ export default defineConfig({
         { src: 'node_modules/editor.md/lib', dest: 'editor.md' }
       ]
     })],
+    server: {
+    allowedHosts: ['assets'], 
+  },
 });

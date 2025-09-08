@@ -7,7 +7,7 @@ export default function LocaleSwitcherGT() {
     pageLanguage: "vi",
     initialLangs: [
       "vi","en","ja","ko","zh-CN","zh-TW","fr","de","es",
-      "pt","it","nl","ru","ar","hi","id","ms","th","fil","tr"
+      "pt","it","nl","ru","ar","hi","id","ms","th","tr"
     ],
     persistKey: "gt_lang",
     mountId: "google_translate_element",
@@ -72,7 +72,7 @@ export default function LocaleSwitcherGT() {
                       setLang(code);
                       setOpen(false);
                     }}
-                    className={`w-full text-left px-3 py-2 text-sm
+                    className={`w-full text-left px-3 py-2 text-sm cursor-pointer
                                 hover:bg-neutral-200 
                                 ${active ? "bg-neutral-100 dark:bg-neutral-200 font-medium" : ""}`}
                   >

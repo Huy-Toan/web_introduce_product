@@ -5,7 +5,7 @@ const Newscard = ({ news, onEdit, onDelete }) => {
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <img
-        src={news.image_url}
+        src={news.image_url || "/banner.jpg"}
         alt={news.title}
         className="w-full h-48 object-cover"
         onError={(e) => {

@@ -13,9 +13,9 @@ const Cer_PartnerCard = ({ cer_partner, onEdit, onDelete }) => {
     <div className="bg-white rounded-lg shadow flex flex-col md:flex-row w-full overflow-hidden min-h-[180px]">
       {/* Ảnh bên trái */}
       <img
-        src={cer_partner.image_url}
+        src={cer_partner.image_url || "banner.jpg"}
         alt={cer_partner.name}
-        className="w-48 h-full object-contain bg-gray-50 flex-shrink-0"
+        className="w-48 self-stretch object-cover bg-gray-100 flex-shrink-0"
         onError={(e) => {
           e.target.src = "/banner.jpg";
         }}

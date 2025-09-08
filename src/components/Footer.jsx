@@ -245,7 +245,7 @@ export default function Footer() {
       {/* BOTTOM BAR: trắng trong suốt + blur */}
       <div className="relative border-t border-white/60 backdrop-blur bg-white/60">
         <div className="max-w-7xl mx-auto px-4 py-5 text-xs text-gray-600 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>© {new Date().getFullYear()} ALLXONE. {t("footer.rights_reserved", { defaultValue: "Tất cả quyền được bảo lưu." })}</span>
+          <span>© {new Date().getFullYear()} ITXEASY. {t("footer.rights_reserved", { defaultValue: "Tất cả quyền được bảo lưu." })}</span>
           <div className="flex items-center gap-4">
             <button
               onClick={() => handleNavigation("/privacy")}

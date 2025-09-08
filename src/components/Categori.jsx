@@ -65,7 +65,7 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
                     ctaAll: "Xem tất cả sản phẩm",
                     prev: "Trước",
                     next: "Sau",
-                    shop: "Mua ngay",
+                    shop: "Xem ngay",
                 }
                 : {
                     heading: "Product Categories",
@@ -74,7 +74,7 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
                     ctaAll: "Browse all products",
                     prev: "Prev",
                     next: "Next",
-                    shop: "Shop Now",
+                    shop: "See Now",
                 },
         [locale]
     );
@@ -265,7 +265,7 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
 
     // Pastel palette theo ảnh (luân phiên)
     const pastel = ["#EFF5F3", "#E7F3F3", "#E7E7E7", "#F4F5F0", "#ECF7F2"];
-    const pink = "#F26B7C"; // chữ script
+    const green = "green"; 
     const caveatStyle = { fontFamily: "'Caveat', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" };
     const gochiStyle = { fontFamily: "'Gochi Hand', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" };
 
@@ -302,7 +302,7 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
                     {/* Navigation Buttons */}
                     <button
                         onClick={goToPrev}
-                        className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white hover:bg-gray-50 shadow-lg rounded-full p-3 transition-all duration-300 hover:shadow-xl pointer-events-auto"
+                        className="cursor-pointer absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white hover:bg-gray-50 shadow-lg rounded-full p-3 transition-all duration-300 hover:shadow-xl pointer-events-auto"
                         aria-label={t.prev}
                         title={t.prev}
                     >
@@ -311,7 +311,7 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
 
                     <button
                         onClick={goToNext}
-                        className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white hover:bg-gray-50 shadow-lg rounded-full p-3 transition-all duration-300 hover:shadow-xl pointer-events-auto"
+                        className="cursor-pointer absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white hover:bg-gray-50 shadow-lg rounded-full p-3 transition-all duration-300 hover:shadow-xl pointer-events-auto"
                         aria-label={t.next}
                         title={t.next}
                     >
@@ -361,7 +361,7 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
                                             <div className="p-8 md:p-10 lg:p-12 min-h-[220px] flex flex-col justify-between">
                                                 <div>
                                                     <div style={caveatStyle} className="text-2xl md:text-3xl">
-                                                        <span style={{ color: pink }}>
+                                                        <span style={{ color: green }}>
                                                             {locale === "vi" ? "Đặc biệt hôm nay" : "Taste Now"}
                                                         </span>
                                                     </div>
@@ -406,7 +406,7 @@ function ProductCategories({ categories = [], onSelectCategory, locale: localePr
                 <div className="text-center mt-10 md:mt-12">
                     <button
                         onClick={() => navigate(`/product?locale=${locale}`)}
-                        className="bg-gradient-to-r from-yellow-500 to-yellow-600 text-white px-8 py-3 rounded-full font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all duration-300 transform hover:-translate-y-1 shadow-lg hover:shadow-xl"
+                        className="cursor-pointer bg-gradient-to-r from-yellow-500 to-yellow-600 text-white px-8 py-3 rounded-full font-semibold hover:from-yellow-600 hover:to-yellow-700 transition-all duration-300 transform hover:-translate-y-1 shadow-lg hover:shadow-xl"
                     >
                         {t.ctaAll}
                     </button>
