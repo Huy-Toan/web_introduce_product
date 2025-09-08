@@ -20,7 +20,7 @@ Tài liệu này mô tả ngắn gọn các chức năng chính của dự án v
 | `api/routes/upload-image.js` | Tải ảnh lên R2 Storage, trả về URL. |
 | `api/routes/editor-upload.js` | Upload tệp từ trình soạn thảo (WYSIWYG). |
 | `api/routes/translate.js` | Gọi API dịch tự động (Google Gemini) cho nội dung. |
-| `api/routes/seo.js` | Quản lý meta SEO cho từng trang. |
+| `api/routes/seo.js` | Quản lý meta SEO và API tạo nội dung (`/generate-content`, `/generate-seo`). |
 | `api/routes/seo-sitemap.js` | Tạo sitemap động và trả về trang SEO root. |
 | `api/routes/ga4.js` | Ghi sự kiện Google Analytics 4 từ phía server. |
 | `api/routes/watermark.js` | Thêm watermark vào ảnh được gửi lên. |
