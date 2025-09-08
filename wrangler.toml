@@ -24,6 +24,9 @@ database_id = "b199ff5f-d589-480e-ae13-ed842514e70c"
 binding = "IMAGES"
 bucket_name = "react-fullstack-images"
 
+[images]
+binding = "IMGPROC"
+
 [placement]
 mode = "smart"
 
