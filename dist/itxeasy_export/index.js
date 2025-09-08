@@ -2264,35 +2264,8 @@ const EXT_BY_MIME = {
   "image/jpg": "jpg",
   "image/png": "png",
   "image/gif": "gif",
-  "image/webp": "webp",
-  "image/avif": "avif"
+  "image/webp": "webp"
 };
-function clamp01$1(n) {
-  if (!Number.isFinite(n)) return 0.95;
-  return Math.max(0, Math.min(1, n));
-}
-function toAnchor$1(p) {
-  return p === "tl" ? { top: 0, left: 0 } : p === "tr" ? { top: 0, right: 0 } : p === "bl" ? { bottom: 0, left: 0 } : { bottom: 0, right: 0 };
-}
-function withWatermarkKey$1(k) {
-  const i = k.lastIndexOf(".");
-  return i < 0 ? `${k}-wm` : `${k.slice(0, i)}-wm${k.slice(i)}`;
-}
-function mimeFromKeyOrType(nameOrMime = "image/jpeg") {
-  const s = String(nameOrMime).toLowerCase();
-  const m1 = s.match(/\.(jpe?g|png|webp|avif|gif)$/)?.[1];
-  if (m1 === "jpg" || m1 === "jpeg") return "image/jpeg";
-  if (m1 === "png") return "image/png";
-  if (m1 === "webp") return "image/webp";
-  if (m1 === "avif") return "image/avif";
-  if (m1 === "gif") return "image/gif";
-  if (s.includes("jpeg")) return "image/jpeg";
-  if (s.includes("png")) return "image/png";
-  if (s.includes("webp")) return "image/webp";
-  if (s.includes("avif")) return "image/avif";
-  if (s.includes("gif")) return "image/gif";
-  return "image/jpeg";
-}
 const uploadImageRouter = new Hono2();
 uploadImageRouter.post("/", async (c) => {
   try {
@@ -2304,10 +2277,14 @@ uploadImageRouter.post("/", async (c) => {
     const allowedTypes = Object.keys(EXT_BY_MIME);
     if (!allowedTypes.includes(file.type)) {
 <<<<<<< HEAD
+<<<<<<< HEAD
       return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP)" }, 400);
 =======
       return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP, AVIF)" }, 400);
 >>>>>>> c3e4c54 (update admin)
+=======
+      return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP)" }, 400);
+>>>>>>> f350d3f (update category)
     }
     if (file.size > 5 * 1024 * 1024) {
       return c.json({ error: "Kích thước ảnh không được vượt quá 5MB!" }, 400);
@@ -2338,17 +2315,22 @@ uploadImageRouter.post("/", async (c) => {
     }
     const r2 = c.env.IMAGES;
 <<<<<<< HEAD
+<<<<<<< HEAD
     await r2.put(key, await file.arrayBuffer(), {
 =======
     const arrBuf = await file.arrayBuffer();
     await r2.put(key, arrBuf, {
 >>>>>>> c3e4c54 (update admin)
+=======
+    await r2.put(key, await file.arrayBuffer(), {
+>>>>>>> f350d3f (update category)
       httpMetadata: {
         contentType: file.type,
         cacheControl: "public, max-age=31536000, immutable",
         contentDisposition: `inline; filename="${key.split("/").pop()}"`
       }
     });
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -2388,11 +2370,14 @@ uploadImageRouter.post("/", async (c) => {
       }
     }
 >>>>>>> c3e4c54 (update admin)
+=======
+>>>>>>> f350d3f (update category)
     if (!c.env.INTERNAL_R2_URL && !c.env.PUBLIC_R2_URL) {
       return c.json({ error: "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL" }, 500);
     }
     const storageBase = (c.env.INTERNAL_R2_URL || c.env.PUBLIC_R2_URL).replace(/\/+$/, "");
     const displayBase = (c.env.PUBLIC_R2_URL || storageBase).replace(/\/+$/, "");
+<<<<<<< HEAD
 <<<<<<< HEAD
 =======
     if (!c.env.PUBLIC_R2_URL) {
@@ -2426,18 +2411,20 @@ uploadImageRouter.post("/", async (c) => {
     const finalKey = wmKey || key;
     const storageUrl = `${storageBase}/${finalKey}`;
     const displayUrl = `${displayBase}/${finalKey}`;
+=======
+    const storageUrl = `${storageBase}/${key}`;
+    const displayUrl = `${displayBase}/${key}`;
+>>>>>>> f350d3f (update category)
     return c.json({
       success: true,
-      image_key: finalKey,
-      // key cuối cùng (ưu tiên -wm nếu có)
-      original_key: key,
-      // key gốc (để debug/ghi DB nếu muốn)
-      wm_applied: Boolean(wmKey),
-      // có chèn watermark không
-      wm_key: wmKey || null,
+      image_key: key,
       displayUrl,
+<<<<<<< HEAD
       fileName: finalKey.split("/").pop(),
 >>>>>>> c3e4c54 (update admin)
+=======
+      fileName: key.split("/").pop(),
+>>>>>>> f350d3f (update category)
       alt: baseSlug,
       prefix
     });
@@ -2446,10 +2433,14 @@ uploadImageRouter.post("/", async (c) => {
     return c.json({
       error: "Có lỗi xảy ra khi upload ảnh",
 <<<<<<< HEAD
+<<<<<<< HEAD
       details: error.message
 =======
       details: error?.message || String(error)
 >>>>>>> c3e4c54 (update admin)
+=======
+      details: error.message
+>>>>>>> f350d3f (update category)
     }, 500);
   }
 });

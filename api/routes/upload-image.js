@@ -25,9 +25,9 @@ function sanitizePrefix(input = '') {
 
 const EXT_BY_MIME = {
   'image/jpeg': 'jpg',
-  'image/jpg': 'jpg',
-  'image/png': 'png',
-  'image/gif': 'gif',
+  'image/jpg':  'jpg',
+  'image/png':  'png',
+  'image/gif':  'gif',
   'image/webp': 'webp',
   'image/avif': 'avif',
 };
@@ -97,6 +97,7 @@ uploadImageRouter.post('/', async (c) => {
     const addId = String(c.env.ADD_RANDOM_ID || '').toLowerCase() === 'true';
     const shortId = Math.random().toString(36).slice(2, 8);
 
+    // Tạo key ứng viên
     const buildKey = (slug, withId) => {
       const name = withId ? `${slug}-${shortId}.${ext}` : `${slug}.${ext}`;
       return prefix ? `${prefix}/${name}` : name;
