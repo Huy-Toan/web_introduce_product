@@ -2012,20 +2012,20 @@ var SmartRouter = class {
     let i = 0;
     let res;
     for (; i < len; i++) {
-      const router = routers[i];
+      const router2 = routers[i];
       try {
         for (let i2 = 0, len2 = routes.length; i2 < len2; i2++) {
-          router.add(...routes[i2]);
+          router2.add(...routes[i2]);
         }
-        res = router.match(method, path);
+        res = router2.match(method, path);
       } catch (e) {
         if (e instanceof UnsupportedPathError) {
           continue;
         }
         throw e;
       }
-      this.match = router.match.bind(router);
-      this.#routers = [router];
+      this.match = router2.match.bind(router2);
+      this.#routers = [router2];
       this.#routes = void 0;
       break;
     }
@@ -2227,72 +2227,59 @@ var Hono2 = class extends Hono$1 {
   }
 };
 function toSlug(s = "", maxLen = 80) {
-  return String(s).toLowerCase().normalize("NFD").replace(/[^\p{Letter}\p{Number}\s\-_.]/gu, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^[\-.]+|[\-.]+$/g, "").slice(0, maxLen).replace(/[\-.]+$/g, "");
+  return String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-_.]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^[-.]+|[-.]+$/g, "").slice(0, maxLen).replace(/[-.]+$/g, "");
 }
 function sanitizePrefix(input = "") {
-  return String(input || "").toLowerCase().replace(/[^a-z0-9\/_-]+/g, "").replace(/\.{2,}/g, "").replace(/\/{2,}/g, "/").replace(/^\/+|\/+$/g, "");
+  return String(input || "").toLowerCase().replace(/[^a-z0-9/_-]+/g, "").replace(/\.\.+/g, "").replace(/\/{2,}/g, "/").replace(/^\/+|\/+$/g, "");
 }
 const EXT_BY_MIME = {
   "image/jpeg": "jpg",
   "image/jpg": "jpg",
   "image/png": "png",
   "image/gif": "gif",
-  "image/webp": "webp"
+  "image/webp": "webp",
+  "image/avif": "avif"
 };
+function clamp01$1(n) {
+  if (!Number.isFinite(n)) return 0.95;
+  return Math.max(0, Math.min(1, n));
+}
+function toAnchor$1(p) {
+  return p === "tl" ? { top: 0, left: 0 } : p === "tr" ? { top: 0, right: 0 } : p === "bl" ? { bottom: 0, left: 0 } : { bottom: 0, right: 0 };
+}
+function withWatermarkKey$1(k) {
+  const i = k.lastIndexOf(".");
+  return i < 0 ? `${k}-wm` : `${k.slice(0, i)}-wm${k.slice(i)}`;
+}
+function mimeFromKeyOrType(nameOrMime = "image/jpeg") {
+  const s = String(nameOrMime).toLowerCase();
+  const m1 = s.match(/\.(jpe?g|png|webp|avif|gif)$/)?.[1];
+  if (m1 === "jpg" || m1 === "jpeg") return "image/jpeg";
+  if (m1 === "png") return "image/png";
+  if (m1 === "webp") return "image/webp";
+  if (m1 === "avif") return "image/avif";
+  if (m1 === "gif") return "image/gif";
+  if (s.includes("jpeg")) return "image/jpeg";
+  if (s.includes("png")) return "image/png";
+  if (s.includes("webp")) return "image/webp";
+  if (s.includes("avif")) return "image/avif";
+  if (s.includes("gif")) return "image/gif";
+  return "image/jpeg";
+}
 const uploadImageRouter = new Hono2();
-uploadImageRouter.get("/__diag", async (c) => {
-  const env2 = c.env || {};
-  const hasIMAGES = !!env2.IMAGES;
-  const hasPUBLIC = !!env2.PUBLIC_R2_URL;
-  const hasINTERNAL = !!env2.INTERNAL_R2_URL;
-  const addId = String(env2.ADD_RANDOM_ID || "").toLowerCase() === "true";
-  let putOk = false, headOk = false, err = null;
-  try {
-    if (hasIMAGES) {
-      await env2.IMAGES.put("healthcheck.txt", "ok", { httpMetadata: { contentType: "text/plain" } });
-      const head = await env2.IMAGES.head("healthcheck.txt");
-      putOk = true;
-      headOk = !!head;
-    }
-  } catch (e) {
-    err = String(e);
-  }
-  return c.json({
-    service: "upload-image",
-    hasIMAGES,
-    hasPUBLIC,
-    hasINTERNAL,
-    addId,
-    putOk,
-    headOk,
-    err,
-    now: (/* @__PURE__ */ new Date()).toISOString()
-  });
-});
 uploadImageRouter.post("/", async (c) => {
   try {
-    if (!c.env?.IMAGES) {
-      const msg = "R2 binding IMAGES chưa được cấu hình trên service đang chạy.";
-      console.error("Upload error:", msg);
-      return c.json({ code: "IMAGES_BINDING_MISSING", error: msg }, 500);
-    }
-    let formData;
-    try {
-      formData = await c.req.formData();
-    } catch (e) {
-      console.error("formData() failed. Có thể bạn đang gửi Content-Type=application/json", e);
-      return c.json({ code: "BAD_MULTIPART", error: "Không thể đọc FormData. Hãy gửi multipart/form-data và KHÔNG tự set Content-Type." }, 400);
-    }
+    const formData = await c.req.formData();
     const file = formData.get("image");
     if (!file || typeof file === "string") {
-      return c.json({ code: "NO_FILE", error: 'Không có file nào được upload (thiếu field "image").' }, 400);
+      return c.json({ error: "Không có file nào được upload" }, 400);
     }
     const allowedTypes = Object.keys(EXT_BY_MIME);
     if (!allowedTypes.includes(file.type)) {
-      return c.json({ code: "UNSUPPORTED_TYPE", error: "Chỉ chấp nhận ảnh JPEG, PNG, GIF, WebP." }, 400);
+      return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP, AVIF)" }, 400);
     }
     if (file.size > 5 * 1024 * 1024) {
-      return c.json({ code: "FILE_TOO_BIG", error: "Kích thước ảnh không được vượt quá 5MB." }, 400);
+      return c.json({ error: "Kích thước ảnh không được vượt quá 5MB!" }, 400);
     }
     const urlObj = new URL(c.req.url);
     const rawSeoName = formData.get("seoName") || urlObj.searchParams.get("seoName") || (file.name ? file.name.replace(/\.[^.]+$/, "") : "image");
@@ -2318,46 +2305,76 @@ uploadImageRouter.post("/", async (c) => {
         tries++;
       }
     }
-    try {
-      await c.env.IMAGES.put(key, await file.arrayBuffer(), {
-        httpMetadata: {
-          contentType: file.type,
-          cacheControl: "public, max-age=31536000, immutable",
-          contentDisposition: `inline; filename="${key.split("/").pop()}"`
-        }
-      });
-    } catch (err) {
-      console.error("R2 put() failed:", err);
-      return c.json({ code: "R2_PUT_FAILED", error: "Lỗi khi ghi file vào R2", details: String(err) }, 500);
+    const r2 = c.env.IMAGES;
+    const arrBuf = await file.arrayBuffer();
+    await r2.put(key, arrBuf, {
+      httpMetadata: {
+        contentType: file.type,
+        cacheControl: "public, max-age=31536000, immutable",
+        contentDisposition: `inline; filename="${key.split("/").pop()}"`
+      }
+    });
+    const wmParam = formData.get("wm") ?? urlObj.searchParams.get("wm") ?? "";
+    const wmEnabledDefault = String(c.env.AUTO_WATERMARK || "1") === "1";
+    const wmEnabled = wmParam === "0" ? false : wmParam === "1" ? true : wmEnabledDefault;
+    let wmKey = null;
+    if (wmEnabled) {
+      try {
+        const pos = (formData.get("pos") || urlObj.searchParams.get("pos") || c.env.WM_POS || "tr").toString().toLowerCase();
+        const logoWidth = parseInt(formData.get("logoWidth") || urlObj.searchParams.get("logoWidth") || c.env.WM_LOGO_WIDTH || "180", 10);
+        const opacity = clamp01$1(parseFloat(formData.get("opacity") || urlObj.searchParams.get("opacity") || c.env.WM_OPACITY || "0.95"));
+        const logoKey = (formData.get("logoKey") || urlObj.searchParams.get("logoKey") || c.env.LOGO_KEY || "itxeasy-logo.png").toString();
+        const [srcObj, logoObj] = await Promise.all([r2.get(key), r2.get(logoKey)]);
+        if (!srcObj?.body) throw new Error(`Source not found: ${key}`);
+        if (!logoObj?.body) throw new Error(`Logo not found in R2: ${logoKey}`);
+        const logoBuf = await logoObj.arrayBuffer();
+        const overlay = c.env.IMGPROC.input(logoBuf).transform({ width: logoWidth });
+        const anchor = toAnchor$1(pos);
+        const margin = 16;
+        const outMime = mimeFromKeyOrType(key || file.type);
+        const out = await c.env.IMGPROC.input(srcObj.body).draw(overlay, {
+          opacity,
+          ...anchor,
+          top: anchor.top !== void 0 ? margin : void 0,
+          right: anchor.right !== void 0 ? margin : void 0,
+          bottom: anchor.bottom !== void 0 ? margin : void 0,
+          left: anchor.left !== void 0 ? margin : void 0
+        }).output({ format: outMime }).blob();
+        wmKey = withWatermarkKey$1(key);
+        await r2.put(wmKey, out, {
+          httpMetadata: { contentType: outMime, cacheControl: "public, max-age=31536000, immutable" }
+        });
+      } catch (e) {
+        console.warn("[upload-image] watermark failed:", e);
+      }
     }
     if (!c.env.INTERNAL_R2_URL && !c.env.PUBLIC_R2_URL) {
-      const msg = "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL để dựng URL hiển thị.";
-      console.error("Upload error:", msg);
-      return c.json({ code: "MISSING_R2_URL", error: msg, key }, 500);
+      return c.json({ error: "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL" }, 500);
     }
     const storageBase = (c.env.INTERNAL_R2_URL || c.env.PUBLIC_R2_URL).replace(/\/+$/, "");
     const displayBase = (c.env.PUBLIC_R2_URL || storageBase).replace(/\/+$/, "");
-    const storageUrl = `${storageBase}/${key}`;
-    const displayUrl = `${displayBase}/${key}`;
+    const finalKey = wmKey || key;
+    const storageUrl = `${storageBase}/${finalKey}`;
+    const displayUrl = `${displayBase}/${finalKey}`;
     return c.json({
       success: true,
-      image_key: key,
+      image_key: finalKey,
+      // key cuối cùng (ưu tiên -wm nếu có)
+      original_key: key,
+      // key gốc (để debug/ghi DB nếu muốn)
+      wm_applied: Boolean(wmKey),
+      // có chèn watermark không
+      wm_key: wmKey || null,
       displayUrl,
-      storageUrl,
-      fileName: key.split("/").pop(),
-      mime: file.type,
-      size: file.size,
+      fileName: finalKey.split("/").pop(),
       alt: baseSlug,
       prefix
     });
   } catch (error) {
-    console.error("Upload error (unhandled):", error, error?.stack);
+    console.error("Upload error:", error);
     return c.json({
-      code: "UNHANDLED",
       error: "Có lỗi xảy ra khi upload ảnh",
-      name: error?.name || null,
-      message: error?.message || String(error),
-      stack: error?.stack || null
+      details: error?.message || String(error)
     }, 500);
   }
 });
@@ -2401,6 +2418,60 @@ editorUploadRouter.post("/", async (c) => {
     return c.json({ success: 0, message: error.message }, 500);
   }
 });
+const router = new Hono2();
+router.post("/", async (c) => {
+  const { IMAGES, IMGPROC } = c.env;
+  const url = new URL(c.req.url);
+  const pos = (url.searchParams.get("pos") || "br").toLowerCase();
+  const logoWidth = parseInt(url.searchParams.get("logoWidth") || "160", 10);
+  const opacity = clamp01(parseFloat(url.searchParams.get("opacity") || "0.95"));
+  const logoKey = url.searchParams.get("logoKey") || c.env.LOGO_KEY || "itxeasy-logo.png";
+  const body = await c.req.json().catch(() => ({}));
+  const srcKey = String(body?.key || body?.imageKey || "").trim();
+  if (!srcKey) return c.json({ ok: false, error: "Missing key" }, 400);
+  const srcObj = await IMAGES.get(srcKey);
+  if (!srcObj?.body) return c.json({ ok: false, error: `Source not found: ${srcKey}` }, 404);
+  const logoObj = await IMAGES.get(logoKey);
+  if (!logoObj?.body) return c.json({ ok: false, error: `Logo not found in R2: ${logoKey}` }, 500);
+  const logoBuf = await logoObj.arrayBuffer();
+  const overlay = IMGPROC.input(logoBuf).transform({ width: logoWidth });
+  const anchor = toAnchor(pos);
+  const margin = 16;
+  const outMime = mimeFromKey(srcKey);
+  const out = await IMGPROC.input(srcObj.body).draw(overlay, {
+    opacity,
+    ...anchor,
+    top: anchor.top !== void 0 ? margin : void 0,
+    right: anchor.right !== void 0 ? margin : void 0,
+    bottom: anchor.bottom !== void 0 ? margin : void 0,
+    left: anchor.left !== void 0 ? margin : void 0
+  }).output({ format: outMime }).blob();
+  const wmKey = withWatermarkKey(srcKey);
+  await IMAGES.put(wmKey, out, {
+    httpMetadata: { contentType: outMime, cacheControl: "public, max-age=31536000, immutable" }
+  });
+  return c.json({ ok: true, key: wmKey, original: srcKey });
+});
+function clamp01(n) {
+  if (!Number.isFinite(n)) return 0.95;
+  return Math.max(0, Math.min(1, n));
+}
+function toAnchor(p) {
+  return p === "tl" ? { top: 0, left: 0 } : p === "tr" ? { top: 0, right: 0 } : p === "bl" ? { bottom: 0, left: 0 } : { bottom: 0, right: 0 };
+}
+function withWatermarkKey(k) {
+  const i = k.lastIndexOf(".");
+  return i < 0 ? `${k}-wm` : `${k.slice(0, i)}-wm${k.slice(i)}`;
+}
+function mimeFromKey(k) {
+  const ext = k.toLowerCase().match(/\.(jpe?g|png|webp|avif|gif)$/)?.[1] || "jpg";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "avif") return "image/avif";
+  if (ext === "gif") return "image/gif";
+  return "image/jpeg";
+}
 const DEFAULT_LOCALE$7 = "vi";
 const getLocale$7 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$7).toLowerCase();
 const hasDB$7 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
@@ -34458,10 +34529,23 @@ async function ga4RunRealtime(env2, body) {
 }
 const ga4Router = new Hono2();
 ga4Router.all("*", async (c, next) => {
-  c.header("Access-Control-Allow-Origin", "*");
+  const origin = c.req.header("Origin") || "";
+  const allowed = [
+    "http://localhost:5173",
+    // dev local
+    "https://beta.itxeasy.com",
+    // staging
+    "https://itxeasy.com"
+    // production
+  ];
+  if (allowed.includes(origin)) {
+    c.header("Access-Control-Allow-Origin", origin);
+  }
   c.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   c.header("Access-Control-Allow-Headers", "content-type,authorization");
-  if (c.req.method === "OPTIONS") return c.text("", 204);
+  if (c.req.method === "OPTIONS") {
+    return c.text("", 204);
+  }
   await next();
 });
 ga4Router.post("/report", async (c) => {
@@ -35108,6 +35192,7 @@ app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
 app.route("/api/ga4", ga4Router);
+app.route("/api/watermark", router);
 app.get(
   "/api/health",
   (c) => c.json({

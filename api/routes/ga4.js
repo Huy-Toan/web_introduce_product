@@ -7,14 +7,31 @@ export const ga4Router = new Hono();
 // (tuỳ chọn) middleware kiểm tra admin nếu bạn đã có
 // ga4Router.use("*", yourAuthMiddleware);
 
-// CORS cho dev/test
+// CORS cho dev + production
 ga4Router.all("*", async (c, next) => {
-    c.header("Access-Control-Allow-Origin", "*");
+    const origin = c.req.header("Origin") || "";
+
+    // whitelist domain
+    const allowed = [
+        "http://localhost:5173",      // dev local
+        "https://beta.itxeasy.com",   // staging
+        "https://itxeasy.com"         // production
+    ];
+
+    if (allowed.includes(origin)) {
+        c.header("Access-Control-Allow-Origin", origin);
+    }
+
     c.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
     c.header("Access-Control-Allow-Headers", "content-type,authorization");
-    if (c.req.method === "OPTIONS") return c.text("", 204);
+
+    if (c.req.method === "OPTIONS") {
+        return c.text("", 204);
+    }
+
     await next();
 });
+
 
 
 // ================== REPORT ==================
