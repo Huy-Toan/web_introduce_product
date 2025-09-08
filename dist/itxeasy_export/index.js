@@ -2237,35 +2237,8 @@ const EXT_BY_MIME = {
   "image/jpg": "jpg",
   "image/png": "png",
   "image/gif": "gif",
-  "image/webp": "webp",
-  "image/avif": "avif"
+  "image/webp": "webp"
 };
-function clamp01$1(n) {
-  if (!Number.isFinite(n)) return 0.95;
-  return Math.max(0, Math.min(1, n));
-}
-function toAnchor$1(p) {
-  return p === "tl" ? { top: 0, left: 0 } : p === "tr" ? { top: 0, right: 0 } : p === "bl" ? { bottom: 0, left: 0 } : { bottom: 0, right: 0 };
-}
-function withWatermarkKey$1(k) {
-  const i = k.lastIndexOf(".");
-  return i < 0 ? `${k}-wm` : `${k.slice(0, i)}-wm${k.slice(i)}`;
-}
-function mimeFromKeyOrType(nameOrMime = "image/jpeg") {
-  const s = String(nameOrMime).toLowerCase();
-  const m1 = s.match(/\.(jpe?g|png|webp|avif|gif)$/)?.[1];
-  if (m1 === "jpg" || m1 === "jpeg") return "image/jpeg";
-  if (m1 === "png") return "image/png";
-  if (m1 === "webp") return "image/webp";
-  if (m1 === "avif") return "image/avif";
-  if (m1 === "gif") return "image/gif";
-  if (s.includes("jpeg")) return "image/jpeg";
-  if (s.includes("png")) return "image/png";
-  if (s.includes("webp")) return "image/webp";
-  if (s.includes("avif")) return "image/avif";
-  if (s.includes("gif")) return "image/gif";
-  return "image/jpeg";
-}
 const uploadImageRouter = new Hono2();
 uploadImageRouter.post("/", async (c) => {
   try {
@@ -2276,7 +2249,7 @@ uploadImageRouter.post("/", async (c) => {
     }
     const allowedTypes = Object.keys(EXT_BY_MIME);
     if (!allowedTypes.includes(file.type)) {
-      return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP, AVIF)" }, 400);
+      return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP)" }, 400);
     }
     if (file.size > 5 * 1024 * 1024) {
       return c.json({ error: "Kích thước ảnh không được vượt quá 5MB!" }, 400);
@@ -2306,67 +2279,25 @@ uploadImageRouter.post("/", async (c) => {
       }
     }
     const r2 = c.env.IMAGES;
-    const arrBuf = await file.arrayBuffer();
-    await r2.put(key, arrBuf, {
+    await r2.put(key, await file.arrayBuffer(), {
       httpMetadata: {
         contentType: file.type,
         cacheControl: "public, max-age=31536000, immutable",
         contentDisposition: `inline; filename="${key.split("/").pop()}"`
       }
     });
-    const wmParam = formData.get("wm") ?? urlObj.searchParams.get("wm") ?? "";
-    const wmEnabledDefault = String(c.env.AUTO_WATERMARK || "1") === "1";
-    const wmEnabled = wmParam === "0" ? false : wmParam === "1" ? true : wmEnabledDefault;
-    let wmKey = null;
-    if (wmEnabled) {
-      try {
-        const pos = (formData.get("pos") || urlObj.searchParams.get("pos") || c.env.WM_POS || "tr").toString().toLowerCase();
-        const logoWidth = parseInt(formData.get("logoWidth") || urlObj.searchParams.get("logoWidth") || c.env.WM_LOGO_WIDTH || "180", 10);
-        const opacity = clamp01$1(parseFloat(formData.get("opacity") || urlObj.searchParams.get("opacity") || c.env.WM_OPACITY || "0.95"));
-        const logoKey = (formData.get("logoKey") || urlObj.searchParams.get("logoKey") || c.env.LOGO_KEY || "itxeasy-logo.png").toString();
-        const [srcObj, logoObj] = await Promise.all([r2.get(key), r2.get(logoKey)]);
-        if (!srcObj?.body) throw new Error(`Source not found: ${key}`);
-        if (!logoObj?.body) throw new Error(`Logo not found in R2: ${logoKey}`);
-        const logoBuf = await logoObj.arrayBuffer();
-        const overlay = c.env.IMGPROC.input(logoBuf).transform({ width: logoWidth });
-        const anchor = toAnchor$1(pos);
-        const margin = 16;
-        const outMime = mimeFromKeyOrType(key || file.type);
-        const out = await c.env.IMGPROC.input(srcObj.body).draw(overlay, {
-          opacity,
-          ...anchor,
-          top: anchor.top !== void 0 ? margin : void 0,
-          right: anchor.right !== void 0 ? margin : void 0,
-          bottom: anchor.bottom !== void 0 ? margin : void 0,
-          left: anchor.left !== void 0 ? margin : void 0
-        }).output({ format: outMime }).blob();
-        wmKey = withWatermarkKey$1(key);
-        await r2.put(wmKey, out, {
-          httpMetadata: { contentType: outMime, cacheControl: "public, max-age=31536000, immutable" }
-        });
-      } catch (e) {
-        console.warn("[upload-image] watermark failed:", e);
-      }
-    }
     if (!c.env.INTERNAL_R2_URL && !c.env.PUBLIC_R2_URL) {
       return c.json({ error: "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL" }, 500);
     }
     const storageBase = (c.env.INTERNAL_R2_URL || c.env.PUBLIC_R2_URL).replace(/\/+$/, "");
     const displayBase = (c.env.PUBLIC_R2_URL || storageBase).replace(/\/+$/, "");
-    const finalKey = wmKey || key;
-    const storageUrl = `${storageBase}/${finalKey}`;
-    const displayUrl = `${displayBase}/${finalKey}`;
+    const storageUrl = `${storageBase}/${key}`;
+    const displayUrl = `${displayBase}/${key}`;
     return c.json({
       success: true,
-      image_key: finalKey,
-      // key cuối cùng (ưu tiên -wm nếu có)
-      original_key: key,
-      // key gốc (để debug/ghi DB nếu muốn)
-      wm_applied: Boolean(wmKey),
-      // có chèn watermark không
-      wm_key: wmKey || null,
+      image_key: key,
       displayUrl,
-      fileName: finalKey.split("/").pop(),
+      fileName: key.split("/").pop(),
       alt: baseSlug,
       prefix
     });
@@ -2374,7 +2305,7 @@ uploadImageRouter.post("/", async (c) => {
     console.error("Upload error:", error);
     return c.json({
       error: "Có lỗi xảy ra khi upload ảnh",
-      details: error?.message || String(error)
+      details: error.message
     }, 500);
   }
 });
