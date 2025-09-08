@@ -5,6 +5,12 @@ Tập trung mô tả các endpoint hỗ trợ tạo nội dung và phân tích S
 ## POST `/api/seo/generate-content`
 Tạo bài viết Markdown dựa trên *keyword* đầu vào.
 
+### Luồng xử lý
+1. Nhận `keyword` và kiểm tra đầu vào.
+2. Gọi Cloudflare AI để lên dàn ý (planning) cho bài viết.
+3. Tiếp tục gọi AI hai lần để sinh phần mở đầu và các đoạn còn lại.
+4. Làm sạch kết quả và ghép lại thành Markdown hoàn chỉnh trước khi trả về.
+
 ### Yêu cầu
 - **URL**: `https://beta.itxeasy.com/api/seo/generate-content`
 - **Phương thức**: `POST`
@@ -42,6 +48,11 @@ Tạo bài viết Markdown dựa trên *keyword* đầu vào.
 ## POST `/api/seo/generate-seo`
 Phân tích một đoạn nội dung và đề xuất tiêu đề, meta, từ khóa và điểm SEO.
 
+### Luồng xử lý
+1. Nhận `content` và rút gọn nếu quá dài.
+2. Gọi Cloudflare AI với yêu cầu trả về đúng schema JSON.
+3. Trả lại các gợi ý SEO (tiêu đề, meta, từ khóa, điểm số, tips...).
+
 ### Yêu cầu
 - **URL**: `https://beta.itxeasy.com/api/seo/generate-seo`
 - **Phương thức**: `POST`
@@ -76,5 +87,10 @@ Phân tích một đoạn nội dung và đề xuất tiêu đề, meta, từ kh
 | --- | ----- |
 | 400 | Thiếu `content` hoặc nội dung rỗng |
 | 500 | Lỗi phân tích SEO |
+
+## Triển khai
+- **Mã nguồn**: [`api/routes/seo.js`](../api/routes/seo.js)
+- **Phụ thuộc**: hàm [`src/utils/textClean.js`](../src/utils/textClean.js)
+- **Cấu hình**: sử dụng binding `AI` được khai báo trong [`wrangler.toml`](../wrangler.toml)
 
 Các API trên trả về dữ liệu JSON và không yêu cầu tham số xác thực trong môi trường thử nghiệm.

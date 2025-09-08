@@ -49,6 +49,7 @@ Environment Variables của Pages.
 - [Thiết kế hệ thống](docs/SYSTEM_DESIGN.md)
 - [Bản đồ chức năng & tệp mã](docs/FEATURE_MAP.md)
 - [API SEO tự động](docs/API_SEO.md)
+- [Tổng hợp API backend](docs/API_REFERENCE.md)
 
 ## Hướng dẫn Deploy dự án lên Cloudflare thông qua GitHub
 
