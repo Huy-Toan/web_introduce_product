@@ -47,6 +47,7 @@ Environment Variables của Pages.
 
 - [Tài liệu yêu cầu (SRS)](docs/SRS.md)
 - [Thiết kế hệ thống](docs/SYSTEM_DESIGN.md)
+- [Bản đồ chức năng & tệp mã](docs/FEATURE_MAP.md)
 
 ## Hướng dẫn Deploy dự án lên Cloudflare thông qua GitHub
 
