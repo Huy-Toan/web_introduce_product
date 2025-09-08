@@ -1,35 +1,31 @@
-# Quy tắc ứng xử
+# Quy tắc ứng xử nội bộ
 
-Dự án này tuân theo [Contributor Covenant](https://www.contributor-covenant.org) phiên bản 2.1.
+Dự án này là tài sản riêng của Công ty ITXEasy và chỉ dành cho nhân viên cùng đối tác được ủy quyền. Việc truy cập hoặc đóng góp mã nguồn phải tuân thủ các chính sách bảo mật và quy định nội bộ của công ty.
 
 ## Cam kết
 
-Chúng tôi cam kết tạo ra môi trường thân thiện, không phân biệt và an toàn cho mọi người,
-không phân biệt tuổi tác, giới tính, khuynh hướng, mức độ kinh nghiệm hay nguồn gốc.
+Chúng ta cùng xây dựng môi trường làm việc chuyên nghiệp, tôn trọng lẫn nhau và hợp tác hiệu quả.
 
-## Hành vi được khuyến khích
+## Hành vi mong đợi
 
-- Sử dụng ngôn ngữ thân thiện và bao dung.
-- Tôn trọng quan điểm và kinh nghiệm của người khác.
-- Nhận trách nhiệm và xin lỗi khi mắc lỗi.
+- Sử dụng ngôn ngữ rõ ràng, lịch sự và có tính xây dựng.
+- Tôn trọng quan điểm của đồng nghiệp và hỗ trợ lẫn nhau.
+- Giữ bí mật các thông tin, dữ liệu và mã nguồn của dự án.
 
 ## Hành vi không chấp nhận
 
-- Ngôn từ hoặc hình ảnh mang tính quấy rối hoặc phân biệt đối xử.
-- Công kích cá nhân, đùa cợt xúc phạm.
-- Công khai thông tin cá nhân của người khác mà chưa được phép.
+- Bất kỳ hình thức quấy rối, phân biệt đối xử hoặc công kích cá nhân.
+- Tiết lộ thông tin hoặc tài sản trí tuệ của công ty cho bên ngoài khi chưa được phép.
+- Sử dụng mã nguồn vào mục đích trái với chính sách của công ty.
 
-## Trách nhiệm thực thi
+## Thực thi
 
-Người duy trì dự án có trách nhiệm làm rõ và thực thi các chuẩn mực này.
-Họ có quyền xoá, sửa hoặc từ chối các đóng góp không phù hợp, hoặc cấm tạm thời/ vĩnh viễn
-những người vi phạm.
+Quản lý dự án có trách nhiệm theo dõi và xử lý các vi phạm. Biện pháp có thể bao gồm cảnh cáo, thu hồi quyền truy cập hoặc báo cáo lên cấp quản lý cao hơn.
 
 ## Báo cáo
 
-Nếu bạn chứng kiến hoặc trải nghiệm hành vi không chấp nhận được, vui lòng liên hệ qua email
-`info@itxeasy.com`. Tất cả báo cáo sẽ được xem xét và xử lý kịp thời.
+Nếu bạn phát hiện hành vi vi phạm, vui lòng báo cáo cho bộ phận phụ trách qua email `hr@itxeasy.com`. Mọi báo cáo sẽ được bảo mật và xử lý kịp thời.
 
 ---
 
-Nội dung này được điều chỉnh từ [Contributor Covenant 2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct.html).
+Tài liệu này được điều chỉnh phù hợp cho môi trường nội bộ của ITXEasy.
