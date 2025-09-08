@@ -82,13 +82,29 @@ const LABELS = {
 };
 const L = (lc, key) => LABELS[lc]?.[key] ?? LABELS.en[key] ?? key;
 
+/** Helpers fetch + gợi ý slug */
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+function makeCandidates(baseSlug) {
+  const xs = [];
+  for (let i = 2; i <= 5; i++) xs.push(`${baseSlug}-${i}`);
+  const rand = () => Math.random().toString(36).slice(2, 5);
+  xs.push(`${baseSlug}-${rand()}`);
+  xs.push(`${baseSlug}-${rand()}`);
+  return xs;
+}
+
 const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {} }) => {
   const isEditing = Boolean(initialData?.id);
   const [removedImage, setRemovedImage] = useState(false);
-  // Base (VI) -> parent_categories
+
+  // Base (VI)
   const [base, setBase] = useState({ name: '', slug: '', description: '', image_url: '' });
 
-  // Translations -> parent_categories_translations (name + description + slug)
+  // Translations
   const [translations, setTranslations] = useState(
     /** @type {Record<string, {name?:string, slug?:string, description?:string}>} */({})
   );
@@ -101,11 +117,27 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+
+  // Slug validation (cũ)
   const [slugErrorVI, setSlugErrorVI] = useState('');
   const [slugErrorsTr, setSlugErrorsTr] = useState(/** @type {Record<string,string>} */({}));
+
+  // Auto translate
   const [autoTranslate, setAutoTranslate] = useState(true);
   const debounceTimer = useRef(null);
   const lastSourceSnapshot = useRef({ name: '', description: '' });
+
+  // === NEW: trạng thái & logic kiểm tra slug trùng
+  const [baseSlugTouched, setBaseSlugTouched] = useState(false);
+  const [slugStatusVI, setSlugStatusVI] = useState(
+    /** @type {{checking:boolean, available:boolean|null, suggestion?:string, normalized?:string, msg?:string}} */(
+      { checking:false, available:null }
+    )
+  );
+  const [slugStatusTr, setSlugStatusTr] = useState(
+    /** @type {Record<string, {checking:boolean, available:boolean|null, suggestion?:string, normalized?:string, msg?:string}>} */({})
+  );
+  const checkTrTimers = useRef(/** @type {Record<string, any>} */({}));
 
   // Nạp dữ liệu khi mở modal
   useEffect(() => {
@@ -126,7 +158,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
       };
       setRemovedImage(false);
 
-      // Nếu FE có kèm translations sẵn
+      // translations sẵn
       const initTr = { ...(initialData.translations || {}) };
       delete initTr.vi;
       const addLocales = Object.keys(initTr);
@@ -146,6 +178,11 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
         )
       );
       setTouched({});
+
+      // reset slug-check states
+      setBaseSlugTouched(false);
+      setSlugStatusVI({ checking:false, available:null });
+      setSlugStatusTr({});
     }
   }, [initialData, isOpen]);
 
@@ -154,7 +191,6 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     const loadTranslationsIfEditing = async () => {
       if (!isOpen || !initialData?.id) return;
       try {
-        // NOTE: Cập nhật đúng endpoint lấy translations cho parent
         const r = await fetch(`/api/parent_categories/${initialData.id}/translations`);
         if (!r.ok) return;
         const j = await r.json();
@@ -179,7 +215,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     loadTranslationsIfEditing();
   }, [isOpen, initialData?.id]);
 
-  // Auto-translate từ VI sang locale khác (nếu bật) cho name + description + auto-gen slug nếu rỗng/chưa touch
+  // Auto-translate từ VI sang locale khác (nếu bật)
   useEffect(() => {
     if (!autoTranslate) return;
     const srcName = base.name?.trim() || '';
@@ -222,7 +258,6 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
           const nextName = nameTranslated || prev[lc]?.name || srcName;
           const nextDesc = descTranslated || prev[lc]?.description || srcDesc;
           const currentSlug = (prev[lc]?.slug || '').trim();
-          // chỉ tự sinh slug nếu đang trống
           const nextSlug = currentSlug ? currentSlug : (nextName ? slugify(nextName) : '');
           return {
             ...prev,
@@ -240,12 +275,25 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     [openLocales]
   );
 
+  // Khi gõ base (VI)
   const handleBaseChange = (e) => {
     const { name, value } = e.target;
     setBase(prev => ({ ...prev, [name]: value }));
-    if (name === 'slug') setSlugErrorVI('');
+    if (name === 'slug') {
+      setBaseSlugTouched(true);
+      setSlugErrorVI('');
+      // bật cờ checking để hiện "Đang kiểm tra..."
+      setSlugStatusVI(prev => ({ ...prev, checking:true }));
+    }
+    if (name === 'name' && !baseSlugTouched) {
+      // auto-gen slug khi chưa chạm vào ô slug
+      const s = slugify(value || '');
+      setBase(prev => ({ ...prev, slug: s }));
+      setSlugStatusVI(prev => ({ ...prev, checking:true }));
+    }
   };
 
+  // Khi gõ translations
   const handleTrChange = (lc, key, value) => {
     setTranslations(prev => ({
       ...prev,
@@ -254,6 +302,9 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     setTouched(prev => ({ ...prev, [lc]: { ...(prev[lc] || {}), [key]: true } }));
     if (key === 'slug') {
       setSlugErrorsTr(prev => ({ ...prev, [lc]: '' }));
+      setSlugStatusTr(prev => ({ ...prev, [lc]: { ...(prev[lc]||{}), checking:true } }));
+      // debounce check riêng theo locale
+      triggerCheckSlugTR(lc, value);
     }
   };
 
@@ -276,22 +327,34 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     setSlugErrorsTr(prev => {
       const copy = { ...prev }; delete copy[lc]; return copy;
     });
+    setSlugStatusTr(prev => {
+      const copy = { ...prev }; delete copy[lc]; return copy;
+    });
+    clearTimeout(checkTrTimers.current[lc]);
     setActiveTab('vi');
   };
 
+  // === Normalize + fire check ngay khi blur (VI)
   const handleSlugBlurVI = () => {
     const normalized = slugify(base.slug || '');
     setBase(prev => ({ ...prev, slug: normalized }));
     if (normalized && !isValidSlug(normalized)) {
       setSlugErrorVI('Slug chỉ gồm a-z, 0-9 và dấu gạch nối (-), không bắt đầu/kết thúc bằng -.');
     }
+    setBaseSlugTouched(true);
+    // nổ check ngay
+    triggerCheckSlugVI(normalized);
   };
+
   const generateSlugFromVIName = () => {
     const s = slugify(base.name || '');
     setBase(prev => ({ ...prev, slug: s }));
+    setBaseSlugTouched(true);
     setSlugErrorVI(s && !isValidSlug(s) ? 'Slug không hợp lệ.' : '');
+    if (s) triggerCheckSlugVI(s);
   };
 
+  // === Normalize + fire check khi blur (TR)
   const handleSlugBlurTR = (lc) => {
     const current = translations[lc]?.slug || '';
     const normalized = slugify(current);
@@ -305,6 +368,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
         ? 'Slug chỉ gồm a-z, 0-9 và dấu gạch nối (-), không bắt đầu/kết thúc bằng -.'
         : ''
     }));
+    triggerCheckSlugTR(lc, normalized);
   };
 
   const generateSlugFromTRName = (lc) => {
@@ -318,8 +382,100 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
       ...prev,
       [lc]: s && !isValidSlug(s) ? 'Slug không hợp lệ.' : ''
     }));
+    if (s) triggerCheckSlugTR(lc, s);
   };
 
+  // ==== CHECKERS ====
+  function triggerCheckSlugVI(raw) {
+    const val = slugify(raw || base.slug || '');
+    if (!val) {
+      setSlugStatusVI({ checking:false, available:false, normalized:'', msg:'Slug trống' });
+      return;
+    }
+    setSlugStatusVI(prev => ({ ...prev, checking:true, available:null, normalized:val }));
+    const q = new URLSearchParams({ slug: val });
+    if (isEditing && initialData.id) q.set('exclude_id', String(initialData.id));
+    // debounce nhẹ bằng setTimeout 0 để tránh đụng state batching
+    setTimeout(async () => {
+      try {
+        const j = await fetchJSON(`/api/parents/check_slug?${q.toString()}`);
+        if (j?.ok) {
+          if (j.available) {
+            setSlugStatusVI({ checking:false, available:true, normalized:j.slug });
+            setSlugErrorVI('');
+          } else {
+            // gợi ý
+            const suggestion = await findFirstAvailableSuggestion(j.slug || val, (cand) => {
+              const q2 = new URLSearchParams({ slug: cand });
+              if (isEditing && initialData.id) q2.set('exclude_id', String(initialData.id));
+              return `/api/parents/check_slug?${q2.toString()}`;
+            });
+            setSlugStatusVI({
+              checking:false, available:false, normalized:j.slug || val,
+              suggestion, msg:'Slug đã tồn tại, hãy đổi hoặc dùng gợi ý.'
+            });
+            setSlugErrorVI('Slug bị trùng.');
+          }
+        } else {
+          setSlugStatusVI({ checking:false, available:null, normalized:val, msg:'Không kiểm tra được' });
+        }
+      } catch {
+        setSlugStatusVI({ checking:false, available:null, normalized:val, msg:'Không kiểm tra được' });
+      }
+    }, 0);
+  }
+
+  function triggerCheckSlugTR(lc, raw) {
+    const val = slugify(raw ?? translations[lc]?.slug ?? '');
+    if (!val) {
+      setSlugStatusTr(prev => ({ ...prev, [lc]: { checking:false, available:false, normalized:'', msg:'Slug trống' } }));
+      return;
+    }
+    setSlugStatusTr(prev => ({ ...prev, [lc]: { ...(prev[lc]||{}), checking:true, available:null, normalized:val } }));
+
+    clearTimeout(checkTrTimers.current[lc]);
+    checkTrTimers.current[lc] = setTimeout(async () => {
+      try {
+        const q = new URLSearchParams({ slug: val, locale: lc });
+        if (isEditing && initialData.id) q.set('exclude_id', String(initialData.id));
+        const j = await fetchJSON(`/api/parents/check_slug_tr?${q.toString()}`);
+        if (j?.ok) {
+          if (j.available) {
+            setSlugStatusTr(prev => ({ ...prev, [lc]: { checking:false, available:true, normalized:j.slug } }));
+            setSlugErrorsTr(prev => ({ ...prev, [lc]: '' }));
+          } else {
+            const suggestion = await findFirstAvailableSuggestion(j.slug || val, (cand) => {
+              const q2 = new URLSearchParams({ slug: cand, locale: lc });
+              if (isEditing && initialData.id) q2.set('exclude_id', String(initialData.id));
+              return `/api/parents/check_slug_tr?${q2.toString()}`;
+            });
+            setSlugStatusTr(prev => ({ ...prev, [lc]: {
+              checking:false, available:false, normalized:j.slug || val,
+              suggestion, msg:'Slug đã tồn tại, hãy đổi hoặc dùng gợi ý.'
+            }}));
+            setSlugErrorsTr(prev => ({ ...prev, [lc]: 'Slug bị trùng.' }));
+          }
+        } else {
+          setSlugStatusTr(prev => ({ ...prev, [lc]: { checking:false, available:null, normalized:val, msg:'Không kiểm tra được' } }));
+        }
+      } catch {
+        setSlugStatusTr(prev => ({ ...prev, [lc]: { checking:false, available:null, normalized:val, msg:'Không kiểm tra được' } }));
+      }
+    }, 350);
+  }
+
+  async function findFirstAvailableSuggestion(baseSlug, toUrl) {
+    const cands = makeCandidates(baseSlug);
+    for (const cand of cands) {
+      try {
+        const j = await fetchJSON(toUrl(cand));
+        if (j?.ok && j.available) return j.slug;
+      } catch { /* ignore */ }
+    }
+    return '';
+  }
+
+  // Upload ảnh
   const uploadImage = async (file) => {
     const formData = new FormData();
     formData.append('image', file);
@@ -327,36 +483,73 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
     if (!response.ok) throw new Error('Upload failed');
     const data = await response.json();
     return {
-      image_key: data.image_key,                 
+      image_key: data.image_key,
       previewUrl: data.displayUrl || data.url,
     };
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // validate như cũ...
+
+    // Nếu slug VI không hợp lệ hoặc trùng mà người dùng chưa chấp nhận gợi ý
+    if (base.slug && !isValidSlug(base.slug)) {
+      alert('Slug (VI) không hợp lệ.');
+      return;
+    }
+    if (slugStatusVI.available === false) {
+      const sug = slugStatusVI.suggestion;
+      if (sug) {
+        const ok = confirm(`Slug bị trùng. Dùng gợi ý "${sug}" không?`);
+        if (ok) {
+          setBase(prev => ({ ...prev, slug: sug }));
+        } else {
+          return;
+        }
+      } else {
+        alert('Slug (VI) đang bị trùng, vui lòng đổi.');
+        return;
+      }
+    }
+
+    // validate translations slug đơn giản
+    for (const lc of Object.keys(translations)) {
+      const s = translations[lc]?.slug?.trim();
+      if (s && !isValidSlug(s)) {
+        alert(`Slug (${lc.toUpperCase()}) không hợp lệ.`);
+        return;
+      }
+      if (slugStatusTr[lc]?.available === false) {
+        const sug = slugStatusTr[lc]?.suggestion;
+        if (sug) {
+          const ok = confirm(`Slug (${lc.toUpperCase()}) bị trùng. Dùng gợi ý "${sug}" không?`);
+          if (ok) {
+            setTranslations(prev => ({ ...prev, [lc]: { ...(prev[lc]||{}), slug: sug } }));
+          } else {
+            return;
+          }
+        } else {
+          alert(`Slug (${lc.toUpperCase()}) đang bị trùng, vui lòng đổi.`);
+          return;
+        }
+      }
+    }
 
     setIsUploading(true);
     try {
-      // --- ẢNH: áp dụng logic giống đoạn mẫu bạn đưa ---
+      // Ảnh
       let image_url = base.image_url;
 
       if (imageFile) {
-        // chọn ảnh mới -> upload và dùng key mới
         const uploaded = await uploadImage(imageFile);
         image_url = uploaded.image_key;
         setImagePreview(uploaded.previewUrl);
       } else if (isEditing) {
-        // đang edit nhưng không upload ảnh mới
         if (removedImage) {
-          // đã bấm xoá -> gửi null để BE xoá ảnh
           image_url = null;
         } else {
-          // không đụng gì tới ảnh -> KHÔNG GỬI image_url trong payload
-          image_url = undefined; // đánh dấu để lát nữa loại field này
+          image_url = undefined;
         }
       } else {
-        // đang tạo mới, nếu có sẵn url thì gửi; không thì thôi
         image_url = base.image_url ? base.image_url : undefined;
       }
 
@@ -364,7 +557,6 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
       let payloadBase = {
         name: base.name,
         description: base.description,
-        // chỉ set khi cần:
         ...(image_url !== undefined ? { image_url } : {})
       };
 
@@ -374,7 +566,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
         payloadBase = rest;
       }
 
-      // Translations như cũ...
+      // Translations
       const cleanTranslations = {};
       for (const [lc, v] of Object.entries(translations)) {
         const tName = (v?.name || '').trim();
@@ -410,8 +602,11 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
       setImagePreview('');
       setSlugErrorVI('');
       setSlugErrorsTr({});
-      setRemovedImage(false); // NEW: reset cờ
+      setRemovedImage(false);
       lastSourceSnapshot.current = { name: '', description: '' };
+      setBaseSlugTouched(false);
+      setSlugStatusVI({ checking:false, available:null });
+      setSlugStatusTr({});
     } catch (error) {
       console.error(error);
       alert('Có lỗi xảy ra khi upload ảnh hoặc gửi dữ liệu. Vui lòng thử lại!');
@@ -419,7 +614,6 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
       setIsUploading(false);
     }
   };
-
 
   if (!isOpen) return null;
   const siteURL = import.meta?.env?.VITE_SITE_URL || '';
@@ -547,6 +741,33 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 disabled:bg-gray-100 ${slugErrorVI ? 'border-red-400 focus:ring-red-300' : 'border-gray-300 focus:ring-blue-500'
                       }`}
                   />
+
+                  {/* trạng thái check */}
+                  {slugStatusVI.checking && (
+                    <p className="text-xs text-gray-500 mt-1">Đang kiểm tra slug...</p>
+                  )}
+                  {slugStatusVI.available === true && (
+                    <p className="text-xs text-green-600 mt-1">Slug khả dụng.</p>
+                  )}
+                  {slugStatusVI.available === false && (
+                    <div className="text-xs text-red-600 mt-1 flex items-center gap-2 flex-wrap">
+                      <span>{slugStatusVI.msg || 'Slug đã tồn tại.'}</span>
+                      {slugStatusVI.suggestion && (
+                        <button
+                          type="button"
+                          className="cursor-pointer inline-flex text-xs px-2 py-1 rounded bg-red-50 border border-red-200 hover:bg-red-100"
+                          onClick={() => {
+                            setBase(prev => ({ ...prev, slug: slugStatusVI.suggestion || prev.slug }));
+                            setBaseSlugTouched(true);
+                            triggerCheckSlugVI(slugStatusVI.suggestion);
+                          }}
+                        >
+                          Dùng gợi ý: {slugStatusVI.suggestion}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {slugErrorVI ? (
                     <p className="text-sm text-red-600 mt-1">{slugErrorVI}</p>
                   ) : (
@@ -630,6 +851,35 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
                       disabled={isUploading}
                       className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 disabled:bg-gray-100 ${slugErrorsTr[lc] ? 'border-red-400 focus:ring-red-300' : 'border-gray-300 focus:ring-blue-500'}`}
                     />
+
+                    {/* trạng thái check */}
+                    {slugStatusTr[lc]?.checking && (
+                      <p className="text-xs text-gray-500 mt-1">Đang kiểm tra slug...</p>
+                    )}
+                    {slugStatusTr[lc]?.available === true && (
+                      <p className="text-xs text-green-600 mt-1">Slug khả dụng.</p>
+                    )}
+                    {slugStatusTr[lc]?.available === false && (
+                      <div className="text-xs text-red-600 mt-1 flex items-center gap-2 flex-wrap">
+                        <span>{slugStatusTr[lc]?.msg || 'Slug đã tồn tại.'}</span>
+                        {slugStatusTr[lc]?.suggestion && (
+                          <button
+                            type="button"
+                            className="cursor-pointer inline-flex text-xs px-2 py-1 rounded bg-red-50 border border-red-200 hover:bg-red-100"
+                            onClick={() => {
+                              const s = slugStatusTr[lc]?.suggestion;
+                              if (!s) return;
+                              setTranslations(prev => ({ ...prev, [lc]: { ...(prev[lc]||{}), slug: s } }));
+                              setTouched(prev => ({ ...prev, [lc]: { ...(prev[lc]||{}), slug: true } }));
+                              triggerCheckSlugTR(lc, s);
+                            }}
+                          >
+                            Dùng gợi ý: {slugStatusTr[lc]?.suggestion}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     {slugErrorsTr[lc] ? (
                       <p className="text-sm text-red-600 mt-1">{slugErrorsTr[lc]}</p>
                     ) : (
@@ -686,7 +936,7 @@ const ParentCategoriesFormModal = ({ isOpen, onClose, onSubmit, initialData = {}
   );
 };
 
-function ImagePicker({ imagePreview, setImagePreview, setImageFile, setBase, isUploading }) {
+function ImagePicker({ imagePreview, setImagePreview, setImageFile, setBase, isUploading, onRemove }) {
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">Ảnh minh họa</label>
@@ -699,7 +949,7 @@ function ImagePicker({ imagePreview, setImagePreview, setImageFile, setBase, isU
               setImageFile(null);
               setImagePreview('');
               setBase(prev => ({ ...prev, image_url: '' }));
-              onRemove?.();  
+              onRemove?.();
             }}
             disabled={isUploading}
             className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600 disabled:bg-gray-400"

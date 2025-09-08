@@ -51,6 +51,64 @@ async function resolveParentId(c, idOrSlug) {
  *  - with_counts=1
  *  - with_subs=1
  */
+
+// ==== CHECK SLUG: base (VI) ====
+parentsRouter.get("/check_slug", async (c) => {
+  try {
+    if (!hasDB(c.env)) return c.json({ ok: false, error: "DB unavailable" }, 503);
+    const slugRaw = (c.req.query("slug") || "").trim();
+    const excludeId = Number(c.req.query("exclude_id") || 0);
+    const slug = slugify(slugRaw);
+
+    if (!slug) return c.json({ ok: true, available: false, reason: "empty" });
+
+    // Kiểm tra trong parent_categories.slug
+    let sql = `SELECT id FROM parent_categories WHERE slug = ?`;
+    const params = [slug];
+
+    if (excludeId) {
+      sql += ` AND id <> ?`;
+      params.push(excludeId);
+    }
+    const row = await c.env.DB.prepare(sql).bind(...params).first();
+
+    return c.json({ ok: true, slug, available: !row });
+  } catch (err) {
+    console.error("check_slug error:", err);
+    return c.json({ ok: false, error: "check failed" }, 500);
+  }
+});
+
+// ==== CHECK SLUG: translation (per locale) ====
+parentsRouter.get("/check_slug_tr", async (c) => {
+  try {
+    if (!hasDB(c.env)) return c.json({ ok: false, error: "DB unavailable" }, 503);
+    const slugRaw = (c.req.query("slug") || "").trim();
+    const locale = (c.req.query("locale") || "").trim().toLowerCase();
+    const excludeId = Number(c.req.query("exclude_id") || 0);
+    const slug = slugify(slugRaw);
+
+    if (!slug || !locale) {
+      return c.json({ ok: true, available: false, reason: "empty_or_no_locale" });
+    }
+
+    let sql = `SELECT parent_id AS id FROM parent_categories_translations WHERE locale = ? AND slug = ?`;
+    const params = [locale, slug];
+
+    if (excludeId) {
+      sql += ` AND parent_id <> ?`;
+      params.push(excludeId);
+    }
+    const row = await c.env.DB.prepare(sql).bind(...params).first();
+
+    return c.json({ ok: true, slug, available: !row, locale });
+  } catch (err) {
+    console.error("check_slug_tr error:", err);
+    return c.json({ ok: false, error: "check failed" }, 500);
+  }
+});
+
+
 parentsRouter.get("/", async (c) => {
   const { limit, offset, q, with_counts, with_subs } = c.req.query();
   try {

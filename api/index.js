@@ -23,8 +23,7 @@ import adminRouter from "./admin/admin.js";
 import { requireAdminAuth, requirePerm } from "./auth/authMidleware.js";
 import { jwtVerify } from "jose";
 import { getCookie } from "hono/cookie";
-import { migrate0012 } from "./routes/migrate_0012.js";
-
+import { adminCreateTable } from "./routes/createtable.js";
 const enc = new TextEncoder();
 const getKey = (secret) => enc.encode(secret);
 
@@ -396,10 +395,7 @@ app.use("/api/users/*", requirePerm("users.manage"));
 app.route("/", seoRoot);
 app.route("/sitemaps", sitemaps);
 
-// ⛳️ Mount migration/schema endpoints ra /update (GET không bị chặn)
-app.use("/update/*", guardUpdate);
-app.route("/update", migrate0012);
-
+app.route("/admin", adminCreateTable);
 app.route("/api/seo", seoApp);
 app.route("/api/auth", authRouter);
 app.route("/api/users", userRouter);
