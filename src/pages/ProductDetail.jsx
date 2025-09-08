@@ -228,11 +228,11 @@ function Lightbox({ open, images, index, onClose, onPrev, onNext, title }) {
       )}
 
       {/* Ảnh trong khung đồng nhất (vuông) */}
-      <div className="w-[min(92vw,1100px)] h-[min(88vh,92vw)] bg-white rounded-xl shadow-xl overflow-hidden flex items-center justify-center">
+      <div className="w-[min(90vw,90vh)] h-[min(90vw,90vh)] bg-white rounded-xl shadow-xl overflow-hidden flex items-center justify-center">
         <img
           src={src || "/banner.jpg"}
           alt={title || "image"}
-          className="w-full h-full object-contain"
+          className="w-full h-full"
           loading="eager"
           onError={(e) => (e.currentTarget.src = "/banner.jpg")}
         />
