@@ -1,6 +1,9 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 import{R}from"./index-C2six7h2.js";var le=Object.defineProperty,D=Object.getOwnPropertySymbols,V=Object.prototype.hasOwnProperty,x=Object.prototype.propertyIsEnumerable,Y=(u,l,s)=>l in u?le(u,l,{enumerable:!0,configurable:!0,writable:!0,value:s}):u[l]=s,z=(u,l)=>{for(var s in l||(l={}))V.call(l,s)&&Y(u,s,l[s]);if(D)for(var s of D(l))x.call(l,s)&&Y(u,s,l[s]);return u},U=(u,l)=>{var s={};for(var c in u)V.call(u,c)&&l.indexOf(c)<0&&(s[c]=u[c]);if(u!=null&&D)for(var c of D(u))l.indexOf(c)<0&&x.call(u,c)&&(s[c]=u[c]);return s};/**
 =======
+=======
+>>>>>>> 3e7c014 (fix translate)
 <<<<<<<< HEAD:dist/client/assets/index-gW_PKHq9.js
 <<<<<<< HEAD:dist/client/assets/index-gW_PKHq9.js
 <<<<<<<< HEAD:dist/client/assets/index-gW_PKHq9.js
@@ -14,7 +17,13 @@ import{R}from"./index-D6uHI9IO.js";var le=Object.defineProperty,D=Object.getOwnP
 ========
 import{R}from"./index-C2six7h2.js";var le=Object.defineProperty,D=Object.getOwnPropertySymbols,V=Object.prototype.hasOwnProperty,x=Object.prototype.propertyIsEnumerable,Y=(u,l,s)=>l in u?le(u,l,{enumerable:!0,configurable:!0,writable:!0,value:s}):u[l]=s,z=(u,l)=>{for(var s in l||(l={}))V.call(l,s)&&Y(u,s,l[s]);if(D)for(var s of D(l))x.call(l,s)&&Y(u,s,l[s]);return u},U=(u,l)=>{var s={};for(var c in u)V.call(u,c)&&l.indexOf(c)<0&&(s[c]=u[c]);if(u!=null&&D)for(var c of D(u))l.indexOf(c)<0&&x.call(u,c)&&(s[c]=u[c]);return s};/**
 >>>>>>>> b5f4e15 (fix gg translates):dist/client/assets/index-DIi18JFy.js
+<<<<<<< HEAD
 >>>>>>> ee6ea05 (fix gg translates)
+=======
+=======
+import{R}from"./index-C2six7h2.js";var le=Object.defineProperty,D=Object.getOwnPropertySymbols,V=Object.prototype.hasOwnProperty,x=Object.prototype.propertyIsEnumerable,Y=(u,l,s)=>l in u?le(u,l,{enumerable:!0,configurable:!0,writable:!0,value:s}):u[l]=s,z=(u,l)=>{for(var s in l||(l={}))V.call(l,s)&&Y(u,s,l[s]);if(D)for(var s of D(l))x.call(l,s)&&Y(u,s,l[s]);return u},U=(u,l)=>{var s={};for(var c in u)V.call(u,c)&&l.indexOf(c)<0&&(s[c]=u[c]);if(u!=null&&D)for(var c of D(u))l.indexOf(c)<0&&x.call(u,c)&&(s[c]=u[c]);return s};/**
+>>>>>>> 0480fdf (fix translate)
+>>>>>>> 3e7c014 (fix translate)
  * @license QR Code generator library (TypeScript)
  * Copyright (c) Project Nayuki.
  * SPDX-License-Identifier: MIT
