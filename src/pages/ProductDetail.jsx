@@ -228,7 +228,7 @@ function Lightbox({ open, images, index, onClose, onPrev, onNext, title }) {
       )}
 
       {/* Ảnh trong khung đồng nhất (vuông) */}
-      <div className="w-[min(90vw,90vh)] h-[min(90vw,90vh)] bg-white rounded-xl shadow-xl overflow-hidden flex items-center justify-center">
+      <div className="w-[min(90vw,90vh)] h-[min(80vw,80vh)] bg-white rounded-xl shadow-xl overflow-hidden flex items-center justify-center">
         <img
           src={src || "/banner.jpg"}
           alt={title || "image"}
