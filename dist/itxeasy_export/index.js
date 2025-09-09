@@ -2012,47 +2012,20 @@ var SmartRouter = class {
     let i = 0;
     let res;
     for (; i < len; i++) {
-<<<<<<< HEAD
-<<<<<<< HEAD
       const router2 = routers[i];
       try {
         for (let i2 = 0, len2 = routes.length; i2 < len2; i2++) {
           router2.add(...routes[i2]);
         }
         res = router2.match(method, path);
-=======
-      const router = routers[i];
-=======
-      const router2 = routers[i];
->>>>>>> c3e4c54 (update admin)
-      try {
-        for (let i2 = 0, len2 = routes.length; i2 < len2; i2++) {
-          router2.add(...routes[i2]);
-        }
-<<<<<<< HEAD
-        res = router.match(method, path);
->>>>>>> 05698dd (update)
-=======
-        res = router2.match(method, path);
->>>>>>> c3e4c54 (update admin)
       } catch (e) {
         if (e instanceof UnsupportedPathError) {
           continue;
         }
         throw e;
       }
-<<<<<<< HEAD
-<<<<<<< HEAD
       this.match = router2.match.bind(router2);
       this.#routers = [router2];
-=======
-      this.match = router.match.bind(router);
-      this.#routers = [router];
->>>>>>> 05698dd (update)
-=======
-      this.match = router2.match.bind(router2);
-      this.#routers = [router2];
->>>>>>> c3e4c54 (update admin)
       this.#routes = void 0;
       break;
     }
@@ -2254,84 +2227,59 @@ var Hono2 = class extends Hono$1 {
   }
 };
 function toSlug(s = "", maxLen = 80) {
-  return String(s).toLowerCase().normalize("NFD").replace(/[^\p{Letter}\p{Number}\s\-_.]/gu, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^[\-.]+|[\-.]+$/g, "").slice(0, maxLen).replace(/[\-.]+$/g, "");
+  return String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-_.]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^[-.]+|[-.]+$/g, "").slice(0, maxLen).replace(/[-.]+$/g, "");
 }
 function sanitizePrefix(input = "") {
-  return String(input || "").toLowerCase().replace(/[^a-z0-9\/_-]+/g, "").replace(/\.{2,}/g, "").replace(/\/{2,}/g, "/").replace(/^\/+|\/+$/g, "");
+  return String(input || "").toLowerCase().replace(/[^a-z0-9/_-]+/g, "").replace(/\.\.+/g, "").replace(/\/{2,}/g, "/").replace(/^\/+|\/+$/g, "");
 }
 const EXT_BY_MIME = {
   "image/jpeg": "jpg",
   "image/jpg": "jpg",
   "image/png": "png",
   "image/gif": "gif",
-  "image/webp": "webp"
+  "image/webp": "webp",
+  "image/avif": "avif"
 };
+function clamp01$1(n) {
+  if (!Number.isFinite(n)) return 0.95;
+  return Math.max(0, Math.min(1, n));
+}
+function toAnchor$1(p) {
+  return p === "tl" ? { top: 0, left: 0 } : p === "tr" ? { top: 0, right: 0 } : p === "bl" ? { bottom: 0, left: 0 } : { bottom: 0, right: 0 };
+}
+function withWatermarkKey$1(k) {
+  const i = k.lastIndexOf(".");
+  return i < 0 ? `${k}-wm` : `${k.slice(0, i)}-wm${k.slice(i)}`;
+}
+function mimeFromKeyOrType(nameOrMime = "image/jpeg") {
+  const s = String(nameOrMime).toLowerCase();
+  const m1 = s.match(/\.(jpe?g|png|webp|avif|gif)$/)?.[1];
+  if (m1 === "jpg" || m1 === "jpeg") return "image/jpeg";
+  if (m1 === "png") return "image/png";
+  if (m1 === "webp") return "image/webp";
+  if (m1 === "avif") return "image/avif";
+  if (m1 === "gif") return "image/gif";
+  if (s.includes("jpeg")) return "image/jpeg";
+  if (s.includes("png")) return "image/png";
+  if (s.includes("webp")) return "image/webp";
+  if (s.includes("avif")) return "image/avif";
+  if (s.includes("gif")) return "image/gif";
+  return "image/jpeg";
+}
 const uploadImageRouter = new Hono2();
-uploadImageRouter.get("/__diag", async (c) => {
-  const env2 = c.env || {};
-  const hasIMAGES = !!env2.IMAGES;
-  const hasPUBLIC = !!env2.PUBLIC_R2_URL;
-  const hasINTERNAL = !!env2.INTERNAL_R2_URL;
-  const addId = String(env2.ADD_RANDOM_ID || "").toLowerCase() === "true";
-  let putOk = false, headOk = false, err = null;
-  try {
-    if (hasIMAGES) {
-      await env2.IMAGES.put("healthcheck.txt", "ok", { httpMetadata: { contentType: "text/plain" } });
-      const head = await env2.IMAGES.head("healthcheck.txt");
-      putOk = true;
-      headOk = !!head;
-    }
-  } catch (e) {
-    err = String(e);
-  }
-  return c.json({
-    service: "upload-image",
-    hasIMAGES,
-    hasPUBLIC,
-    hasINTERNAL,
-    addId,
-    putOk,
-    headOk,
-    err,
-    now: (/* @__PURE__ */ new Date()).toISOString()
-  });
-});
 uploadImageRouter.post("/", async (c) => {
   try {
-    if (!c.env?.IMAGES) {
-      const msg = "R2 binding IMAGES chưa được cấu hình trên service đang chạy.";
-      console.error("Upload error:", msg);
-      return c.json({ code: "IMAGES_BINDING_MISSING", error: msg }, 500);
-    }
-    let formData;
-    try {
-      formData = await c.req.formData();
-    } catch (e) {
-      console.error("formData() failed. Có thể bạn đang gửi Content-Type=application/json", e);
-      return c.json({ code: "BAD_MULTIPART", error: "Không thể đọc FormData. Hãy gửi multipart/form-data và KHÔNG tự set Content-Type." }, 400);
-    }
+    const formData = await c.req.formData();
     const file = formData.get("image");
     if (!file || typeof file === "string") {
-      return c.json({ code: "NO_FILE", error: 'Không có file nào được upload (thiếu field "image").' }, 400);
+      return c.json({ error: "Không có file nào được upload" }, 400);
     }
     const allowedTypes = Object.keys(EXT_BY_MIME);
     if (!allowedTypes.includes(file.type)) {
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-      return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP)" }, 400);
-=======
       return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP, AVIF)" }, 400);
->>>>>>> c3e4c54 (update admin)
-=======
-      return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP)" }, 400);
->>>>>>> f350d3f (update category)
-=======
-      return c.json({ code: "UNSUPPORTED_TYPE", error: "Chỉ chấp nhận ảnh JPEG, PNG, GIF, WebP." }, 400);
->>>>>>> b9cc66f (merge leads)
     }
     if (file.size > 5 * 1024 * 1024) {
-      return c.json({ code: "FILE_TOO_BIG", error: "Kích thước ảnh không được vượt quá 5MB." }, 400);
+      return c.json({ error: "Kích thước ảnh không được vượt quá 5MB!" }, 400);
     }
     const urlObj = new URL(c.req.url);
     const rawSeoName = formData.get("seoName") || urlObj.searchParams.get("seoName") || (file.name ? file.name.replace(/\.[^.]+$/, "") : "image");
@@ -2357,29 +2305,15 @@ uploadImageRouter.post("/", async (c) => {
         tries++;
       }
     }
-<<<<<<< HEAD
     const r2 = c.env.IMAGES;
-<<<<<<< HEAD
-<<<<<<< HEAD
-    await r2.put(key, await file.arrayBuffer(), {
-=======
     const arrBuf = await file.arrayBuffer();
     await r2.put(key, arrBuf, {
->>>>>>> c3e4c54 (update admin)
-=======
-    await r2.put(key, await file.arrayBuffer(), {
->>>>>>> f350d3f (update category)
       httpMetadata: {
         contentType: file.type,
         cacheControl: "public, max-age=31536000, immutable",
         contentDisposition: `inline; filename="${key.split("/").pop()}"`
       }
     });
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
     const wmParam = formData.get("wm") ?? urlObj.searchParams.get("wm") ?? "";
     const wmEnabledDefault = String(c.env.AUTO_WATERMARK || "1") === "1";
     const wmEnabled = wmParam === "0" ? false : wmParam === "1" ? true : wmEnabledDefault;
@@ -2414,107 +2348,33 @@ uploadImageRouter.post("/", async (c) => {
         console.warn("[upload-image] watermark failed:", e);
       }
     }
->>>>>>> c3e4c54 (update admin)
-=======
->>>>>>> f350d3f (update category)
-=======
-    try {
-      await c.env.IMAGES.put(key, await file.arrayBuffer(), {
-        httpMetadata: {
-          contentType: file.type,
-          cacheControl: "public, max-age=31536000, immutable",
-          contentDisposition: `inline; filename="${key.split("/").pop()}"`
-        }
-      });
-    } catch (err) {
-      console.error("R2 put() failed:", err);
-      return c.json({ code: "R2_PUT_FAILED", error: "Lỗi khi ghi file vào R2", details: String(err) }, 500);
-    }
->>>>>>> b9cc66f (merge leads)
-    if (!c.env.INTERNAL_R2_URL && !c.env.PUBLIC_R2_URL) {
-      const msg = "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL để dựng URL hiển thị.";
-      console.error("Upload error:", msg);
-      return c.json({ code: "MISSING_R2_URL", error: msg, key }, 500);
-    }
-    const storageBase = (c.env.INTERNAL_R2_URL || c.env.PUBLIC_R2_URL).replace(/\/+$/, "");
-    const displayBase = (c.env.PUBLIC_R2_URL || storageBase).replace(/\/+$/, "");
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-    if (!c.env.PUBLIC_R2_URL) {
-      return c.json({ error: "Thiếu PUBLIC_R2_URL trong cấu hình môi trường" }, 500);
-    }
-    const storageBase = c.env.PUBLIC_R2_URL.replace(/\/+$/, "");
-    const displayBase = (c.env.DISPLAY_BASE_URL || storageBase).replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
     if (!c.env.INTERNAL_R2_URL && !c.env.PUBLIC_R2_URL) {
       return c.json({ error: "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL" }, 500);
     }
     const storageBase = (c.env.INTERNAL_R2_URL || c.env.PUBLIC_R2_URL).replace(/\/+$/, "");
     const displayBase = (c.env.PUBLIC_R2_URL || storageBase).replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
-    const storageUrl = `${storageBase}/${key}`;
-    const displayUrl = `${displayBase}/${key}`;
-    return c.json({
-      success: true,
-      image_key: key,
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-      url: storageUrl,
->>>>>>> 05698dd (update)
-=======
->>>>>>> 8642042 (merge branch leads)
-      displayUrl,
-      storageUrl,
-      fileName: key.split("/").pop(),
-<<<<<<< HEAD
-=======
     const finalKey = wmKey || key;
     const storageUrl = `${storageBase}/${finalKey}`;
     const displayUrl = `${displayBase}/${finalKey}`;
-=======
-    const storageUrl = `${storageBase}/${key}`;
-    const displayUrl = `${displayBase}/${key}`;
->>>>>>> f350d3f (update category)
     return c.json({
       success: true,
-      image_key: key,
+      image_key: finalKey,
+      // key cuối cùng (ưu tiên -wm nếu có)
+      original_key: key,
+      // key gốc (để debug/ghi DB nếu muốn)
+      wm_applied: Boolean(wmKey),
+      // có chèn watermark không
+      wm_key: wmKey || null,
       displayUrl,
-<<<<<<< HEAD
       fileName: finalKey.split("/").pop(),
->>>>>>> c3e4c54 (update admin)
-=======
-      fileName: key.split("/").pop(),
->>>>>>> f350d3f (update category)
-=======
-      mime: file.type,
-      size: file.size,
->>>>>>> b9cc66f (merge leads)
       alt: baseSlug,
       prefix
     });
   } catch (error) {
-    console.error("Upload error (unhandled):", error, error?.stack);
+    console.error("Upload error:", error);
     return c.json({
-      code: "UNHANDLED",
       error: "Có lỗi xảy ra khi upload ảnh",
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-      details: error.message
-=======
       details: error?.message || String(error)
->>>>>>> c3e4c54 (update admin)
-=======
-      details: error.message
->>>>>>> f350d3f (update category)
-=======
-      name: error?.name || null,
-      message: error?.message || String(error),
-      stack: error?.stack || null
->>>>>>> b9cc66f (merge leads)
     }, 500);
   }
 });
@@ -2545,15 +2405,7 @@ editorUploadRouter.post("/", async (c) => {
     await r2.put(fileName, await file.arrayBuffer(), {
       httpMetadata: { contentType: file.type }
     });
-<<<<<<< HEAD
-<<<<<<< HEAD
     const baseUrl2 = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const baseUrl2 = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const baseUrl2 = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const publicUrl = `${baseUrl2}/${fileName}`;
     return c.json({
       success: 1,
@@ -2566,10 +2418,6 @@ editorUploadRouter.post("/", async (c) => {
     return c.json({ success: 0, message: error.message }, 500);
   }
 });
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> c3e4c54 (update admin)
 const router = new Hono2();
 router.post("/", async (c) => {
   const { IMAGES, IMGPROC } = c.env;
@@ -2624,11 +2472,6 @@ function mimeFromKey(k) {
   if (ext === "gif") return "image/gif";
   return "image/jpeg";
 }
-<<<<<<< HEAD
-=======
->>>>>>> 05698dd (update)
-=======
->>>>>>> c3e4c54 (update admin)
 const DEFAULT_LOCALE$7 = "vi";
 const getLocale$7 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$7).toLowerCase();
 const hasDB$7 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
@@ -2676,15 +2519,7 @@ aboutRouter.get("/", async (c) => {
       ORDER BY a.id ASC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const about = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -2702,15 +2537,7 @@ aboutRouter.get("/:id", async (c) => {
     const locale = getLocale$7(c);
     const item = await getMergedAboutById(c.env.DB, id, locale);
     if (!item) return c.json({ error: "Not found" }, 404);
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const about = {
       ...item,
       image_url: item.image_url ? `${base}/${item.image_url}` : null
@@ -2943,15 +2770,7 @@ newsRouter.get("/", async (c) => {
     `;
     const params = [locale];
     const { results = [] } = await c.env.DB.prepare(sql).bind(...params).all();
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const news = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -2983,15 +2802,7 @@ newsRouter.get("/:idOrSlug", async (c) => {
     const raw = await getMergedNewsById(c.env.DB, newsId, locale);
     if (!raw) return c.json({ error: "Not found" }, 404);
     const translations = await getAllTranslations(c.env.DB, newsId);
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -3560,15 +3371,7 @@ parentsRouter.get("/", async (c) => {
     if (hasOffset) params.push(Number(offset));
     const result = await c.env.DB.prepare(baseSql).bind(...params).all();
     let parents = result?.results ?? [];
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const toFullUrl = (k) => k ? `${base}/${k}` : null;
     if (String(with_counts) === "1" && parents.length) {
       const ids = parents.map((p) => p.id);
@@ -3678,15 +3481,7 @@ parentsRouter.get("/:idOrSlug", async (c) => {
     `;
     const parent = await c.env.DB.prepare(sql).bind(locale, parentId).first();
     if (!parent) return c.json({ error: "Parent category not found" }, 404);
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const toFullUrl = (k) => k ? `${base}/${k}` : null;
     const outParent = {
       ...parent,
@@ -3942,15 +3737,7 @@ parentsRouter.get("/:slug/products", async (c) => {
     `;
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, parentId).all();
     const rawProducts = res?.results ?? [];
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const products = rawProducts.map((p) => ({
       ...p,
       image_url: p.image_url ? `${base}/${p.image_url}` : null
@@ -3985,15 +3772,7 @@ parentsRouter.get("/:idOrSlug/subcategories", async (c) => {
     `;
     const res = await c.env.DB.prepare(subsSql).bind(locale, parentId).all();
     const rawSubs = res?.results ?? [];
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const subcategories = rawSubs.map((s) => ({
       ...s,
       image_url: s.image_url ? `${base}/${s.image_url}` : null
@@ -4101,15 +3880,7 @@ subCategoriesRouter.get("/", async (c) => {
       }, {});
       subcategories = subcategories.map((s) => ({ ...s, product_count: counts[s.id] || 0 }));
     }
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     subcategories = subcategories.map((s) => ({
       ...s,
       image_url: s.image_url ? `${base}/${s.image_url}` : null
@@ -4160,15 +3931,7 @@ subCategoriesRouter.get("/:idOrSlug", async (c) => {
       const cnt = await c.env.DB.prepare(`SELECT COUNT(*) AS product_count FROM products WHERE subcategory_id = ?`).bind(raw.id).first();
       product_count = Number(cnt?.product_count || 0);
     }
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const subcategory = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null,
@@ -4438,15 +4201,7 @@ subCategoriesRouter.get("/:slug/products", async (c) => {
     `;
     const res = await c.env.DB.prepare(sql).bind(locale, locale, locale, subId).all();
     const rows = res?.results ?? [];
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const products = rows.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -32174,7 +31929,6 @@ const DEFAULT_LOCALE$3 = "vi";
 const getLocale$3 = (c) => (c.req.query("locale") || DEFAULT_LOCALE$3).toLowerCase();
 const hasDB$3 = (env2) => Boolean(env2?.DB) || Boolean(env2?.DB_AVAILABLE);
 const slugify = (s = "") => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-]/g, "").trim().replace(/\s+/g, "-").replace(/-+/g, "-");
-<<<<<<< HEAD
 const withBase = (base, u) => {
   const s = String(u || "").trim();
   if (!s) return null;
@@ -32232,8 +31986,6 @@ function buildImagesView(images_json_text, base) {
   }
 }
 const productsRouter = new Hono2();
-=======
->>>>>>> 05698dd (update)
 const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
   const isNumericId = /^\d+$/.test(idOrSlug);
   const sql = `
@@ -32244,11 +31996,8 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
       COALESCE(pt.description, p.description)   AS description,
       COALESCE(pt.content,     p.content)       AS content,
       p.image_url,
-<<<<<<< HEAD
       p.images_json,              -- NEW
       p.views,                    -- NEW
-=======
->>>>>>> 05698dd (update)
       p.created_at,
       p.updated_at,
 
@@ -32267,10 +32016,6 @@ const findProductByIdOrSlug = async (db, idOrSlug, locale) => {
   `;
   return isNumericId ? db.prepare(sql).bind(locale, locale, Number(idOrSlug)).first() : db.prepare(sql).bind(locale, locale, idOrSlug, idOrSlug).first();
 };
-<<<<<<< HEAD
-=======
-const productsRouter = new Hono2();
->>>>>>> 05698dd (update)
 productsRouter.get("/", async (c) => {
   const { subcategory_id, sub_slug, limit, offset, q } = c.req.query();
   try {
@@ -32316,13 +32061,9 @@ productsRouter.get("/", async (c) => {
         COALESCE(pt.slug,  p.slug)                AS slug,
         COALESCE(pt.description, p.description)   AS description,
         COALESCE(pt.content,     p.content)       AS content,
-<<<<<<< HEAD
         p.image_url,
         p.images_json,             -- NEW
         p.views,                   -- NEW
-=======
-        p.image_url,                 -- KEY trong DB
->>>>>>> 05698dd (update)
         p.created_at,
         p.updated_at,
 
@@ -32343,8 +32084,6 @@ productsRouter.get("/", async (c) => {
     `;
     const result = await c.env.DB.prepare(sql).bind(...params).all();
     const rows = result?.results ?? [];
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
     const products = rows.map((r) => {
       const { images, cover } = buildImagesView(r.images_json, base);
@@ -32359,16 +32098,6 @@ productsRouter.get("/", async (c) => {
         // NEW: url tuyệt đối
       };
     });
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
-    const products = rows.map((r) => ({
-      ...r,
-      image_url: r.image_url ? `${base}/${r.image_url}` : null
-    }));
->>>>>>> 05698dd (update)
     return c.json({
       products,
       count: products.length,
@@ -32381,7 +32110,6 @@ productsRouter.get("/", async (c) => {
     return c.json({ error: "Failed to fetch products" }, 500);
   }
 });
-<<<<<<< HEAD
 productsRouter.get("/:id/translations", async (c) => {
   const id = Number(c.req.param("id"));
   try {
@@ -32409,8 +32137,6 @@ productsRouter.get("/:id/translations", async (c) => {
     return c.json({ error: "Failed to get translations" }, 500);
   }
 });
-=======
->>>>>>> 05698dd (update)
 productsRouter.get("/:idOrSlug", async (c) => {
   const idOrSlug = c.req.param("idOrSlug");
   try {
@@ -32418,8 +32144,6 @@ productsRouter.get("/:idOrSlug", async (c) => {
     const locale = getLocale$3(c);
     const raw = await findProductByIdOrSlug(c.env.DB, idOrSlug, locale);
     if (!raw) return c.json({ error: "Product not found" }, 404);
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(
       /\/+$/,
       ""
@@ -32433,15 +32157,6 @@ productsRouter.get("/:idOrSlug", async (c) => {
       // NEW
       cover_image: cover
       // NEW
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
-    const product = {
-      ...raw,
-      image_url: raw.image_url ? `${base}/${raw.image_url}` : null
->>>>>>> 05698dd (update)
     };
     return c.json({ product, source: "database", locale });
   } catch (err) {
@@ -32459,11 +32174,8 @@ productsRouter.post("/", async (c) => {
       description,
       content,
       image_url,
-<<<<<<< HEAD
       images_json,
       // NEW
-=======
->>>>>>> 05698dd (update)
       subcategory_id,
       translations
     } = body || {};
@@ -32475,7 +32187,6 @@ productsRouter.post("/", async (c) => {
       const sub = await c.env.DB.prepare("SELECT id FROM subcategories WHERE id = ?").bind(Number(subcategory_id)).first();
       if (!sub) return c.json({ error: "subcategory_id not found" }, 400);
     }
-<<<<<<< HEAD
     let imagesJsonText = null;
     if (images_json !== void 0) {
       imagesJsonText = normalizeImagesInput(images_json);
@@ -32485,11 +32196,6 @@ productsRouter.post("/", async (c) => {
     const sql = `
       INSERT INTO products (title, slug, description, content, image_url, images_json, subcategory_id)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-=======
-    const sql = `
-      INSERT INTO products (title, slug, description, content, image_url, subcategory_id)
-      VALUES (?, ?, ?, ?, ?, ?)
->>>>>>> 05698dd (update)
     `;
     const runRes = await c.env.DB.prepare(sql).bind(
       title2.trim(),
@@ -32497,10 +32203,7 @@ productsRouter.post("/", async (c) => {
       description || null,
       content,
       image_url || null,
-<<<<<<< HEAD
       imagesJsonText || null,
-=======
->>>>>>> 05698dd (update)
       subcategory_id == null ? null : Number(subcategory_id)
     ).run();
     if (!runRes.success) throw new Error("Insert failed");
@@ -32549,11 +32252,8 @@ productsRouter.put("/:id", async (c) => {
       description,
       content,
       image_url,
-<<<<<<< HEAD
       images_json,
       // NEW
-=======
->>>>>>> 05698dd (update)
       subcategory_id,
       translations
     } = body || {};
@@ -32583,13 +32283,10 @@ productsRouter.put("/:id", async (c) => {
       sets.push("image_url = ?");
       params.push(image_url);
     }
-<<<<<<< HEAD
     if (images_json !== void 0) {
       sets.push("images_json = ?");
       params.push(normalizeImagesInput(images_json));
     }
-=======
->>>>>>> 05698dd (update)
     if (subcategory_id !== void 0) {
       sets.push("subcategory_id = ?");
       params.push(subcategory_id == null ? null : Number(subcategory_id));
@@ -32602,12 +32299,8 @@ productsRouter.put("/:id", async (c) => {
       `;
       params.push(id);
       const res = await c.env.DB.prepare(sql).bind(...params).run();
-<<<<<<< HEAD
       if ((res.meta?.changes || 0) === 0)
         return c.json({ error: "Product not found" }, 404);
-=======
-      if ((res.meta?.changes || 0) === 0) return c.json({ error: "Product not found" }, 404);
->>>>>>> 05698dd (update)
     }
     if (translations && typeof translations === "object") {
       const upsertT = `
@@ -32679,35 +32372,6 @@ productsRouter.put("/:id/translations", async (c) => {
     return c.json({ error: "Failed to upsert translations" }, 500);
   }
 });
-<<<<<<< HEAD
-=======
-productsRouter.get("/:id/translations", async (c) => {
-  const id = Number(c.req.param("id"));
-  try {
-    if (!hasDB$3(c.env)) return c.json({ error: "Database not available" }, 503);
-    const sql = `
-      SELECT locale, title, slug, description, content
-      FROM products_translations
-      WHERE product_id = ?
-      ORDER BY locale ASC
-    `;
-    const { results = [] } = await c.env.DB.prepare(sql).bind(id).all();
-    const translations = {};
-    for (const row of results) {
-      translations[row.locale] = {
-        title: row.title || "",
-        slug: row.slug || "",
-        description: row.description || "",
-        content: row.content || ""
-      };
-    }
-    return c.json({ translations });
-  } catch (err) {
-    console.error("Error fetching product translations:", err);
-    return c.json({ error: "Failed to fetch translations" }, 500);
-  }
-});
->>>>>>> 05698dd (update)
 productsRouter.delete("/:id", async (c) => {
   const id = Number(c.req.param("id"));
   try {
@@ -32724,7 +32388,6 @@ productsRouter.delete("/:id", async (c) => {
     return c.json({ error: "Failed to delete product" }, 500);
   }
 });
-<<<<<<< HEAD
 productsRouter.post("/:id/view", async (c) => {
   const id = Number(c.req.param("id"));
   try {
@@ -32738,8 +32401,6 @@ productsRouter.post("/:id/view", async (c) => {
     return c.json({ error: "Failed to update views" }, 500);
   }
 });
-=======
->>>>>>> 05698dd (update)
 const toStr = (v) => v == null ? "" : String(v).trim();
 function csvToJson(text) {
   const lines = String(text || "").split(/\r?\n/).filter(Boolean);
@@ -32749,13 +32410,9 @@ function csvToJson(text) {
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(",");
     const obj = {};
-<<<<<<< HEAD
     headers.forEach(
       (h, idx) => obj[h] = cols[idx] != null ? cols[idx].trim() : ""
     );
-=======
-    headers.forEach((h, idx) => obj[h] = cols[idx] != null ? cols[idx].trim() : "");
->>>>>>> 05698dd (update)
     rows.push(obj);
   }
   return rows;
@@ -32811,14 +32468,10 @@ function looksUntranslated(src, out, target) {
 async function translateTextInWorker(c, text, source, target) {
   const out = await c.env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
     messages: [
-<<<<<<< HEAD
       {
         role: "system",
         content: `Translate from ${source} to ${target}. Reply with translation only.`
       },
-=======
-      { role: "system", content: `Translate from ${source} to ${target}. Reply with translation only.` },
->>>>>>> 05698dd (update)
       { role: "user", content: text }
     ],
     temperature: 0.2
@@ -32874,7 +32527,6 @@ productsRouter.post("/import", async (c) => {
       rows = csvToJson(text);
     }
     if (!rows.length) {
-<<<<<<< HEAD
       return c.json({
         ok: true,
         created: 0,
@@ -32882,9 +32534,6 @@ productsRouter.post("/import", async (c) => {
         skipped: 0,
         message: "No data rows found"
       });
-=======
-      return c.json({ ok: true, created: 0, updated: 0, skipped: 0, message: "No data rows found" });
->>>>>>> 05698dd (update)
     }
     rows = rows.map((r) => {
       const out = {};
@@ -32947,7 +32596,6 @@ productsRouter.post("/import", async (c) => {
       }
       return null;
     };
-<<<<<<< HEAD
     const gatherImagesFromRow = (row) => {
       if (row.images_json) return normalizeImagesInput(row.images_json);
       const csv = row.images || row.image_urls;
@@ -32961,8 +32609,6 @@ productsRouter.post("/import", async (c) => {
       if (row.image_url) return normalizeImagesInput([row.image_url]);
       return null;
     };
-=======
->>>>>>> 05698dd (update)
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const title2 = toStr(row.title);
@@ -32975,10 +32621,7 @@ productsRouter.post("/import", async (c) => {
       slug = slugify(slug);
       const description = toStr(row.description);
       const image_url = toStr(row.image_url);
-<<<<<<< HEAD
       const imagesJsonText = gatherImagesFromRow(row);
-=======
->>>>>>> 05698dd (update)
       const subcategory_id = resolveSubcategoryId(row);
       if (!subcategory_id) {
         skipped++;
@@ -32996,7 +32639,6 @@ productsRouter.post("/import", async (c) => {
       const exists = await c.env.DB.prepare("SELECT id FROM products WHERE slug = ? LIMIT 1").bind(slug).first();
       let productId;
       if (exists?.id) {
-<<<<<<< HEAD
         const res = await c.env.DB.prepare(
           `
           UPDATE products
@@ -33004,21 +32646,11 @@ productsRouter.post("/import", async (c) => {
           WHERE id = ?
         `
         ).bind(
-=======
-        const res = await c.env.DB.prepare(`
-          UPDATE products
-          SET title = ?, description = ?, content = ?, image_url = ?, subcategory_id = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `).bind(
->>>>>>> 05698dd (update)
           title2,
           description || null,
           content,
           image_url || null,
-<<<<<<< HEAD
           imagesJsonText,
-=======
->>>>>>> 05698dd (update)
           Number(subcategory_id),
           exists.id
         ).run();
@@ -33026,28 +32658,18 @@ productsRouter.post("/import", async (c) => {
         if ((res.meta?.changes || 0) > 0) updated++;
         else skipped++;
       } else {
-<<<<<<< HEAD
         const res = await c.env.DB.prepare(
           `
           INSERT INTO products (title, slug, description, content, image_url, images_json, subcategory_id)
           VALUES (?, ?, ?, ?, ?, ?, ?)
         `
         ).bind(
-=======
-        const res = await c.env.DB.prepare(`
-          INSERT INTO products (title, slug, description, content, image_url, subcategory_id)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `).bind(
->>>>>>> 05698dd (update)
           title2,
           slug,
           description || null,
           content,
           image_url || null,
-<<<<<<< HEAD
           imagesJsonText,
-=======
->>>>>>> 05698dd (update)
           Number(subcategory_id)
         ).run();
         if (res.success) {
@@ -33076,19 +32698,12 @@ productsRouter.post("/import", async (c) => {
           const tDesc0 = toStr(row[`${lc}_description`]);
           const tCont0 = toStr(row[`${lc}_content`]);
           const tSlug0 = toStr(row[`${lc}_slug`]);
-<<<<<<< HEAD
           const tTitle = tTitle0 || await withRetry(() => translateTextInWorker(c, title2, source, lc), {
             tries,
             delayMs: delay0,
             backoff,
             timeoutMs: 8e3
           });
-=======
-          const tTitle = tTitle0 || await withRetry(
-            () => translateTextInWorker(c, title2, source, lc),
-            { tries, delayMs: delay0, backoff, timeoutMs: 8e3 }
-          );
->>>>>>> 05698dd (update)
           const tDesc = tDesc0 || (description ? await withRetry(
             () => translateTextInWorker(c, description, source, lc),
             { tries, delayMs: delay0, backoff, timeoutMs: 8e3 }
@@ -33119,15 +32734,11 @@ productsRouter.post("/import", async (c) => {
         }
         const missing = required.filter((lc) => !trans[lc]?.ok);
         if (mode === "strict" && missing.length) {
-<<<<<<< HEAD
           errors.push({
             row: i + 1,
             reason: "strict_missing_required_locales",
             locales: missing
           });
-=======
-          errors.push({ row: i + 1, reason: "strict_missing_required_locales", locales: missing });
->>>>>>> 05698dd (update)
         } else {
           for (const lc of targets) {
             if (!trans[lc]?.ok) continue;
@@ -34060,15 +33671,7 @@ bannerRouter.get("/", async (c) => {
       ORDER BY b.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -34087,15 +33690,7 @@ bannerRouter.get("/:id", async (c) => {
     const locale = getLocale$2(c);
     const raw = await getMergedBannerById(c.env.DB, id, locale);
     if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -34277,15 +33872,7 @@ fieldRouter.get("/", async (c) => {
       ORDER BY f.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -34310,15 +33897,7 @@ fieldRouter.get("/:id", async (c) => {
     const locale = getLocale$1(c);
     const raw = await getMergedFieldById(c.env.DB, id, locale);
     if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -34515,15 +34094,7 @@ cerPartnerRouter.get("/", async (c) => {
       ORDER BY c.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale).all();
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -34556,15 +34127,7 @@ cerPartnerRouter.get("/type/:type", async (c) => {
       ORDER BY c.created_at DESC
     `;
     const { results = [] } = await c.env.DB.prepare(sql).bind(locale, t).all();
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const items = results.map((r) => ({
       ...r,
       image_url: r.image_url ? `${base}/${r.image_url}` : null
@@ -34583,15 +34146,7 @@ cerPartnerRouter.get("/:id", async (c) => {
     const locale = getLocale(c);
     const raw = await getMergedById(c.env.DB, id, locale);
     if (!raw) return c.json({ ok: false, error: "Not found" }, 404);
-<<<<<<< HEAD
-<<<<<<< HEAD
     const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
-=======
-    const base = (c.env.DISPLAY_BASE_URL || c.env.PUBLIC_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 05698dd (update)
-=======
-    const base = (c.env.PUBLIC_R2_URL || c.env.INTERNAL_R2_URL || "").replace(/\/+$/, "");
->>>>>>> 8642042 (merge branch leads)
     const item = {
       ...raw,
       image_url: raw.image_url ? `${base}/${raw.image_url}` : null
@@ -34942,10 +34497,6 @@ ${parentItems.map((i) => `  <url><loc>${esc(i.loc)}</loc>${i.lastmod ? `<lastmod
     "cache-control": "public, s-maxage=3600"
   });
 });
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 9a5e679 (fix ga4)
 const OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const SCOPE = "https://www.googleapis.com/auth/analytics.readonly";
 function b64url(u8) {
@@ -35021,10 +34572,6 @@ async function ga4RunRealtime(env2, body) {
 }
 const ga4Router = new Hono2();
 ga4Router.all("*", async (c, next) => {
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> c3e4c54 (update admin)
   const origin = c.req.header("Origin") || "";
   const allowed = [
     "http://localhost:5173",
@@ -35037,25 +34584,11 @@ ga4Router.all("*", async (c, next) => {
   if (allowed.includes(origin)) {
     c.header("Access-Control-Allow-Origin", origin);
   }
-<<<<<<< HEAD
   c.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
   c.header("Access-Control-Allow-Headers", "content-type,authorization");
   if (c.req.method === "OPTIONS") {
     return c.text("", 204);
   }
-=======
-  c.header("Access-Control-Allow-Origin", "*");
-  c.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  c.header("Access-Control-Allow-Headers", "content-type,authorization");
-  if (c.req.method === "OPTIONS") return c.text("", 204);
->>>>>>> 9a5e679 (fix ga4)
-=======
-  c.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  c.header("Access-Control-Allow-Headers", "content-type,authorization");
-  if (c.req.method === "OPTIONS") {
-    return c.text("", 204);
-  }
->>>>>>> c3e4c54 (update admin)
   await next();
 });
 ga4Router.post("/report", async (c) => {
@@ -35171,11 +34704,6 @@ ga4Router.get("/news-views", async (c) => {
     return c.json({ error: String(e.message || e) }, 500);
   }
 });
-<<<<<<< HEAD
-=======
->>>>>>> 05698dd (update)
-=======
->>>>>>> 9a5e679 (fix ga4)
 const app$1 = new Hono2();
 app$1.use("*", requireAdminAuth);
 app$1.post("/users", requirePerm("users.manage"), (c) => {
@@ -35184,296 +34712,12 @@ app$1.post("/users", requirePerm("users.manage"), (c) => {
 app$1.post("/content", requirePerm("content.manage"), (c) => {
   return c.json({ message: "Content updated" });
 });
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> c6aa93a (update table products)
-const migrate0012 = new Hono2();
-async function getColumnSet(db, table) {
-  const rs = await db.prepare(`PRAGMA table_info(${table});`).all();
-  return new Set((rs.results || []).map((r) => r.name));
-}
-function maybeAddColumn(stmts, colsSet, table, colSql) {
-  const colName = colSql.split(/\s+/)[0].replace(/"/g, "");
-  if (!colsSet.has(colName)) {
-<<<<<<< HEAD
-<<<<<<< HEAD
-    stmts.push({ sql: `ALTER TABLE ${table} ADD COLUMN ${colSql};`, args: [] });
-  }
-}
-async function hasTable(db, table) {
-  const rs = await db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?1;`).bind(table).all();
-  return !!(rs.results && rs.results.length);
-}
-async function getDDL(db, table) {
-  const rs = await db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name=?1;`).bind(table).all();
-  return rs.results?.[0]?.sql ?? null;
-}
-=======
-    stmts.push(
-      {
-        sql: `ALTER TABLE ${table} ADD COLUMN ${colSql};`,
-        args: []
-      }
-    );
-  }
-}
->>>>>>> c6aa93a (update table products)
-=======
-    stmts.push({ sql: `ALTER TABLE ${table} ADD COLUMN ${colSql};`, args: [] });
-  }
-}
-async function hasTable(db, table) {
-  const rs = await db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?1;`).bind(table).all();
-  return !!(rs.results && rs.results.length);
-}
-async function getDDL(db, table) {
-  const rs = await db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name=?1;`).bind(table).all();
-  return rs.results?.[0]?.sql ?? null;
-}
->>>>>>> 60a28d3 (update)
-migrate0012.post("/migrations/0012/apply", async (c) => {
-=======
 const adminCreateTable = new Hono2();
 adminCreateTable.post("/create-dino-table", async (c) => {
->>>>>>> b9cc66f (merge leads)
   try {
     if (!c.env.DB) {
       return c.json({ error: "DB not available" }, 500);
     }
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 60a28d3 (update)
-    statements.push({
-      sql: `
-        UPDATE products
-        SET images_json = json(
-          '[{"url":' || quote(image_url) || ',"is_primary":1,"sort_order":0}]'
-        )
-        WHERE
-          (images_json IS NULL OR trim(images_json) = '')
-          AND image_url IS NOT NULL
-          AND trim(image_url) <> '';
-      `,
-      args: []
-    });
-<<<<<<< HEAD
-=======
-    const backfillSQL = `
-      UPDATE products
-      SET images_json = json(
-        '[{"url":' || quote(image_url) || ',"is_primary":1,"sort_order":0}]'
-      )
-      WHERE
-        (images_json IS NULL OR trim(images_json) = '')
-        AND image_url IS NOT NULL
-        AND trim(image_url) <> '';
-    `;
-    statements.push({ sql: backfillSQL, args: [] });
->>>>>>> c6aa93a (update table products)
-=======
->>>>>>> 60a28d3 (update)
-    statements.push({ sql: `DROP TRIGGER IF EXISTS products_updated_at;`, args: [] });
-    statements.push({
-      sql: `CREATE TRIGGER products_updated_at
-            AFTER UPDATE ON products
-            FOR EACH ROW
-            BEGIN
-              UPDATE products SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id;
-            END;`,
-      args: []
-    });
-    if (statements.length === 0) {
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 60a28d3 (update)
-      const schemaProducts2 = await c.env.DB.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='products';`).all();
-      const schemaNews2 = await c.env.DB.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='news';`).all();
-      return c.json({
-        ok: true,
-        message: "Nothing to apply (already up-to-date).",
-        schemas: {
-          products: schemaProducts2.results?.[0]?.sql ?? null,
-          news: schemaNews2.results?.[0]?.sql ?? null
-        }
-      });
-<<<<<<< HEAD
-=======
-      return c.json({ ok: true, message: "Nothing to apply (already up-to-date)." });
->>>>>>> c6aa93a (update table products)
-=======
->>>>>>> 60a28d3 (update)
-    }
-    const prepared = statements.map((s) => c.env.DB.prepare(s.sql));
-    await c.env.DB.batch(prepared);
-    const schemaProducts = await c.env.DB.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='products';`).all();
-    const schemaNews = await c.env.DB.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='news';`).all();
-    return c.json({
-      ok: true,
-<<<<<<< HEAD
-<<<<<<< HEAD
-      message: "Migration 0012 (products/news) applied successfully",
-=======
-      message: "Migration 0012 applied successfully",
->>>>>>> c6aa93a (update table products)
-=======
-      message: "Migration 0012 (products/news) applied successfully",
->>>>>>> 60a28d3 (update)
-      executed: statements.map((s) => s.sql.trim()),
-      schemas: {
-        products: schemaProducts.results?.[0]?.sql ?? null,
-        news: schemaNews.results?.[0]?.sql ?? null
-      }
-    });
-  } catch (err) {
-<<<<<<< HEAD
-<<<<<<< HEAD
-    console.error("migration 0012 apply error:", err);
-=======
-    console.error("migration 0012 error:", err);
->>>>>>> c6aa93a (update table products)
-=======
-    console.error("migration 0012 apply error:", err);
->>>>>>> 60a28d3 (update)
-    return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
-  }
-});
-migrate0012.get("/migrations/0012/preview", async (c) => {
-  try {
-    if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
-    const productsCols = await getColumnSet(c.env.DB, "products");
-    const newsCols = await getColumnSet(c.env.DB, "news");
-    const plan = [];
-    if (!productsCols.has("views")) plan.push(`ALTER TABLE products ADD COLUMN views INTEGER NOT NULL DEFAULT 0;`);
-    if (!newsCols.has("views")) plan.push(`ALTER TABLE news ADD COLUMN views INTEGER NOT NULL DEFAULT 0;`);
-    if (!productsCols.has("images_json")) {
-      plan.push(`ALTER TABLE products ADD COLUMN "images_json" TEXT CHECK ("images_json" IS NULL OR json_valid("images_json"));`);
-    }
-    plan.push(`UPDATE products SET images_json = json('[{"url":' || quote(image_url) || ',"is_primary":1,"sort_order":0}]') WHERE (images_json IS NULL OR trim(images_json)='') AND image_url IS NOT NULL AND trim(image_url)<>'';`);
-    plan.push(`DROP TRIGGER IF EXISTS products_updated_at;`);
-    plan.push(`CREATE TRIGGER products_updated_at AFTER UPDATE ON products FOR EACH ROW BEGIN UPDATE products SET updated_at = CURRENT_TIMESTAMP WHERE id = OLD.id; END;`);
-    return c.json({ ok: true, plan });
-  } catch (err) {
-    return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
-  }
-});
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 60a28d3 (update)
-const ABOUT_US_SQL = 'CREATE TABLE about_us (  id INTEGER PRIMARY KEY AUTOINCREMENT,  title VARCHAR(255) NOT NULL,  "content" TEXT NOT NULL,  image_url VARCHAR(255),  created_at TEXT DEFAULT (CURRENT_TIMESTAMP));';
-async function createAboutUsPlan(db) {
-  const exists = await hasTable(db, "about_us");
-  const plan = [];
-  if (exists) plan.push("DROP TABLE IF EXISTS about_us;");
-  plan.push(ABOUT_US_SQL);
-  return { exists, plan };
-}
-async function applyAboutUs(db) {
-  const exists = await hasTable(db, "about_us");
-  if (exists) {
-    await db.prepare("DROP TABLE IF EXISTS about_us;").run();
-  }
-  await db.prepare(ABOUT_US_SQL).run();
-  const schema = await getDDL(db, "about_us");
-  return { created: true, schema, dropped: exists };
-}
-migrate0012.get("/migrations/0012/preview-about-us", async (c) => {
-  if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
-  const { exists, plan } = await createAboutUsPlan(c.env.DB);
-  return c.json({ ok: true, table: "about_us", already_exists: exists, plan });
-});
-migrate0012.post("/migrations/0012/apply-about-us", async (c) => {
-  try {
-    if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
-    const { created, schema, dropped } = await applyAboutUs(c.env.DB);
-    return c.json({
-      ok: true,
-      message: dropped ? "about_us dropped and re-created" : "about_us created",
-      schema
-    });
-  } catch (err) {
-    console.error("apply-about-us error:", err);
-    return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
-  }
-});
-migrate0012.get("/migrations/0012/check-about-us", async (c) => {
-  try {
-    if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
-    const exists = await hasTable(c.env.DB, "about_us");
-    const ddl = exists ? await getDDL(c.env.DB, "about_us") : null;
-    return c.json({ ok: true, table_exists: exists, ddl });
-  } catch (err) {
-    return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
-  }
-});
-<<<<<<< HEAD
-=======
->>>>>>> c6aa93a (update table products)
-=======
->>>>>>> 60a28d3 (update)
-migrate0012.get("/schema/:table/columns", async (c) => {
-  try {
-    if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
-    const table = c.req.param("table");
-    if (!/^[A-Za-z0-9_]+$/.test(table)) return c.json({ error: "Invalid table name" }, 400);
-    const rs = await c.env.DB.prepare(`PRAGMA table_info(${table});`).all();
-    return c.json({ ok: true, table, columns: rs.results });
-  } catch (err) {
-    return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
-  }
-});
-migrate0012.get("/schema/:table/ddl", async (c) => {
-  try {
-    if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
-    const table = c.req.param("table");
-    if (!/^[A-Za-z0-9_]+$/.test(table)) return c.json({ error: "Invalid table name" }, 400);
-    const ddl = await c.env.DB.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name=?1;`).bind(table).all();
-    return c.json({ ok: true, table, sql: ddl.results?.[0]?.sql ?? null });
-  } catch (err) {
-    return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
-  }
-});
-migrate0012.get("/migrations/0012/check", async (c) => {
-  try {
-    if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
-    const prodCols = await c.env.DB.prepare(`PRAGMA table_info(products);`).all();
-    const newsCols = await c.env.DB.prepare(`PRAGMA table_info(news);`).all();
-    const prodSet = new Set((prodCols.results || []).map((r) => r.name));
-    const newsSet = new Set((newsCols.results || []).map((r) => r.name));
-    const trig = await c.env.DB.prepare(`SELECT name, sql FROM sqlite_master WHERE type='trigger' AND tbl_name='products' AND name='products_updated_at';`).all();
-    const triggerSql = trig.results?.[0]?.sql ?? null;
-    const prodDDL = await c.env.DB.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='products';`).all();
-    const ddlText = prodDDL.results?.[0]?.sql ?? "";
-    const hasViewsProducts = prodSet.has("views");
-    const hasViewsNews = newsSet.has("views");
-    const hasImagesJson = prodSet.has("images_json");
-    const hasJsonCheck = hasImagesJson && /images_json/i.test(ddlText) && /json_valid\s*\(\s*"?images_json"?\s*\)/i.test(ddlText);
-    return c.json({
-      ok: true,
-      checks: {
-        products_has_views: hasViewsProducts,
-        news_has_views: hasViewsNews,
-        products_has_images_json: hasImagesJson,
-        products_images_json_has_check_json_valid: hasJsonCheck,
-        trigger_products_updated_at_exists: Boolean(triggerSql)
-      },
-      debug: {
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-        // giúp bạn nhìn nhanh
->>>>>>> c6aa93a (update table products)
-=======
->>>>>>> 60a28d3 (update)
-        products_columns: prodCols.results,
-        news_columns: newsCols.results,
-        products_trigger_sql: triggerSql
-=======
     const sql = `
       CREATE TABLE IF NOT EXISTS dinosaurs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35585,7 +34829,6 @@ dinoMigrate.post("/dinosaurs/columns/rename-and-convert", async (c) => {
         }
       } else {
         selectCols.push(`"${r.name}"`);
->>>>>>> b9cc66f (merge leads)
       }
       if (r.pk && /^id$/i.test(r.name) && /INT/i.test(type)) {
         pk = " PRIMARY KEY AUTOINCREMENT";
@@ -35633,13 +34876,6 @@ dinoMigrate.get("/dinosaurs/columns", async (c) => {
     return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
   }
 });
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 05698dd (update)
-=======
->>>>>>> c6aa93a (update table products)
-=======
 function escapeHtml(s = "") {
   return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
@@ -36525,7 +35761,6 @@ async function newsDetailSSR(c) {
   `;
   return renderIndexWithHead(c, head);
 }
->>>>>>> b9cc66f (merge leads)
 const enc = new TextEncoder();
 const getKey = (secret) => enc.encode(secret);
 const GRAPH = "https://graph.facebook.com/v20.0";
@@ -36554,21 +35789,6 @@ const addCORS = (res) => new Response(res.body, {
   })
 });
 app.options("/wa/*", () => addCORS(new Response(null, { status: 204 })));
-<<<<<<< HEAD
-<<<<<<< HEAD
-const guardUpdate = async (c, next) => {
-  const secret = c.env.UPDATE_SECRET;
-  if (!secret) return next();
-  const auth2 = c.req.header("authorization") || "";
-  const bearer2 = auth2.startsWith("Bearer ") ? auth2.slice(7) : "";
-  const key = bearer2 || c.req.header("x-update-key") || "";
-  if (key !== secret) return c.json({ error: "Unauthorized" }, 401);
-  await next();
-};
-=======
->>>>>>> 05698dd (update)
-=======
->>>>>>> b9cc66f (merge leads)
 app.get("/webhook", (c) => {
   const url = new URL(c.req.url);
   const mode = url.searchParams.get("hub.mode");
@@ -36615,17 +35835,10 @@ app.post("/wa/send", async (c) => {
   const text = (body || "").toString();
   if (!env2.PHONE_NUMBER_ID || !env2.WHATSAPP_TOKEN) {
     return addCORS(
-<<<<<<< HEAD
       new Response(
         JSON.stringify({ ok: false, error: "Missing PHONE_NUMBER_ID or WHATSAPP_TOKEN" }),
         { status: 500, headers: { "Content-Type": "application/json" } }
       )
-=======
-      new Response(JSON.stringify({ ok: false, error: "Missing PHONE_NUMBER_ID or WHATSAPP_TOKEN" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" }
-      })
->>>>>>> 05698dd (update)
     );
   }
   if (!dest || !text && !hasTemplate) {
@@ -36736,39 +35949,6 @@ app.post("/wa/inbox", async (c) => {
     })
   );
 });
-<<<<<<< HEAD
-=======
-app.post("/wa/inbox", async (c) => {
-  const env2 = c.env;
-  const { from, body } = await c.req.json().catch(() => ({}));
-  const sender = (from || "").replace(/\D/g, "");
-  const text = (body || "").toString();
-  if (!sender || !text) {
-    return addCORS(
-      new Response(JSON.stringify({ ok: false, error: "Missing from/body" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-      })
-    );
-  }
-  let dbInserted = false;
-  try {
-    if (env2.DB) {
-      await env2.DB.prepare(
-        "INSERT INTO messages(chat_id, direction, wa_from, wa_to, type, body, ts) VALUES (?,?,?,?,?,?,?)"
-      ).bind(sender, "in", sender, env2.BUSINESS_WA_E164 || "", "text", text, Date.now()).run();
-      dbInserted = true;
-    }
-  } catch (e) {
-    console.error("D1 insert incoming error:", e);
-  }
-  return addCORS(
-    new Response(JSON.stringify({ ok: true, dbInserted }), {
-      headers: { "Content-Type": "application/json" }
-    })
-  );
-});
->>>>>>> 05698dd (update)
 app.get("/wa/history", async (c) => {
   const env2 = c.env;
   const { searchParams } = new URL(c.req.url);
@@ -36842,12 +36022,7 @@ const verifyAdmin = async (c) => {
     const row = await c.env.DB?.prepare(
       "SELECT revoked, expires_at FROM sessions WHERE jti = ?"
     ).bind(jti).first();
-<<<<<<< HEAD
     if (!row || row.revoked || !row.expires_at || row.expires_at < Date.now() / 1e3) return null;
-=======
-    if (!row || row.revoked || !row.expires_at || row.expires_at < Date.now() / 1e3)
-      return null;
->>>>>>> 05698dd (update)
     return payload;
   } catch {
     return null;
@@ -36909,20 +36084,8 @@ app.use("/api/users", requirePerm("users.manage"));
 app.use("/api/users/*", requirePerm("users.manage"));
 app.route("/seo", seoRoot);
 app.route("/sitemaps", sitemaps);
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-app.use("/update/*", guardUpdate);
-app.route("/update", migrate0012);
-=======
->>>>>>> 05698dd (update)
-=======
-app.route("/admin", migrate0012);
->>>>>>> c6aa93a (update table products)
-=======
 app.route("/admin", adminCreateTable);
 app.route("/put", dinoMigrate);
->>>>>>> b9cc66f (merge leads)
 app.route("/api/seo", seoApp);
 app.route("/api/auth", authRouter);
 app.route("/api/users", userRouter);
@@ -36938,18 +36101,8 @@ app.route("/api/cer-partners", cerPartnerRouter);
 app.route("/api/upload-image", uploadImageRouter);
 app.route("/api/editor-upload", editorUploadRouter);
 app.route("/api/translate", translateRouter);
-<<<<<<< HEAD
-<<<<<<< HEAD
 app.route("/api/ga4", ga4Router);
 app.route("/api/watermark", router);
-<<<<<<< HEAD
-=======
->>>>>>> 05698dd (update)
-=======
-app.route("/api/ga4", ga4Router);
->>>>>>> 9a5e679 (fix ga4)
-=======
->>>>>>> c3e4c54 (update admin)
 app.get(
   "/api/health",
   (c) => c.json({
