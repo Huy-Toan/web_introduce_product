@@ -2254,10 +2254,10 @@ var Hono2 = class extends Hono$1 {
   }
 };
 function toSlug(s = "", maxLen = 80) {
-  return String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s-_.]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^[-.]+|[-.]+$/g, "").slice(0, maxLen).replace(/[-.]+$/g, "");
+  return String(s).toLowerCase().normalize("NFD").replace(/[^\p{Letter}\p{Number}\s\-_.]/gu, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^[\-.]+|[\-.]+$/g, "").slice(0, maxLen).replace(/[\-.]+$/g, "");
 }
 function sanitizePrefix(input = "") {
-  return String(input || "").toLowerCase().replace(/[^a-z0-9/_-]+/g, "").replace(/\.\.+/g, "").replace(/\/{2,}/g, "/").replace(/^\/+|\/+$/g, "");
+  return String(input || "").toLowerCase().replace(/[^a-z0-9\/_-]+/g, "").replace(/\.{2,}/g, "").replace(/\/{2,}/g, "/").replace(/^\/+|\/+$/g, "");
 }
 const EXT_BY_MIME = {
   "image/jpeg": "jpg",
@@ -2267,15 +2267,56 @@ const EXT_BY_MIME = {
   "image/webp": "webp"
 };
 const uploadImageRouter = new Hono2();
+uploadImageRouter.get("/__diag", async (c) => {
+  const env2 = c.env || {};
+  const hasIMAGES = !!env2.IMAGES;
+  const hasPUBLIC = !!env2.PUBLIC_R2_URL;
+  const hasINTERNAL = !!env2.INTERNAL_R2_URL;
+  const addId = String(env2.ADD_RANDOM_ID || "").toLowerCase() === "true";
+  let putOk = false, headOk = false, err = null;
+  try {
+    if (hasIMAGES) {
+      await env2.IMAGES.put("healthcheck.txt", "ok", { httpMetadata: { contentType: "text/plain" } });
+      const head = await env2.IMAGES.head("healthcheck.txt");
+      putOk = true;
+      headOk = !!head;
+    }
+  } catch (e) {
+    err = String(e);
+  }
+  return c.json({
+    service: "upload-image",
+    hasIMAGES,
+    hasPUBLIC,
+    hasINTERNAL,
+    addId,
+    putOk,
+    headOk,
+    err,
+    now: (/* @__PURE__ */ new Date()).toISOString()
+  });
+});
 uploadImageRouter.post("/", async (c) => {
   try {
-    const formData = await c.req.formData();
+    if (!c.env?.IMAGES) {
+      const msg = "R2 binding IMAGES chưa được cấu hình trên service đang chạy.";
+      console.error("Upload error:", msg);
+      return c.json({ code: "IMAGES_BINDING_MISSING", error: msg }, 500);
+    }
+    let formData;
+    try {
+      formData = await c.req.formData();
+    } catch (e) {
+      console.error("formData() failed. Có thể bạn đang gửi Content-Type=application/json", e);
+      return c.json({ code: "BAD_MULTIPART", error: "Không thể đọc FormData. Hãy gửi multipart/form-data và KHÔNG tự set Content-Type." }, 400);
+    }
     const file = formData.get("image");
     if (!file || typeof file === "string") {
-      return c.json({ error: "Không có file nào được upload" }, 400);
+      return c.json({ code: "NO_FILE", error: 'Không có file nào được upload (thiếu field "image").' }, 400);
     }
     const allowedTypes = Object.keys(EXT_BY_MIME);
     if (!allowedTypes.includes(file.type)) {
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
       return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP)" }, 400);
@@ -2285,9 +2326,12 @@ uploadImageRouter.post("/", async (c) => {
 =======
       return c.json({ error: "Chỉ chấp nhận file ảnh (JPEG, PNG, GIF, WebP)" }, 400);
 >>>>>>> f350d3f (update category)
+=======
+      return c.json({ code: "UNSUPPORTED_TYPE", error: "Chỉ chấp nhận ảnh JPEG, PNG, GIF, WebP." }, 400);
+>>>>>>> b9cc66f (merge leads)
     }
     if (file.size > 5 * 1024 * 1024) {
-      return c.json({ error: "Kích thước ảnh không được vượt quá 5MB!" }, 400);
+      return c.json({ code: "FILE_TOO_BIG", error: "Kích thước ảnh không được vượt quá 5MB." }, 400);
     }
     const urlObj = new URL(c.req.url);
     const rawSeoName = formData.get("seoName") || urlObj.searchParams.get("seoName") || (file.name ? file.name.replace(/\.[^.]+$/, "") : "image");
@@ -2313,6 +2357,7 @@ uploadImageRouter.post("/", async (c) => {
         tries++;
       }
     }
+<<<<<<< HEAD
     const r2 = c.env.IMAGES;
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -2372,8 +2417,24 @@ uploadImageRouter.post("/", async (c) => {
 >>>>>>> c3e4c54 (update admin)
 =======
 >>>>>>> f350d3f (update category)
+=======
+    try {
+      await c.env.IMAGES.put(key, await file.arrayBuffer(), {
+        httpMetadata: {
+          contentType: file.type,
+          cacheControl: "public, max-age=31536000, immutable",
+          contentDisposition: `inline; filename="${key.split("/").pop()}"`
+        }
+      });
+    } catch (err) {
+      console.error("R2 put() failed:", err);
+      return c.json({ code: "R2_PUT_FAILED", error: "Lỗi khi ghi file vào R2", details: String(err) }, 500);
+    }
+>>>>>>> b9cc66f (merge leads)
     if (!c.env.INTERNAL_R2_URL && !c.env.PUBLIC_R2_URL) {
-      return c.json({ error: "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL" }, 500);
+      const msg = "Thiếu biến môi trường INTERNAL_R2_URL hoặc PUBLIC_R2_URL để dựng URL hiển thị.";
+      console.error("Upload error:", msg);
+      return c.json({ code: "MISSING_R2_URL", error: msg, key }, 500);
     }
     const storageBase = (c.env.INTERNAL_R2_URL || c.env.PUBLIC_R2_URL).replace(/\/+$/, "");
     const displayBase = (c.env.PUBLIC_R2_URL || storageBase).replace(/\/+$/, "");
@@ -2406,7 +2467,9 @@ uploadImageRouter.post("/", async (c) => {
 =======
 >>>>>>> 8642042 (merge branch leads)
       displayUrl,
+      storageUrl,
       fileName: key.split("/").pop(),
+<<<<<<< HEAD
 =======
     const finalKey = wmKey || key;
     const storageUrl = `${storageBase}/${finalKey}`;
@@ -2425,13 +2488,19 @@ uploadImageRouter.post("/", async (c) => {
 =======
       fileName: key.split("/").pop(),
 >>>>>>> f350d3f (update category)
+=======
+      mime: file.type,
+      size: file.size,
+>>>>>>> b9cc66f (merge leads)
       alt: baseSlug,
       prefix
     });
   } catch (error) {
-    console.error("Upload error:", error);
+    console.error("Upload error (unhandled):", error, error?.stack);
     return c.json({
+      code: "UNHANDLED",
       error: "Có lỗi xảy ra khi upload ảnh",
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
       details: error.message
@@ -2441,6 +2510,11 @@ uploadImageRouter.post("/", async (c) => {
 =======
       details: error.message
 >>>>>>> f350d3f (update category)
+=======
+      name: error?.name || null,
+      message: error?.message || String(error),
+      stack: error?.stack || null
+>>>>>>> b9cc66f (merge leads)
     }, 500);
   }
 });
@@ -3397,6 +3471,49 @@ async function resolveParentId(c, idOrSlug) {
   const row = await c.env.DB.prepare(findIdSql).bind(locale, idOrSlug, idOrSlug).first();
   return row?.id ?? null;
 }
+parentsRouter.get("/check_slug", async (c) => {
+  try {
+    if (!hasDB$5(c.env)) return c.json({ ok: false, error: "DB unavailable" }, 503);
+    const slugRaw = (c.req.query("slug") || "").trim();
+    const excludeId = Number(c.req.query("exclude_id") || 0);
+    const slug = slugify$2(slugRaw);
+    if (!slug) return c.json({ ok: true, available: false, reason: "empty" });
+    let sql = `SELECT id FROM parent_categories WHERE slug = ?`;
+    const params = [slug];
+    if (excludeId) {
+      sql += ` AND id <> ?`;
+      params.push(excludeId);
+    }
+    const row = await c.env.DB.prepare(sql).bind(...params).first();
+    return c.json({ ok: true, slug, available: !row });
+  } catch (err) {
+    console.error("check_slug error:", err);
+    return c.json({ ok: false, error: "check failed" }, 500);
+  }
+});
+parentsRouter.get("/check_slug_tr", async (c) => {
+  try {
+    if (!hasDB$5(c.env)) return c.json({ ok: false, error: "DB unavailable" }, 503);
+    const slugRaw = (c.req.query("slug") || "").trim();
+    const locale = (c.req.query("locale") || "").trim().toLowerCase();
+    const excludeId = Number(c.req.query("exclude_id") || 0);
+    const slug = slugify$2(slugRaw);
+    if (!slug || !locale) {
+      return c.json({ ok: true, available: false, reason: "empty_or_no_locale" });
+    }
+    let sql = `SELECT parent_id AS id FROM parent_categories_translations WHERE locale = ? AND slug = ?`;
+    const params = [locale, slug];
+    if (excludeId) {
+      sql += ` AND parent_id <> ?`;
+      params.push(excludeId);
+    }
+    const row = await c.env.DB.prepare(sql).bind(...params).first();
+    return c.json({ ok: true, slug, available: !row, locale });
+  } catch (err) {
+    console.error("check_slug_tr error:", err);
+    return c.json({ ok: false, error: "check failed" }, 500);
+  }
+});
 parentsRouter.get("/", async (c) => {
   const { limit, offset, q, with_counts, with_subs } = c.req.query();
   try {
@@ -35069,6 +35186,7 @@ app$1.post("/content", requirePerm("content.manage"), (c) => {
 });
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 >>>>>>> c6aa93a (update table products)
 const migrate0012 = new Hono2();
@@ -35116,21 +35234,15 @@ async function getDDL(db, table) {
 }
 >>>>>>> 60a28d3 (update)
 migrate0012.post("/migrations/0012/apply", async (c) => {
+=======
+const adminCreateTable = new Hono2();
+adminCreateTable.post("/create-dino-table", async (c) => {
+>>>>>>> b9cc66f (merge leads)
   try {
-    if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
-    const productsCols = await getColumnSet(c.env.DB, "products");
-    const newsCols = await getColumnSet(c.env.DB, "news");
-    const statements = [];
-    maybeAddColumn(statements, productsCols, "products", `views INTEGER NOT NULL DEFAULT 0`);
-    maybeAddColumn(statements, newsCols, "news", `views INTEGER NOT NULL DEFAULT 0`);
-    if (!productsCols.has("images_json")) {
-      statements.push({
-        sql: `ALTER TABLE products
-              ADD COLUMN "images_json" TEXT
-              CHECK ("images_json" IS NULL OR json_valid("images_json"));`,
-        args: []
-      });
+    if (!c.env.DB) {
+      return c.json({ error: "DB not available" }, 500);
     }
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 =======
@@ -35361,17 +35473,1059 @@ migrate0012.get("/migrations/0012/check", async (c) => {
         products_columns: prodCols.results,
         news_columns: newsCols.results,
         products_trigger_sql: triggerSql
-      }
+=======
+    const sql = `
+      CREATE TABLE IF NOT EXISTS dinosaurs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        period TEXT,
+        diet TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `;
+    await c.env.DB.prepare(sql).run();
+    return c.json({
+      success: true,
+      message: "Table 'dinosaurs' created (or already exists)"
     });
+  } catch (err) {
+    console.error("Error creating table:", err);
+    return c.json(
+      {
+        error: "Failed to create table",
+        message: err && err.message ? err.message : String(err),
+        stack: err && err.stack ? err.stack : null
+      },
+      500
+    );
+  }
+});
+adminCreateTable.get("/list-tables", async (c) => {
+  try {
+    if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
+    const rs = await c.env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all();
+    return c.json({ ok: true, tables: rs.results });
+  } catch (err) {
+    return c.json(
+      { ok: false, message: err && err.message ? err.message : String(err) },
+      500
+    );
+  }
+});
+const dinoMigrate = new Hono2();
+dinoMigrate.post("/dinosaurs/columns/add", async (c) => {
+  try {
+    if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
+    const body = await c.req.json().catch(() => ({}));
+    const name = String(body.name || "").trim();
+    const typeRaw = String(body.type || "TEXT").trim().toUpperCase();
+    const notNull = !!body.not_null;
+    const defVal = body.default;
+    if (!name) return c.json({ error: "name is required" }, 400);
+    const isJSON = typeRaw === "JSON";
+    const typeForDef = isJSON ? "TEXT" : typeRaw;
+    let sql = `ALTER TABLE dinosaurs ADD COLUMN "${name}" ${typeForDef}`;
+    if (notNull) sql += " NOT NULL";
+    if (defVal !== void 0) {
+      sql += " DEFAULT " + (typeof defVal === "number" ? defVal : defVal === null ? "NULL" : `'${defVal}'`);
+    }
+    if (isJSON) sql += ` CHECK ("${name}" IS NULL OR json_valid("${name}"))`;
+    await c.env.DB.prepare(sql).run();
+    return c.json({ ok: true, message: `Added column ${name} (${isJSON ? "JSON" : typeForDef})` });
+  } catch (err) {
+    console.error("ADD COLUMN error:", err);
+    return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
+  }
+});
+dinoMigrate.post("/dinosaurs/columns/rename-and-convert", async (c) => {
+  try {
+    if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
+    const body = await c.req.json().catch(() => ({}));
+    const from = String(body.from || "").trim();
+    const to = String(body.to || "").trim();
+    const newTypeRaw = String(body.new_type || "").trim().toUpperCase();
+    const castExpr = body.cast_expr ? String(body.cast_expr) : null;
+    if (!from || !to || !newTypeRaw) {
+      return c.json({ error: "from, to, new_type are required" }, 400);
+    }
+    const info = await c.env.DB.prepare("PRAGMA table_info(dinosaurs);").all();
+    const cols = info.results || [];
+    if (!cols.length) return c.json({ error: "Table 'dinosaurs' not found" }, 400);
+    const colNames = cols.map((r) => r.name);
+    if (!colNames.includes(from)) return c.json({ error: `Column '${from}' not found` }, 400);
+    if (colNames.includes(to) && to !== from) return c.json({ error: `Column '${to}' already exists` }, 400);
+    const isJSON = newTypeRaw === "JSON";
+    const newTypeForDef = isJSON ? "TEXT" : newTypeRaw;
+    const defs = [];
+    const selectCols = [];
+    for (const r of cols) {
+      let name = r.name;
+      let type = (r.type || "").trim() || "TEXT";
+      let notNull = r.notnull ? " NOT NULL" : "";
+      let dflt = r.dflt_value !== null && r.dflt_value !== void 0 ? ` DEFAULT ${r.dflt_value}` : "";
+      let pk = r.pk ? " PRIMARY KEY" : "";
+      let extra = "";
+      if (r.name === from) {
+        name = to;
+        type = newTypeForDef;
+        if (isJSON) {
+          extra = ` CHECK ("${to}" IS NULL OR json_valid("${to}"))`;
+        }
+        const expr = castExpr ? castExpr : `"${from}"`;
+        if (isJSON) {
+          selectCols.push(
+            `CASE
+               WHEN ${expr} IS NULL OR trim(${expr}) = '' THEN NULL
+               WHEN json_valid(${expr}) THEN ${expr}
+               ELSE json(quote(${expr}))
+             END AS "${to}"`
+          );
+        } else {
+          selectCols.push(`CAST(${expr} AS ${newTypeRaw}) AS "${to}"`);
+        }
+      } else {
+        selectCols.push(`"${r.name}"`);
+>>>>>>> b9cc66f (merge leads)
+      }
+      if (r.pk && /^id$/i.test(r.name) && /INT/i.test(type)) {
+        pk = " PRIMARY KEY AUTOINCREMENT";
+      }
+      defs.push(`"${name}" ${type}${pk}${notNull}${dflt}${extra}`);
+    }
+    const tmp = "dinosaurs__tmp__mig";
+    const destCols = defs.map((d) => d.split(" ")[0].replace(/"/g, ""));
+    const stmts = [
+      c.env.DB.prepare(`DROP TABLE IF EXISTS ${tmp};`),
+      c.env.DB.prepare(`CREATE TABLE ${tmp} (${defs.join(", ")});`),
+      c.env.DB.prepare(
+        `INSERT INTO ${tmp} (${destCols.map((n) => `"${n}"`).join(", ")})
+         SELECT ${selectCols.join(", ")} FROM dinosaurs;`
+      ),
+      c.env.DB.prepare(`DROP TABLE dinosaurs;`),
+      c.env.DB.prepare(`ALTER TABLE ${tmp} RENAME TO dinosaurs;`)
+    ];
+    try {
+      await c.env.DB.batch(stmts);
+    } catch (e) {
+      try {
+        await c.env.DB.prepare(`DROP TABLE IF EXISTS ${tmp};`).run();
+      } catch {
+      }
+      throw e;
+    }
+    const after = await c.env.DB.prepare("PRAGMA table_info(dinosaurs);").all();
+    return c.json({
+      ok: true,
+      message: `Renamed '${from}' -> '${to}' and converted to ${newTypeRaw}`,
+      new_columns: after.results
+    });
+  } catch (err) {
+    console.error("rename-and-convert error:", err);
+    return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
+  }
+});
+dinoMigrate.get("/dinosaurs/columns", async (c) => {
+  try {
+    if (!c.env.DB) return c.json({ error: "DB not available" }, 500);
+    const rs = await c.env.DB.prepare("PRAGMA table_info(dinosaurs);").all();
+    return c.json({ ok: true, columns: rs.results });
   } catch (err) {
     return c.json({ ok: false, message: err?.message ?? String(err) }, 500);
   }
 });
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
 >>>>>>> 05698dd (update)
 =======
 >>>>>>> c6aa93a (update table products)
+=======
+function escapeHtml(s = "") {
+  return s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+function escapeAttr(s = "") {
+  return s.replaceAll('"', "&quot;");
+}
+function stripMd(s = "") {
+  return (s || "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[[^\]]*\]\([^)]*\)/g, "").replace(/[#>*_`~-]+/g, "").replace(/\s+/g, " ").trim();
+}
+async function renderIndexWithHead(c, headHtml) {
+  const indexRes = await c.env.ASSETS.fetch(new Request("http://assets/index.html", { method: "GET" }));
+  let html = await indexRes.text();
+  if (/(<\/head>)/i.test(html)) {
+    html = html.replace(/<\/head>/i, `${headHtml}
+</head>`);
+  } else {
+    html = `${headHtml}
+${html}`;
+  }
+  const headers = new Headers(indexRes.headers);
+  headers.set("content-type", "text/html; charset=utf-8");
+  headers.delete("etag");
+  headers.delete("last-modified");
+  headers.set("cache-control", "no-store");
+  headers.set("x-ssr", "1");
+  return new Response(html, { headers, status: 200 });
+}
+function envBrand(c) {
+  return c.env.BRAND_NAME || c.env.VITE_BRAND_NAME || "ITXEASY";
+}
+function envCanonical(c, fallbackOrigin) {
+  return (c.env.CANONICAL_HOST || fallbackOrigin || "").replace(/\/+$/, "");
+}
+async function homeSSR(c) {
+  const url = new URL(c.req.url);
+  const SITE_URL = url.origin;
+  const BRAND = envBrand(c);
+  const TAGLINE = c.env.VITE_TAGLINE || "Choose Us — Choose Quality";
+  const canonical = `${envCanonical(c, SITE_URL)}/`;
+  const path = url.pathname;
+  const noindex = path === "/home";
+  const pageTitle = `${BRAND} — ${TAGLINE}`;
+  const pageDesc = `Trang chủ ${BRAND}: xuất khẩu nông sản Việt Nam, danh mục sản phẩm, lĩnh vực dịch vụ, đối tác chứng nhận quốc tế và tin tức thị trường mới nhất.`;
+  const ogImage = c.env.VITE_OG_HOME || `${SITE_URL}/og-home.jpg`;
+  const toJson = (r) => r.json().catch(() => ({}));
+  const [catsRes, prodsRes, fieldsRes, newsRes] = await Promise.all([
+    fetch(new URL("/api/parent_categories", url), { headers: { Accept: "application/json" } }).then(toJson),
+    fetch(new URL("/api/products", url), { headers: { Accept: "application/json" } }).then(toJson),
+    fetch(new URL("/api/fields", url), { headers: { Accept: "application/json" } }).then(toJson),
+    fetch(new URL("/api/news", url), { headers: { Accept: "application/json" } }).then(toJson)
+  ]);
+  const cats = Array.isArray(catsRes?.parent_categories) ? catsRes.parent_categories : Array.isArray(catsRes) ? catsRes : [];
+  const products = Array.isArray(prodsRes?.products) ? prodsRes.products : Array.isArray(prodsRes) ? prodsRes : [];
+  const fields = Array.isArray(fieldsRes?.fields) ? fieldsRes.fields : Array.isArray(fieldsRes) ? fieldsRes : [];
+  const news = Array.isArray(newsRes?.news) ? newsRes.news : Array.isArray(newsRes) ? newsRes : [];
+  const kCats = cats.map((c2) => c2?.name).filter(Boolean);
+  const kProds = products.map((p) => p?.title).filter(Boolean);
+  const kFields = fields.map((f) => f?.name).filter(Boolean);
+  const baseKW = [BRAND, "xuất khẩu nông sản", "Vietnam export", "trái cây", "agriculture", "logistics", "GAP", "partners", "news"];
+  const keywords = Array.from(/* @__PURE__ */ new Set([...baseKW, ...kCats, ...kProds, ...kFields])).join(", ");
+  const organizationLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: BRAND,
+    url: SITE_URL,
+    logo: `${SITE_URL}/logo-512.png`,
+    contactPoint: [{
+      "@type": "ContactPoint",
+      telephone: "+84 383 655 628",
+      contactType: "customer service",
+      areaServed: ["VN", "Global"],
+      availableLanguage: ["vi", "en"]
+    }]
+  };
+  const webSiteLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: BRAND,
+    url: SITE_URL,
+    potentialAction: {
+      "@type": "SearchAction",
+      target: `${SITE_URL}/search?q={search_term_string}`,
+      "query-input": "required name=search_term_string"
+    }
+  };
+  const webPageLd = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    name: pageTitle,
+    description: pageDesc,
+    url: canonical,
+    isPartOf: { "@type": "WebSite", name: BRAND, url: SITE_URL }
+  };
+  const categoriesLd = cats.length ? {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Product Categories",
+    itemListElement: cats.map((c2, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      item: { "@type": "Thing", name: c2?.name, url: `${SITE_URL}/product/${encodeURIComponent(c2?.slug || "")}` }
+    }))
+  } : null;
+  const productsLd = products.length ? {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Featured Products",
+    itemListElement: products.map((p, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      item: {
+        "@type": "Product",
+        name: p?.title,
+        image: p?.image_url || void 0,
+        url: `${SITE_URL}/product/product-detail/${encodeURIComponent(p?.slug || "")}`,
+        brand: BRAND,
+        offers: p?.price && p?.currency ? {
+          "@type": "Offer",
+          price: String(p.price),
+          priceCurrency: p.currency,
+          availability: "https://schema.org/InStock",
+          url: `${SITE_URL}/product/product-detail/${encodeURIComponent(p?.slug || "")}`
+        } : void 0
+      }
+    }))
+  } : null;
+  const fieldsLd = fields.length ? {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Services",
+    itemListElement: fields.map((f, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      item: {
+        "@type": "Service",
+        name: f?.name,
+        description: stripMd(f?.content || "").slice(0, 200) || void 0,
+        image: f?.image_url || void 0,
+        provider: { "@type": "Organization", name: BRAND, url: SITE_URL }
+      }
+    }))
+  } : null;
+  const newsLd = news.length ? {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Latest News",
+    itemListElement: news.map((n, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      item: {
+        "@type": "NewsArticle",
+        headline: n?.title,
+        url: `${SITE_URL}/news/news-detail/${encodeURIComponent(n?.slug || "")}`,
+        image: n?.image_url || void 0,
+        datePublished: n?.published_at || void 0,
+        dateModified: n?.updated_at || void 0,
+        author: n?.author ? [{ "@type": "Person", name: n.author }] : void 0,
+        publisher: { "@type": "Organization", name: BRAND, logo: `${SITE_URL}/logo-512.png` }
+      }
+    }))
+  } : null;
+  const jsonLd = [organizationLd, webSiteLd, webPageLd, categoriesLd, productsLd, fieldsLd, newsLd].filter(Boolean);
+  const head = `
+    <title>${escapeHtml(pageTitle)}</title>
+    <meta name="description" content="${escapeHtml(pageDesc)}" />
+    <meta name="keywords" content="${escapeHtml(keywords)}" />
+    <link rel="canonical" href="${escapeAttr(canonical)}" />
+    ${noindex ? '<meta name="robots" content="noindex,follow" />' : ""}
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="${escapeHtml(BRAND)}" />
+    <meta property="og:title" content="${escapeHtml(pageTitle)}" />
+    <meta property="og:description" content="${escapeHtml(pageDesc)}" />
+    <meta property="og:url" content="${escapeAttr(canonical)}" />
+    ${ogImage ? `<meta property="og:image" content="${escapeAttr(ogImage)}" />` : ""}
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(pageTitle)}" />
+    <meta name="twitter:description" content="${escapeHtml(pageDesc)}" />
+    ${ogImage ? `<meta name="twitter:image" content="${escapeAttr(ogImage)}" />` : ""}
+
+    ${jsonLd.map((o) => `<script type="application/ld+json">${JSON.stringify(o)}<\/script>`).join("\n")}
+  `;
+  const resp = await renderIndexWithHead(c, head);
+  resp.headers.set("x-which-ssr", "home");
+  return resp;
+}
+async function contactSSR(c) {
+  const url = new URL(c.req.url);
+  const BRAND = envBrand(c);
+  const SITE_URL = url.origin;
+  const canonical = `${envCanonical(c, SITE_URL)}/contact`;
+  const pageTitle = `Contact | ${BRAND}`;
+  const pageDesc = `Liên hệ ${BRAND}: địa chỉ, email, số điện thoại, WhatsApp. Gửi yêu cầu báo giá/đối tác về xuất khẩu nông sản Việt Nam.`;
+  const keywords = ["Contact", "Liên hệ", BRAND, "xuất khẩu nông sản", "Vietnam export", "address", "email", "phone", "whatsapp"].join(", ");
+  const ogImage = `${SITE_URL}/banner.jpg`;
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": `${SITE_URL}/` },
+      { "@type": "ListItem", "position": 2, "name": "Contact", "item": canonical }
+    ]
+  };
+  const contactPageLd = {
+    "@context": "https://schema.org",
+    "@type": "ContactPage",
+    name: pageTitle,
+    description: pageDesc,
+    url: canonical,
+    isPartOf: { "@type": "WebSite", name: BRAND, url: SITE_URL }
+  };
+  const organizationLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: BRAND,
+    url: SITE_URL,
+    logo: `${SITE_URL}/logo-512.png`,
+    email: "info@allxone.com",
+    telephone: "+84 383 655 628",
+    address: { "@type": "PostalAddress", streetAddress: "140 Nguyen Xi Street", addressLocality: "Binh Thanh District", addressRegion: "Ho Chi Minh City", addressCountry: "VN" },
+    contactPoint: [{ "@type": "ContactPoint", telephone: "+84 7755 68646", contactType: "customer service", areaServed: ["VN", "Global"], availableLanguage: ["vi", "en"] }]
+  };
+  const head = `
+    <title>${escapeHtml(pageTitle)}</title>
+    <meta name="description" content="${escapeHtml(pageDesc)}" />
+    <meta name="keywords" content="${escapeHtml(keywords)}" />
+    <link rel="canonical" href="${escapeAttr(canonical)}" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="${escapeHtml(BRAND)}" />
+    <meta property="og:title" content="${escapeHtml(pageTitle)}" />
+    <meta property="og:description" content="${escapeHtml(pageDesc)}" />
+    <meta property="og:url" content="${escapeAttr(canonical)}" />
+    ${ogImage ? `<meta property="og:image" content="${escapeAttr(ogImage)}" />` : ""}
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(pageTitle)}" />
+    <meta name="twitter:description" content="${escapeHtml(pageDesc)}" />
+    ${ogImage ? `<meta name="twitter:image" content="${escapeAttr(ogImage)}" />` : ""}
+
+    <script type="application/ld+json">${JSON.stringify(breadcrumbLd)}<\/script>
+    <script type="application/ld+json">${JSON.stringify(contactPageLd)}<\/script>
+    <script type="application/ld+json">${JSON.stringify(organizationLd)}<\/script>
+  `;
+  return renderIndexWithHead(c, head);
+}
+async function whatWeDoSSR(c) {
+  const url = new URL(c.req.url);
+  const SITE_URL = url.origin;
+  const BRAND = envBrand(c);
+  const canonical = `${envCanonical(c, SITE_URL)}/what_we_do`;
+  const [fieldsRes, certRes, partnerRes] = await Promise.all([
+    fetch(new URL("/api/fields", url).toString(), { headers: { Accept: "application/json" } }).then((r) => r.json()).catch(() => ({ fields: [] })),
+    fetch(new URL("/api/cer-partners", url).toString(), { headers: { Accept: "application/json" } }).then((r) => r.json()).catch(() => ({ partners: [] })),
+    fetch(new URL("/api/cer-partners", url).toString(), { headers: { Accept: "application/json" } }).then((r) => r.json()).catch(() => ({ partners: [] }))
+    // nếu chứng nhận & partner chung API thì điều chỉnh lại
+  ]);
+  const fieldContent = Array.isArray(fieldsRes?.fields) ? fieldsRes.fields : Array.isArray(fieldsRes) ? fieldsRes : [];
+  const partners = Array.isArray(partnerRes?.partners) ? partnerRes.partners : Array.isArray(partnerRes) ? partnerRes : [];
+  const certifications = Array.isArray(certRes?.certifications) ? certRes.certifications : Array.isArray(certRes) ? certRes : [];
+  const breadcrumbName = "What we do";
+  const firstName = fieldContent?.[0]?.name?.trim();
+  const pageTitle = firstName ? `${firstName} | ${breadcrumbName} | ${BRAND}` : `${breadcrumbName} | ${BRAND}`;
+  const a = fieldContent?.[0]?.content || "";
+  const b = fieldContent?.[1]?.content || "";
+  const rawDesc = [a, b].filter(Boolean).map(stripMd).join(" ");
+  const fallbackDesc = `What we do at ${BRAND}: services, solutions, export agriculture, certifications & partners.`;
+  const pageDesc = rawDesc ? rawDesc.slice(0, 300) : fallbackDesc;
+  const ogImage = fieldContent?.[0]?.image_url || `${SITE_URL}/banner.jpg`;
+  const names = [
+    ...(fieldContent || []).map((x) => x?.name),
+    ...(certifications || []).map((x) => x?.name),
+    ...(partners || []).map((x) => x?.name)
+  ].filter(Boolean);
+  const baseKeywords = ["What we do", "services", "solutions", "export", "agriculture", "Vietnam export", BRAND];
+  const keywords = Array.from(/* @__PURE__ */ new Set([...baseKeywords, ...names])).join(", ");
+  const times = [...fieldContent || [], ...partners || [], ...certifications || []].map((x) => x?.updated_at || x?.created_at).filter(Boolean).sort();
+  const publishedTime = times[0];
+  const modifiedTime = times[times.length - 1] || publishedTime;
+  const noindex = (fieldContent?.length || 0) === 0 && (partners?.length || 0) === 0 && (certifications?.length || 0) === 0;
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": `${SITE_URL}/` },
+      { "@type": "ListItem", "position": 2, "name": breadcrumbName, "item": canonical }
+    ]
+  };
+  const collectionPageLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: pageTitle,
+    description: pageDesc,
+    url: canonical,
+    isPartOf: { "@type": "WebSite", name: BRAND, url: SITE_URL }
+  };
+  const head = `
+    <title>${escapeHtml(pageTitle)}</title>
+    <meta name="description" content="${escapeHtml(pageDesc)}" />
+    <meta name="keywords" content="${escapeHtml(keywords)}" />
+    <link rel="canonical" href="${escapeAttr(canonical)}" />
+    ${noindex ? '<meta name="robots" content="noindex,follow" />' : ""}
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="${escapeHtml(BRAND)}" />
+    <meta property="og:title" content="${escapeHtml(pageTitle)}" />
+    <meta property="og:description" content="${escapeHtml(pageDesc)}" />
+    <meta property="og:url" content="${escapeAttr(canonical)}" />
+    <meta property="og:image" content="${escapeAttr(ogImage)}" />
+    ${publishedTime ? `<meta property="article:published_time" content="${escapeAttr(publishedTime)}" />` : ""}
+    ${modifiedTime ? `<meta property="article:modified_time" content="${escapeAttr(modifiedTime)}" />` : ""}
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(pageTitle)}" />
+    <meta name="twitter:description" content="${escapeHtml(pageDesc)}" />
+    <meta name="twitter:image" content="${escapeAttr(ogImage)}" />
+
+    <script type="application/ld+json">${JSON.stringify(breadcrumbLd)}<\/script>
+    <script type="application/ld+json">${JSON.stringify(collectionPageLd)}<\/script>
+  `;
+  return renderIndexWithHead(c, head);
+}
+async function aboutSSR(c) {
+  const url = new URL(c.req.url);
+  const SUPPORTED2 = ["vi", "en"];
+  const lc = (url.searchParams.get("locale") || "").toLowerCase();
+  const locale = SUPPORTED2.includes(lc) ? lc : "vi";
+  const apiUrl = new URL("/api/about", url);
+  apiUrl.searchParams.set("locale", locale);
+  let about = [];
+  try {
+    const apiRes = await fetch(apiUrl.toString(), { headers: { Accept: "application/json" } });
+    const j = await apiRes.json().catch(() => ({}));
+    about = Array.isArray(j?.about) ? j.about : [];
+  } catch {
+  }
+  const BRAND = envBrand(c);
+  const SITE_URL = url.origin;
+  const canonical = `${envCanonical(c, SITE_URL)}/about`;
+  const tBreadcrumb = locale === "vi" ? "Giới thiệu" : "About Us";
+  const title0 = about?.[0]?.title?.trim();
+  const pageTitle = title0 ? `${title0} | ${BRAND}` : `${tBreadcrumb} | ${BRAND}`;
+  const a = about?.[0]?.content || "";
+  const b = about?.[1]?.content || "";
+  const raw = [a, b].filter(Boolean).map(stripMd).join(" ");
+  const pageDesc = raw ? raw.slice(0, 300) : locale === "vi" ? `Giới thiệu ${BRAND}: đơn vị xuất khẩu nông sản Việt Nam, quy trình tiêu chuẩn, đối tác toàn cầu.` : `About ${BRAND}: Vietnamese agricultural exports, standardized processes, global partners.`;
+  const keywordsBase = locale === "vi" ? ["Giới thiệu", "xuất khẩu", "nông sản", "ITXEASY", "Vietnam export"] : ["About Us", "export", "agriculture", "ITXEASY", "Vietnam export"];
+  const extra = (about || []).map((s) => s?.title).filter(Boolean);
+  const keywords = Array.from(/* @__PURE__ */ new Set([...keywordsBase, ...extra])).join(", ");
+  const ogImage = about?.[0]?.image_url || `${SITE_URL}/banner.jpg`;
+  const created = (about || []).map((s) => s?.created_at).filter(Boolean).sort();
+  const publishedTime = created[0];
+  const modifiedTime = (about || []).map((s) => s?.updated_at || s?.created_at).filter(Boolean).sort().slice(-1)[0] || publishedTime;
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": `${SITE_URL}/` },
+      { "@type": "ListItem", "position": 2, "name": tBreadcrumb, "item": canonical }
+    ]
+  };
+  const aboutPageLd = {
+    "@context": "https://schema.org",
+    "@type": "AboutPage",
+    name: pageTitle,
+    description: pageDesc,
+    url: canonical,
+    isPartOf: { "@type": "WebSite", name: BRAND, url: SITE_URL }
+  };
+  const organizationLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: BRAND,
+    url: SITE_URL,
+    logo: `${SITE_URL}/logo-512.png`
+  };
+  const noindex = (about || []).length === 0;
+  const head = `
+    <title>${escapeHtml(pageTitle)}</title>
+    <meta name="description" content="${escapeHtml(pageDesc)}" />
+    <meta name="keywords" content="${escapeHtml(keywords)}" />
+    <link rel="canonical" href="${escapeAttr(canonical)}" />
+    ${noindex ? '<meta name="robots" content="noindex,follow" />' : ""}
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="${escapeHtml(BRAND)}" />
+    <meta property="og:title" content="${escapeHtml(pageTitle)}" />
+    <meta property="og:description" content="${escapeHtml(pageDesc)}" />
+    <meta property="og:url" content="${escapeAttr(canonical)}" />
+    <meta property="og:image" content="${escapeAttr(ogImage)}" />
+    ${publishedTime ? `<meta property="article:published_time" content="${escapeAttr(publishedTime)}" />` : ""}
+    ${modifiedTime ? `<meta property="article:modified_time" content="${escapeAttr(modifiedTime)}" />` : ""}
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(pageTitle)}" />
+    <meta name="twitter:description" content="${escapeHtml(pageDesc)}" />
+    <meta name="twitter:image" content="${escapeAttr(ogImage)}" />
+
+    <script type="application/ld+json">${JSON.stringify(breadcrumbLd)}<\/script>
+    <script type="application/ld+json">${JSON.stringify(aboutPageLd)}<\/script>
+    <script type="application/ld+json">${JSON.stringify(organizationLd)}<\/script>
+  `;
+  return renderIndexWithHead(c, head);
+}
+async function newsListSSR(c) {
+  const url = new URL(c.req.url);
+  const SITE_URL = url.origin;
+  const BRAND = envBrand(c);
+  const SUPPORTED2 = ["vi", "en"];
+  const lc = (url.searchParams.get("locale") || "").toLowerCase();
+  const locale = SUPPORTED2.includes(lc) ? lc : "vi";
+  const PAGE_SIZE = parseInt(url.searchParams.get("pageSize") || "12", 10);
+  const currentPage = Math.max(parseInt(url.searchParams.get("page") || "1", 10), 1);
+  const canonicalBase = `${envCanonical(c, SITE_URL)}/news`;
+  const canonical = canonicalBase;
+  const pageTitle = `${locale === "vi" ? "Tin tức" : "News"} | ${BRAND}`;
+  let newsData = [];
+  try {
+    const res = await fetch(new URL("/api/news", url).toString(), { headers: { Accept: "application/json" } });
+    const j = await res.json().catch(() => ({}));
+    newsData = Array.isArray(j?.news) ? j.news : Array.isArray(j) ? j : [];
+  } catch {
+  }
+  const topSnippets = (newsData || []).slice(0, 6).map((n) => n?.meta_description || stripMd(n?.content || "").slice(0, 140) || n?.title).filter(Boolean).join(" • ");
+  const pageDesc = topSnippets || (locale === "vi" ? `Tin tức ${BRAND}: cập nhật thị trường, quy trình xuất khẩu, chứng nhận, đối tác, logistics nông sản Việt Nam.` : `${BRAND} news: market updates, export process, certifications, partners, and logistics for Vietnamese agriculture.`);
+  const ogImage = newsData.find((n) => n?.image_url)?.image_url || `${SITE_URL}/banner.jpg`;
+  const kwsFromItems = (newsData || []).flatMap((n) => String(n?.keywords || "").split(",").map((s) => s.trim()).filter(Boolean));
+  const baseKW = locale === "vi" ? ["news", "tin tức", "xuất khẩu", "nông sản", "Vietnam export", BRAND] : ["news", "vietnam export", "agriculture", "logistics", "updates", BRAND];
+  const keywords = Array.from(/* @__PURE__ */ new Set([...baseKW, ...kwsFromItems])).join(", ");
+  const publishedTime = (newsData || []).map((n) => n?.published_at || n?.created_at).filter(Boolean).sort()[0];
+  const modifiedTime = (newsData || []).map((n) => n?.updated_at || n?.published_at || n?.created_at).filter(Boolean).sort().slice(-1)[0] || publishedTime;
+  const noindex = (newsData || []).length === 0;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const paginated = (newsData || []).slice(start, start + PAGE_SIZE);
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+      { "@type": "ListItem", position: 2, name: locale === "vi" ? "Tin tức" : "News", item: canonical }
+    ]
+  };
+  const collectionPageLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: pageTitle,
+    description: pageDesc,
+    url: canonical,
+    isPartOf: { "@type": "WebSite", name: BRAND, url: SITE_URL }
+  };
+  const itemListLd = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    itemListElement: paginated.map((n, i) => ({
+      "@type": "ListItem",
+      position: start + i + 1,
+      item: {
+        "@type": "NewsArticle",
+        headline: n?.title,
+        url: `${SITE_URL}/news/news-detail/${encodeURIComponent(n?.slug || "")}`,
+        datePublished: n?.published_at || n?.created_at || void 0,
+        dateModified: n?.updated_at || void 0,
+        image: n?.image_url || void 0,
+        publisher: { "@type": "Organization", name: BRAND, logo: `${SITE_URL}/logo-512.png` }
+      }
+    }))
+  };
+  const head = `
+    <title>${escapeHtml(pageTitle)}</title>
+    <meta name="description" content="${escapeHtml(pageDesc)}" />
+    <meta name="keywords" content="${escapeHtml(keywords)}" />
+    <link rel="canonical" href="${escapeAttr(canonical)}" />
+    ${noindex ? '<meta name="robots" content="noindex,follow" />' : ""}
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="${escapeHtml(BRAND)}" />
+    <meta property="og:title" content="${escapeHtml(pageTitle)}" />
+    <meta property="og:description" content="${escapeHtml(pageDesc)}" />
+    <meta property="og:url" content="${escapeAttr(canonical)}" />
+    ${ogImage ? `<meta property="og:image" content="${escapeAttr(ogImage)}" />` : ""}
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(pageTitle)}" />
+    <meta name="twitter:description" content="${escapeHtml(pageDesc)}" />
+    ${ogImage ? `<meta name="twitter:image" content="${escapeAttr(ogImage)}" />` : ""}
+
+    ${publishedTime ? `<meta property="article:published_time" content="${escapeAttr(publishedTime)}" />` : ""}
+    ${modifiedTime ? `<meta property="article:modified_time" content="${escapeAttr(modifiedTime)}" />` : ""}
+
+    <script type="application/ld+json">${JSON.stringify(breadcrumbLd)}<\/script>
+    <script type="application/ld+json">${JSON.stringify(collectionPageLd)}<\/script>
+    <script type="application/ld+json">${JSON.stringify(itemListLd)}<\/script>
+  `;
+  return renderIndexWithHead(c, head);
+}
+async function productsListSSR(c) {
+  const url = new URL(c.req.url);
+  const params = c.req.param ? c.req.param() : {};
+  const parentSlug = params?.parent || "";
+  const subSlug = params?.sub || "";
+  const SITE_URL = url.origin;
+  const BRAND = envBrand(c);
+  const canonicalHost = envCanonical(c, SITE_URL);
+  let p = "/product";
+  if (parentSlug) p += `/${encodeURIComponent(parentSlug)}`;
+  if (subSlug) p += `/${encodeURIComponent(subSlug)}`;
+  const canonical = `${canonicalHost}${p}`;
+  const toJson = (r) => r.json().catch(() => ({}));
+  const [catsRes, subsRes, prodsRes] = await Promise.all([
+    fetch(new URL("/api/parent_categories", url), { headers: { Accept: "application/json" } }).then(toJson),
+    fetch(new URL("/api/sub_categories", url), { headers: { Accept: "application/json" } }).then(toJson),
+    fetch(new URL("/api/products", url), { headers: { Accept: "application/json" } }).then(toJson)
+  ]);
+  const parents = Array.isArray(catsRes?.parent_categories) ? catsRes.parent_categories : Array.isArray(catsRes) ? catsRes : [];
+  const subs = Array.isArray(subsRes?.sub_categories) ? subsRes.sub_categories : Array.isArray(subsRes) ? subsRes : [];
+  const products = Array.isArray(prodsRes?.products) ? prodsRes.products : Array.isArray(prodsRes) ? prodsRes : [];
+  const parentMeta = parents.find((p2) => p2?.slug === parentSlug);
+  const subMeta = subs.find((s) => s?.slug === subSlug && s?.parent_slug === parentSlug) || subs.find((s) => s?.slug === subSlug);
+  const pageTitle = subMeta?.name ? `${subMeta.name} | Sản phẩm | ${BRAND}` : parentMeta?.name ? `${parentMeta.name} | Sản phẩm | ${BRAND}` : `Sản phẩm | ${BRAND}`;
+  const filtered = products.filter((p2) => {
+    if (parentSlug && subSlug) {
+      return p2?.parent_slug === parentSlug && (p2?.sub_slug === subSlug || p2?.category_slug === subSlug) || p2?.category_parent_slug === parentSlug && (p2?.category_sub_slug === subSlug || p2?.category_slug === subSlug) || !p2?.parent_slug && !p2?.category_parent_slug;
+    }
+    if (parentSlug && !subSlug) {
+      return p2?.parent_slug === parentSlug || p2?.category_parent_slug === parentSlug || p2?.category_slug === parentSlug || !p2?.parent_slug && !p2?.category_parent_slug;
+    }
+    return true;
+  });
+  const topTitles = filtered.slice(0, 12).map((p2) => p2?.title || p2?.name).filter(Boolean);
+  const prefix = subMeta?.description || parentMeta?.description || "";
+  const tail = topTitles.join(", ");
+  const base = [prefix, tail].filter(Boolean).join(" — ");
+  const pageDesc = base || `Danh mục sản phẩm ${subMeta?.name || parentMeta?.name || BRAND}. Xuất khẩu nông sản Việt Nam chất lượng cao.`;
+  const kwSet = new Set([
+    subMeta?.name,
+    parentMeta?.name,
+    "sản phẩm",
+    "xuất khẩu",
+    "nông sản",
+    "trái cây",
+    "export",
+    "agriculture",
+    "Vietnam",
+    BRAND
+  ].filter(Boolean));
+  const keywords = Array.from(kwSet).join(", ");
+  const breadcrumbItems = [
+    { name: "Product", url: `${SITE_URL}/product` }
+  ];
+  if (parentSlug) {
+    breadcrumbItems.push({
+      name: parentMeta?.name || decodeURIComponent(parentSlug),
+      url: `${SITE_URL}/product/${encodeURIComponent(parentSlug)}`
+    });
+  }
+  if (subSlug) {
+    breadcrumbItems.push({
+      name: subMeta?.name || decodeURIComponent(subSlug),
+      url: `${SITE_URL}/product/${encodeURIComponent(parentSlug)}/${encodeURIComponent(subSlug)}`
+    });
+  }
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: breadcrumbItems.map((b, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: b.name,
+      item: b.url
+    }))
+  };
+  const collectionPageLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: pageTitle,
+    description: pageDesc,
+    url: canonical,
+    isPartOf: { "@type": "WebSite", name: BRAND, url: SITE_URL }
+  };
+  const PAGE_SIZE = parseInt(url.searchParams.get("pageSize") || "12", 10);
+  const currentPage = Math.max(parseInt(url.searchParams.get("page") || "1", 10), 1);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const paginated = filtered.slice(start, start + PAGE_SIZE);
+  const itemListLd = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    itemListElement: paginated.map((p2, idx) => ({
+      "@type": "ListItem",
+      position: idx + 1 + start,
+      item: {
+        "@type": "Product",
+        name: p2?.title || p2?.name,
+        url: `${SITE_URL}/product/product-detail/${encodeURIComponent(p2?.slug || p2?.id || "")}`,
+        image: p2?.image_url || void 0,
+        brand: BRAND
+      }
+    }))
+  };
+  const noindex = (filtered || []).length === 0;
+  const head = `
+    <title>${escapeHtml(pageTitle)}</title>
+    <meta name="description" content="${escapeHtml(pageDesc)}" />
+    <meta name="keywords" content="${escapeHtml(keywords)}" />
+    <link rel="canonical" href="${escapeAttr(canonical)}" />
+    ${noindex ? '<meta name="robots" content="noindex,follow" />' : ""}
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="${escapeHtml(BRAND)}" />
+    <meta property="og:title" content="${escapeHtml(pageTitle)}" />
+    <meta property="og:description" content="${escapeHtml(pageDesc)}" />
+    <meta property="og:url" content="${escapeAttr(canonical)}" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(pageTitle)}" />
+    <meta name="twitter:description" content="${escapeHtml(pageDesc)}" />
+
+    <script type="application/ld+json">${JSON.stringify(breadcrumbLd)}<\/script>
+    <script type="application/ld+json">${JSON.stringify(collectionPageLd)}<\/script>
+    <script type="application/ld+json">${JSON.stringify(itemListLd)}<\/script>
+  `;
+  return renderIndexWithHead(c, head);
+}
+const SUPPORTED = ["vi", "en"];
+function isAbs$1(u) {
+  return /^https?:\/\//i.test(u);
+}
+function joinUrl$1(base, p) {
+  const b = (base || "").replace(/\/+$/, "");
+  const q = p.replace(/^\/+/, "");
+  return `${b}/${q}`;
+}
+async function fetchProduct(base, idOrSlug, lc, signal) {
+  const u = new URL(`/api/products/${encodeURIComponent(idOrSlug)}`, base);
+  u.searchParams.set("locale", lc);
+  const r = await fetch(u.toString(), { headers: { Accept: "application/json" }, cache: "no-store", signal });
+  if (!r.ok) return null;
+  const j = await r.json().catch(() => ({}));
+  return j?.product || null;
+}
+async function productDetailSSR(c) {
+  const url = new URL(c.req.url);
+  const params = c.req.param?.() || {};
+  const idOrSlug = (params.idOrSlug || "").toString();
+  const lc = (url.searchParams.get("locale") || "").toLowerCase();
+  const locale = SUPPORTED.includes(lc) ? lc : "vi";
+  const BRAND = envBrand(c);
+  const SITE_URL = url.origin;
+  const CANON_ORIGIN = envCanonical(c, SITE_URL);
+  let item = null;
+  let baseId = null;
+  try {
+    item = await fetchProduct(SITE_URL, idOrSlug, locale);
+    if (!item) {
+      for (const lc2 of SUPPORTED) {
+        if (lc2 === locale) continue;
+        const it2 = await fetchProduct(SITE_URL, idOrSlug, lc2);
+        if (it2?.id) {
+          baseId = it2.id;
+          item = await fetchProduct(SITE_URL, baseId, locale);
+          break;
+        }
+      }
+    } else {
+      baseId = item.id;
+    }
+  } catch {
+  }
+  if (!item) {
+    const head404 = `
+      <title>${escapeHtml(locale === "vi" ? `Sản phẩm | ${BRAND}` : `Product | ${BRAND}`)}</title>
+      <meta name="robots" content="noindex,follow" />
+      <link rel="canonical" href="${escapeAttr(`${CANON_ORIGIN}/product`)}" />
+    `;
+    return renderIndexWithHead(c, head404);
+  }
+  const canonicalSlug = (item.slug || item.product_slug || item.id)?.toString().trim().toLowerCase();
+  const canonical = `${CANON_ORIGIN}/product/product-detail/${encodeURIComponent(canonicalSlug)}`;
+  const title0 = item.title?.trim() || item.name?.trim() || "";
+  const pageTitle = title0 ? `${title0} | ${BRAND}` : `${locale === "vi" ? "Sản phẩm" : "Product"} | ${BRAND}`;
+  const raw = [item.description, item.content].filter(Boolean).map(stripMd).join(" ");
+  const pageDesc = raw ? raw.slice(0, 300) : locale === "vi" ? `Sản phẩm của ${BRAND}: thông tin chi tiết, mô tả và hình ảnh.` : `Products from ${BRAND}: details, description and images.`;
+  const keywordsBase = locale === "vi" ? ["sản phẩm", "nông sản", "ITXEASY", "Việt Nam", "xuất khẩu"] : ["product", "agriculture", "ITXEASY", "Vietnam", "export"];
+  const extra = [].concat(item.tags || []).concat(item.subcategory_name || item.subcategory?.name || []).concat(item.parent_name || item.parent?.name || []).concat(title0 ? [title0] : []);
+  const keywords = Array.from(new Set(extra.reduce((a, v) => v ? a.concat([String(v)]) : a, keywordsBase))).join(", ");
+  const ogImage = (() => {
+    const img = item.image_url || "/banner.jpg";
+    return isAbs$1(img) ? img : joinUrl$1(SITE_URL, img);
+  })();
+  const created = item.created_at || item.published_at || null;
+  const updated = item.updated_at || created || null;
+  const productLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: title0 || "",
+    description: pageDesc,
+    image: ogImage ? [ogImage] : void 0,
+    sku: item.sku || void 0,
+    productID: item.id ? String(item.id) : void 0,
+    brand: { "@type": "Brand", name: BRAND },
+    category: item.subcategory_name || item.subcategory?.name || item.parent_name || item.parent?.name || void 0,
+    url: canonical
+    // Nếu bạn có price/currency/availability thì thêm Offers ở đây (đang để trống để không leak dữ liệu sai)
+    // offers: {
+    //   "@type": "Offer",
+    //   priceCurrency: "USD",
+    //   price: "1.00",
+    //   availability: "https://schema.org/InStock",
+    //   url: canonical,
+    // },
+  };
+  const bc = [
+    { name: "Home", url: `${SITE_URL}/` },
+    { name: locale === "vi" ? "Sản phẩm" : "Products", url: `${CANON_ORIGIN}/product` }
+  ];
+  if (item.parent_slug && item.parent_name) {
+    bc.push({ name: item.parent_name, url: `${CANON_ORIGIN}/product/${encodeURIComponent(item.parent_slug)}` });
+  }
+  if (item.subcategory_slug && item.subcategory_name && item.parent_slug) {
+    bc.push({
+      name: item.subcategory_name,
+      url: `${CANON_ORIGIN}/product/${encodeURIComponent(item.parent_slug)}/${encodeURIComponent(item.subcategory_slug)}`
+    });
+  }
+  bc.push({ name: title0 || (locale === "vi" ? "Chi tiết" : "Detail"), url: canonical });
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: bc.map((b, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: b.name,
+      item: b.url
+    }))
+  };
+  const organizationLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: BRAND,
+    url: SITE_URL,
+    logo: `${SITE_URL}/logo-512.png`
+  };
+  const altLinks = [];
+  try {
+    const baseKey = baseId || item.id || canonicalSlug;
+    for (const L of SUPPORTED) {
+      const it = await fetchProduct(SITE_URL, baseKey, L);
+      if (it?.slug || it?.product_slug || it?.id) {
+        const s = (it.slug || it.product_slug || it.id).toString();
+        altLinks.push(
+          `<link rel="alternate" hreflang="${L}" href="${escapeAttr(`${CANON_ORIGIN}/product/product-detail/${encodeURIComponent(s)}?locale=${L}`)}" />`
+        );
+      }
+    }
+    altLinks.push(`<link rel="alternate" hreflang="x-default" href="${escapeAttr(canonical)}" />`);
+  } catch {
+  }
+  const head = `
+    <title>${escapeHtml(pageTitle)}</title>
+    <meta name="description" content="${escapeHtml(pageDesc)}" />
+    <meta name="keywords" content="${escapeHtml(keywords)}" />
+    <link rel="canonical" href="${escapeAttr(canonical)}" />
+    ${altLinks.join("\n    ")}
+
+    <meta property="og:type" content="product" />
+    <meta property="og:site_name" content="${escapeHtml(BRAND)}" />
+    <meta property="og:title" content="${escapeHtml(pageTitle)}" />
+    <meta property="og:description" content="${escapeHtml(pageDesc)}" />
+    <meta property="og:url" content="${escapeAttr(canonical)}" />
+    <meta property="og:image" content="${escapeAttr(ogImage)}" />
+    ${created ? `<meta property="article:published_time" content="${escapeAttr(created)}" />` : ""}
+    ${updated ? `<meta property="article:modified_time" content="${escapeAttr(updated)}" />` : ""}
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(pageTitle)}" />
+    <meta name="twitter:description" content="${escapeHtml(pageDesc)}" />
+    <meta name="twitter:image" content="${escapeAttr(ogImage)}" />
+
+    <script type="application/ld+json">${JSON.stringify(breadcrumbLd)}<\/script>
+    <script type="application/ld+json">${JSON.stringify(productLd)}<\/script>
+    <script type="application/ld+json">${JSON.stringify(organizationLd)}<\/script>
+  `;
+  return renderIndexWithHead(c, head);
+}
+function isAbs(u) {
+  return /^https?:\/\//i.test(u);
+}
+function joinUrl(base, p) {
+  const b = (base || "").replace(/\/+$/, "");
+  const q = p.replace(/^\/+/, "");
+  return `${b}/${q}`;
+}
+async function newsDetailSSR(c) {
+  const url = new URL(c.req.url);
+  const params = c.req.param?.() || {};
+  const slugInUrl = params.slug || "";
+  const SUPPORTED2 = ["vi", "en"];
+  const lc = (url.searchParams.get("locale") || "").toLowerCase();
+  const locale = SUPPORTED2.includes(lc) ? lc : "vi";
+  let item = null;
+  try {
+    const apiUrl = new URL(`/api/news/${encodeURIComponent(slugInUrl)}`, url.origin);
+    apiUrl.searchParams.set("locale", locale);
+    const r = await fetch(apiUrl.toString(), { headers: { Accept: "application/json" }, cache: "no-store" });
+    const j = await r.json().catch(() => ({}));
+    item = j?.news || null;
+  } catch {
+  }
+  const BRAND = envBrand(c);
+  const SITE_URL = url.origin;
+  const slug = (item?.slug || slugInUrl || "").trim();
+  const canonical = `${envCanonical(c, SITE_URL)}/news/news-detail/${encodeURIComponent(slug)}`;
+  const title0 = item?.title?.trim();
+  const pageTitle = title0 ? `${title0} | ${BRAND}` : `${locale === "vi" ? "Tin tức" : "News"} | ${BRAND}`;
+  const raw = [item?.summary, item?.content].filter(Boolean).map(stripMd).join(" ");
+  const pageDesc = raw ? raw.slice(0, 300) : locale === "vi" ? `Tin tức từ ${BRAND}: cập nhật thông tin, hoạt động, đối tác và chia sẻ chuyên môn.` : `News from ${BRAND}: updates, activities, partners, and insights.`;
+  const keywordsBase = locale === "vi" ? ["Tin tức", "bài viết", "cập nhật", "ITXEASY", "Việt Nam"] : ["News", "article", "update", "ITXEASY", "Vietnam"];
+  const extra = (item?.tags || []).concat(item?.title ? [item.title] : []).map((s) => (s || "").toString().trim()).filter(Boolean);
+  const keywords = Array.from(/* @__PURE__ */ new Set([...keywordsBase, ...extra])).join(", ");
+  const ogImage = (() => {
+    const img = item?.image_url || "/banner.jpg";
+    return isAbs(img) ? img : joinUrl(SITE_URL, img);
+  })();
+  const publishedTime = item?.published_at || item?.created_at || "";
+  const modifiedTime = item?.updated_at || publishedTime || "";
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": `${SITE_URL}/` },
+      { "@type": "ListItem", "position": 2, "name": locale === "vi" ? "Tin tức" : "News", "item": `${envCanonical(c, SITE_URL)}/news` },
+      { "@type": "ListItem", "position": 3, "name": title0 || (locale === "vi" ? "Chi tiết" : "Detail"), "item": canonical }
+    ]
+  };
+  const articleLd = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    mainEntityOfPage: { "@type": "WebPage", "@id": canonical },
+    headline: title0 || "",
+    description: pageDesc,
+    image: ogImage ? [ogImage] : void 0,
+    datePublished: publishedTime || void 0,
+    dateModified: modifiedTime || void 0,
+    author: item?.author ? [{ "@type": "Person", "name": item.author }] : void 0,
+    publisher: {
+      "@type": "Organization",
+      name: BRAND,
+      logo: { "@type": "ImageObject", url: `${SITE_URL}/logo-512.png` }
+    }
+  };
+  const organizationLd = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: BRAND,
+    url: SITE_URL,
+    logo: `${SITE_URL}/logo-512.png`
+  };
+  const noindex = !item;
+  const head = `
+    <title>${escapeHtml(pageTitle)}</title>
+    <meta name="description" content="${escapeHtml(pageDesc)}" />
+    <meta name="keywords" content="${escapeHtml(keywords)}" />
+    <link rel="canonical" href="${escapeAttr(canonical)}" />
+    ${noindex ? '<meta name="robots" content="noindex,follow" />' : ""}
+
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="${escapeHtml(BRAND)}" />
+    <meta property="og:title" content="${escapeHtml(pageTitle)}" />
+    <meta property="og:description" content="${escapeHtml(pageDesc)}" />
+    <meta property="og:url" content="${escapeAttr(canonical)}" />
+    <meta property="og:image" content="${escapeAttr(ogImage)}" />
+    ${publishedTime ? `<meta property="article:published_time" content="${escapeAttr(publishedTime)}" />` : ""}
+    ${modifiedTime ? `<meta property="article:modified_time" content="${escapeAttr(modifiedTime)}" />` : ""}
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(pageTitle)}" />
+    <meta name="twitter:description" content="${escapeHtml(pageDesc)}" />
+    <meta name="twitter:image" content="${escapeAttr(ogImage)}" />
+
+    <script type="application/ld+json">${JSON.stringify(breadcrumbLd)}<\/script>
+    <script type="application/ld+json">${JSON.stringify(articleLd)}<\/script>
+    <script type="application/ld+json">${JSON.stringify(organizationLd)}<\/script>
+  `;
+  return renderIndexWithHead(c, head);
+}
+>>>>>>> b9cc66f (merge leads)
 const enc = new TextEncoder();
 const getKey = (secret) => enc.encode(secret);
 const GRAPH = "https://graph.facebook.com/v20.0";
@@ -35401,6 +36555,7 @@ const addCORS = (res) => new Response(res.body, {
 });
 app.options("/wa/*", () => addCORS(new Response(null, { status: 204 })));
 <<<<<<< HEAD
+<<<<<<< HEAD
 const guardUpdate = async (c, next) => {
   const secret = c.env.UPDATE_SECRET;
   if (!secret) return next();
@@ -35412,6 +36567,8 @@ const guardUpdate = async (c, next) => {
 };
 =======
 >>>>>>> 05698dd (update)
+=======
+>>>>>>> b9cc66f (merge leads)
 app.get("/webhook", (c) => {
   const url = new URL(c.req.url);
   const mode = url.searchParams.get("hub.mode");
@@ -35642,6 +36799,40 @@ app.get("/wa/history", async (c) => {
     })
   );
 });
+["GET", "HEAD"].forEach((m) => {
+  app.on(m, "/", homeSSR);
+  app.on(m, "/home", homeSSR);
+});
+app.get("/contact", contactSSR);
+app.get("/what_we_do", whatWeDoSSR);
+app.get("/about", aboutSSR);
+app.get("/news", newsListSSR);
+app.get("/news/news-detail/:slug", newsDetailSSR);
+app.get("/news/news-detail", (c) => {
+  const u = new URL(c.req.url);
+  return c.redirect(`/news${u.search}`, 301);
+});
+app.get("/product", productsListSSR);
+app.get("/product/product-detail/:idOrSlug", productDetailSSR);
+app.get("/product/product-detail", (c) => {
+  const u = new URL(c.req.url);
+  return c.redirect(`/product${u.search}`, 301);
+});
+app.get("/product/:parent", productsListSSR);
+app.get("/product/:parent/:sub", productsListSSR);
+app.get("/__raw", async (c) => {
+  const url = new URL(c.req.url);
+  const res = await c.env.ASSETS.fetch(new Request(url.origin + "/", { method: "GET" }));
+  const headers = new Headers(res.headers);
+  headers.set("cache-control", "no-store");
+  return new Response(await res.text(), { headers, status: 200 });
+});
+app.get("/__source", async (c) => {
+  const r = await homeSSR(c);
+  const h = new Headers(r.headers);
+  h.set("cache-control", "no-store");
+  return new Response(await r.text(), { headers: h, status: 200 });
+});
 const verifyAdmin = async (c) => {
   const token = getCookie(c, "token");
   if (!token || !c.env.JWT_SECRET) return null;
@@ -35665,7 +36856,8 @@ const verifyAdmin = async (c) => {
 const serveAdminLogin = async (c) => {
   const user = await verifyAdmin(c);
   if (user) return c.redirect("/admin/dashboard", 302);
-  const res = await c.env.ASSETS.fetch(c.req.raw);
+  const url = new URL(c.req.url);
+  const res = await c.env.ASSETS.fetch(new Request(url.origin + "/", { headers: c.req.headers }));
   const headers = new Headers(res.headers);
   headers.set("Cache-Control", "no-store");
   return new Response(res.body, { ...res, headers });
@@ -35684,7 +36876,8 @@ app.get("/admin/*", async (c) => {
   if (c.req.path.startsWith("/admin/api")) return c.notFound();
   const user = await verifyAdmin(c);
   if (!user) return c.redirect("/admin/login", 302);
-  return c.env.ASSETS.fetch(c.req.raw);
+  const url = new URL(c.req.url);
+  return c.env.ASSETS.fetch(new Request(url.origin + "/", { headers: c.req.headers }));
 });
 const adminOnlyPaths = [
   "/api/banners",
@@ -35714,8 +36907,9 @@ app.use("/api/users", requireAdminAuth);
 app.use("/api/users/*", requireAdminAuth);
 app.use("/api/users", requirePerm("users.manage"));
 app.use("/api/users/*", requirePerm("users.manage"));
-app.route("/", seoRoot);
+app.route("/seo", seoRoot);
 app.route("/sitemaps", sitemaps);
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 app.use("/update/*", guardUpdate);
@@ -35725,6 +36919,10 @@ app.route("/update", migrate0012);
 =======
 app.route("/admin", migrate0012);
 >>>>>>> c6aa93a (update table products)
+=======
+app.route("/admin", adminCreateTable);
+app.route("/put", dinoMigrate);
+>>>>>>> b9cc66f (merge leads)
 app.route("/api/seo", seoApp);
 app.route("/api/auth", authRouter);
 app.route("/api/users", userRouter);

@@ -11,21 +11,10 @@ function ContactHeader() {
       {/* Content */}
       <div className="relative z-10 flex items-center justify-center h-full">
         <div className="text-center text-white px-4">
-          <h1 className="text-4xl !text-blue-600 md:text-6xl font-bold mb-4 tracking-wider">
+          <h1 className="text-4xl !text-white md:text-6xl font-bold mb-4 tracking-wider">
             CONTACT NOWS
           </h1>
           
-          {/* Breadcrumb */}
-          <div className="flex items-center justify-center space-x-3 text-lg">
-            <a 
-              href="/" 
-              className="text-gray-300 hover:text-white transition-colors duration-300"
-            >
-              Home
-            </a>
-            <span className="text-yellow-400 text-xl">/</span>
-            <span className="text-yellow-400 font-semibold">CONTACT</span>
-          </div>
         </div>
       </div>
       
