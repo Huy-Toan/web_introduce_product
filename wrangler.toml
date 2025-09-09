@@ -42,6 +42,7 @@ BRAND_NAME     = "ITXEASY"
 EMAIL_PROVIDER = "resend"
 CANONICAL_HOST = "beta.itxeasy.com"
 GA4_PROPERTY_ID = "401273146"
+PUBLIC_R2_URL = "https://images.itxeasy.com"
 
 upload_source_maps = true
 
